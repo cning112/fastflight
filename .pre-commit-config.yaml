@@ -1,47 +1,11 @@
 default_stages: [ pre-commit ]
 
 repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.3
     hooks:
-      - id: check-yaml
-      - id: check-toml
-      - id: pretty-format-json
-        args: [ --autofix ]
-
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-
-  - repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 24.1.1
-    hooks:
-      - id: black
-
-  - repo: local
-    hooks:
-      - id: pip-compile
-        name: pip-compile basic
-        description: Automatically compile requirements.
-        entry: pip-compile -o requirements.txt pyproject.toml
-        files: ^pyproject.toml$
-        language: system
-        pass_filenames: false
-        always_run: false
-      - id: pip-compile
-        name: pip-compile dev
-        description: Automatically compile requirements.
-        entry: pip-compile --extra dev --extra test -o dev-requirements.txt pyproject.toml
-        files: ^pyproject.toml$
-        language: system
-        pass_filenames: false
-        always_run: false
-      - id: pip-compile
-        name: pip-compile test
-        description: Automatically compile requirements.
-        entry: pip-compile --extra test -o test-requirements.txt pyproject.toml
-        files: ^pyproject.toml$
-        language: system
-        pass_filenames: false
-        always_run: false
+      - id: ruff
+        args: [ --fix ]
+        types_or: [ python, pyi, jupyter ]
+      - id: ruff-format
+        types_or: [ python, pyi, jupyter ]
