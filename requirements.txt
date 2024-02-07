@@ -55,6 +55,7 @@ orjson==3.9.13
 pydantic==2.6.1
     # via
     #   fastapi
+    #   my_fastapi (pyproject.toml)
     #   pydantic-extra-types
     #   pydantic-settings
 pydantic-core==2.16.2

@@ -66,6 +66,7 @@ pluggy==1.4.0
 pydantic==2.6.1
     # via
     #   fastapi
+    #   my_fastapi (pyproject.toml)
     #   pydantic-extra-types
     #   pydantic-settings
 pydantic-core==2.16.2

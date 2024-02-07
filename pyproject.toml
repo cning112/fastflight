@@ -1,6 +1,6 @@
 [build-system]
-requires = ['setuptools >= 61.0']
-build-backend = 'setuptools.build_meta'
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = 'my_fastapi'
@@ -9,7 +9,7 @@ description = 'My fastapi app'
 version = '0.0.1'
 readme = 'README.md'
 requires-python = '>= 3.12'
-dependencies = ['fastapi[all]==0.109.0']
+dependencies = ['fastapi[all]==0.109.0', 'pydantic>=2.0']
 
 [project.optional-dependencies]
 dev = ['pip-tools', 'pre-commit', 'jupyterlab', 'black[d]', 'isort']
