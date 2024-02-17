@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 
 from my_fastapi.utils.error_handling import setup_error_handling
 
@@ -6,8 +6,11 @@ from .routers import pd_data, root
 
 app = FastAPI()
 
-app.include_router(root.router)
-app.include_router(pd_data.router)
+api_router = APIRouter(prefix="/api")
+api_router.include_router(root.router)
+api_router.include_router(pd_data.router)
+
+app.include_router(api_router)
 
 setup_error_handling(app)
 
