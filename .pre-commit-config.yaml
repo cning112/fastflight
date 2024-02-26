@@ -19,29 +19,32 @@ repos:
 
   - repo: local
     hooks:
-      - id: pip-compile
-        name: pip-compile basic
+      - id: uv-pip-compile
+        name: uv pip-compile basic
         description: Automatically compile requirements.
-        entry: pip-compile -o requirements.txt pyproject.toml
+        entry: uv pip compile -o requirements.txt pyproject.toml
+        additional_dependencies: ["uv"]
+        language: python
         files: (^pyproject\.toml$|^requirements\.txt$)
-        language: system
         pass_filenames: false
         always_run: false
 
-      - id: pip-compile
-        name: pip-compile dev
+      - id: uv-pip-compile
+        name: uv pip-compile dev
         description: Automatically compile requirements.
-        entry: pip-compile --extra dev --extra test -o dev-requirements.txt pyproject.toml
+        entry: uv pip compile --extra dev --extra test -o dev-requirements.txt pyproject.toml
+        additional_dependencies: ["uv"]
+        language: python
         files: (^pyproject\.toml$|^dev-requirements\.txt$)
-        language: system
         pass_filenames: false
         always_run: false
 
-      - id: pip-compile
-        name: pip-compile test
+      - id: uv-pip-compile
+        name: uv pip-compile test
         description: Automatically compile requirements.
-        entry: pip-compile --extra test -o test-requirements.txt pyproject.toml
+        entry: uv pip compile --extra test -o test-requirements.txt pyproject.toml
+        additional_dependencies: ["uv"]
+        language: python
         files: (^pyproject\.toml$|^test-requirements\.txt$)
-        language: system
         pass_filenames: false
         always_run: false
