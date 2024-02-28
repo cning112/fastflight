@@ -35,8 +35,6 @@ certifi==2024.2.2
     #   requests
 cffi==1.16.0
     # via argon2-cffi-bindings
-cfgv==3.4.0
-    # via pre-commit
 charset-normalizer==3.3.2
     # via requests
 click==8.1.7
@@ -57,19 +55,15 @@ decorator==5.1.1
     # via ipython
 defusedxml==0.7.1
     # via nbconvert
-distlib==0.3.8
-    # via virtualenv
 dnspython==2.5.0
     # via email-validator
 email-validator==2.1.0.post1
     # via fastapi
 executing==2.0.1
     # via stack-data
-fastapi==0.109.0
+fastapi==0.110.0
 fastjsonschema==2.19.1
     # via nbformat
-filelock==3.13.1
-    # via virtualenv
 fqdn==1.5.1
     # via jsonschema
 h11==0.14.0
@@ -84,8 +78,6 @@ httpx==0.26.0
     # via
     #   fastapi
     #   jupyterlab
-identify==2.5.33
-    # via pre-commit
 idna==3.6
     # via
     #   anyio
@@ -175,8 +167,6 @@ nbformat==5.9.2
     #   nbconvert
 nest-asyncio==1.6.0
     # via ipykernel
-nodeenv==1.8.0
-    # via pre-commit
 notebook-shim==0.2.3
     # via jupyterlab
 numpy==1.26.4
@@ -199,12 +189,9 @@ pandocfilters==1.5.1
 parso==0.8.3
     # via jedi
 platformdirs==4.2.0
-    # via
-    #   jupyter-core
-    #   virtualenv
+    # via jupyter-core
 pluggy==1.4.0
     # via pytest
-pre-commit==3.6.0
 prometheus-client==0.19.0
     # via jupyter-server
 prompt-toolkit==3.0.43
@@ -259,7 +246,6 @@ pyyaml==6.0.1
     # via
     #   fastapi
     #   jupyter-events
-    #   pre-commit
     #   uvicorn
 pyzmq==25.1.2
     # via
@@ -285,11 +271,8 @@ rpds-py==0.17.1
     # via
     #   jsonschema
     #   referencing
-ruff==0.2.2
 send2trash==1.8.2
     # via jupyter-server
-setuptools==69.1.1
-    # via nodeenv
 six==1.16.0
     # via
     #   asttokens
@@ -304,7 +287,7 @@ soupsieve==2.5
     # via beautifulsoup4
 stack-data==0.6.3
     # via ipython
-starlette==0.35.1
+starlette==0.36.3
     # via fastapi
 terminado==0.18.0
     # via
@@ -350,8 +333,6 @@ urllib3==2.2.0
     # via requests
 uvicorn==0.27.0.post1
     # via fastapi
-virtualenv==20.25.0
-    # via pre-commit
 watchfiles==0.21.0
     # via uvicorn
 wcwidth==0.2.13

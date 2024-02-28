@@ -9,10 +9,10 @@ description = 'My fastapi app'
 version = '0.0.1'
 readme = 'README.md'
 requires-python = '>= 3.11'
-dependencies = ['fastapi[all]==0.109.0', 'pydantic>=2.0', 'pandas']
+dependencies = ['fastapi[all]>=0.110.0', 'pydantic>=2.0', 'pandas']
 
 [project.optional-dependencies]
-dev = ['pre-commit', 'jupyterlab', 'ruff']
+dev = ['jupyterlab']
 test = ['pytest', 'pytest-cov']
 
 [tool.ruff.format]
