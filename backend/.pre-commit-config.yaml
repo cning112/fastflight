@@ -1,0 +1,51 @@
+default_stages: [ pre-commit ]
+
+repos:
+  - repo: local
+    hooks:
+      - id: local-biome-check
+        name: biome check
+        entry: npx biome check --apply --files-ignore-unknown=true --no-errors-on-unmatched
+        language: system
+        types: [ text ]
+        files: "\\.(jsx?|tsx?|c(js|ts)|m(js|ts)|d\\.(ts|cts|mts)|jsonc?)$"
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.2.2
+    hooks:
+      - id: ruff
+        args: [ --fix, --config=backend/pyproject.toml ]
+      - id: ruff-format
+        args: [ --config=backend/pyproject.toml ]
+
+  - repo: local
+    hooks:
+      - id: uv-pip-compile
+        name: uv pip-compile prod
+        description: Automatically compile requirements.
+        entry: uv pip compile -o backend/prod-requirements.txt backend/pyproject.toml
+        additional_dependencies: [ "uv" ]
+        language: python
+        files: (pyproject\.toml$|prod\-requirements\.txt$)
+        pass_filenames: false
+        always_run: false
+
+      - id: uv-pip-compile
+        name: uv pip-compile dev
+        description: Automatically compile requirements.
+        entry: uv pip compile --extra dev --extra test -o backend/requirements.txt backend/pyproject.toml
+        additional_dependencies: [ "uv" ]
+        language: python
+        files: (pyproject\.toml$|requirements\.txt$)
+        pass_filenames: false
+        always_run: false
+
+      - id: uv-pip-compile
+        name: uv pip-compile test
+        description: Automatically compile requirements.
+        entry: uv pip compile --extra test -o backend/test-requirements.txt backend/pyproject.toml
+        additional_dependencies: [ "uv" ]
+        language: python
+        files: (pyproject\.toml$|test-requirements\.txt$)
+        pass_filenames: false
+        always_run: false
