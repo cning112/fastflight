@@ -16,6 +16,8 @@
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.0",
     "@fontsource/roboto": "^5.0.8",
+    "@formily/core": "^2.3.1",
+    "@formily/react": "^2.3.1",
     "@mui/icons-material": "^5.15.11",
     "@mui/material": "^5.15.11",
     "@types/jest": "^29.5.12",
