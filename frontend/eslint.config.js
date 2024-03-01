@@ -2,9 +2,9 @@
 
 import eslint from "@eslint/js";
 import jestPlugin from "eslint-plugin-jest";
-import tseslint from "typescript-eslint";
-import reactHooks from "eslint-plugin-react-hooks";
 import react from "eslint-plugin-react";
+import reactHooks from "eslint-plugin-react-hooks";
+import tseslint from "typescript-eslint";
 
 export default tseslint.config(
 	{
@@ -18,7 +18,7 @@ export default tseslint.config(
 			"@typescript-eslint": tseslint.plugin,
 			jest: jestPlugin,
 			react: react,
-			"react-hooks": reactHooks
+			"react-hooks": reactHooks,
 		},
 		languageOptions: {
 			parser: tseslint.parser,
@@ -54,5 +54,9 @@ export default tseslint.config(
 		// enable jest rules on test files
 		files: ["test/**"],
 		...jestPlugin.configs["flat/recommended"],
+	},
+	{
+		// this is an automatic config for storybook files
+		extends: ["plugin:storybook/recommended"],
 	},
 );
