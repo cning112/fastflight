@@ -11,6 +11,11 @@
     "eject": "react-scripts eject"
   },
   "dependencies": {
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.0",
+    "@fontsource/roboto": "^5.0.8",
+    "@mui/icons-material": "^5.15.11",
+    "@mui/material": "^5.15.11",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.11.24",
     "@types/react": "^18.2.61",
