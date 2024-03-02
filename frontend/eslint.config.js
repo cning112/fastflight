@@ -2,9 +2,10 @@
 
 import eslint from "@eslint/js";
 import jestPlugin from "eslint-plugin-jest";
-import react from "eslint-plugin-react";
-import reactHooks from "eslint-plugin-react-hooks";
+import reactPlugin from "eslint-plugin-react";
+import reactHooksPlugin from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
+import storybookPlugin from "eslint-plugin-storybook";
 
 export default tseslint.config(
 	{
@@ -15,48 +16,24 @@ export default tseslint.config(
 	...tseslint.configs.stylisticTypeChecked,
 	{
 		plugins: {
-			"@typescript-eslint": tseslint.plugin,
-			jest: jestPlugin,
-			react: react,
-			"react-hooks": reactHooks,
+			react: reactPlugin,
+			"react-hooks": reactHooksPlugin,
+			storybook: storybookPlugin,
 		},
 		languageOptions: {
-			parser: tseslint.parser,
 			parserOptions: {
 				project: true,
+				tsconfigRootDir: import.meta.dirname,
 			},
 		},
-		rules: {
-			"@typescript-eslint/no-unsafe-argument": "error",
-			"@typescript-eslint/no-unsafe-assignment": "error",
-			"@typescript-eslint/no-unsafe-call": "error",
-			"@typescript-eslint/no-unsafe-member-access": "error",
-			"@typescript-eslint/no-unsafe-return": "error",
-			"react-hooks/rules-of-hooks": "error",
-			"react-hooks/exhaustive-deps": "warn",
-		},
 	},
 	{
-		files: ["**/*.{js,jsx}"],
-		extends: [tseslint.configs.disableTypeChecked],
-	},
-	{
-		files: ["**/*.{ts,tsx}"],
-		extends: ["react-app", "react-app/jest"],
-	},
-	{
-		files: ["**/*.{ts,tsx,mts,cts}"],
-		rules: {
-			"no-undef": "off",
-		},
+		files: ["*.js"],
+		...tseslint.configs.disableTypeChecked,
 	},
 	{
 		// enable jest rules on test files
 		files: ["test/**"],
 		...jestPlugin.configs["flat/recommended"],
-	},
-	{
-		// this is an automatic config for storybook files
-		extends: ["plugin:storybook/recommended"],
 	},
 );
