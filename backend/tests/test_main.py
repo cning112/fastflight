@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from my_fastapi.main import app
 
 client = TestClient(app)
-client.base_url = client.base_url.join('/api')
+client.base_url = client.base_url.join("/api")
 
 
 def test_root():

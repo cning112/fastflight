@@ -53,7 +53,9 @@ markupsafe==2.1.5
     # via jinja2
 nox==2024.4.15
 numpy==1.26.4
-    # via pandas
+    # via
+    #   pandas
+    #   pyarrow
 orjson==3.9.13
     # via fastapi
 packaging==23.2
@@ -65,6 +67,7 @@ platformdirs==4.2.0
     # via virtualenv
 pluggy==1.4.0
     # via pytest
+pyarrow==15.0.1
 pydantic==2.6.1
     # via
     #   fastapi

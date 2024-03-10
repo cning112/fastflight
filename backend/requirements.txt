@@ -181,7 +181,9 @@ notebook-shim==0.2.4
     # via jupyterlab
 nox==2024.4.15
 numpy==1.26.4
-    # via pandas
+    # via
+    #   pandas
+    #   pyarrow
 orjson==3.9.13
     # via fastapi
 overrides==7.7.0
@@ -221,6 +223,7 @@ ptyprocess==0.7.0
     #   terminado
 pure-eval==0.2.2
     # via stack-data
+pyarrow==15.0.1
 pycparser==2.21
     # via cffi
 pydantic==2.6.1
