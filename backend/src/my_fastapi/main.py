@@ -1,5 +1,4 @@
 from fastapi import APIRouter, FastAPI
-
 from my_fastapi.utils.error_handling import setup_error_handling
 
 from .routers import pd_data, root

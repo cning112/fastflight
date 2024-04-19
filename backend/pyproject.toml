@@ -9,11 +9,14 @@ description = 'My fastapi app'
 version = '0.0.1'
 readme = 'README.md'
 requires-python = '>= 3.11'
-dependencies = ['fastapi[all]>=0.110.0', 'pydantic>=2.0', 'pandas']
+dependencies = ['fastapi[all]>=0.110.2', 'pydantic>=2.0', 'pandas']
 
 [project.optional-dependencies]
-dev = ['jupyterlab']
-test = ['pytest', 'pytest-cov']
+dev = ['jupyterlab', 'pre-commit', 'uv']
+test = ['nox', 'pytest', 'pytest-cov', 'ruff']
+
+[tool.ruff]
+line-length = 120
 
 [tool.ruff.format]
 skip-magic-trailing-comma = true
