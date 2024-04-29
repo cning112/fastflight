@@ -4,11 +4,7 @@ from typing import Union
 
 from fastapi import APIRouter
 
-from my_fastapi.internal.ui_form.form_validator import (
-    FieldValidationError,
-    UiFormBase,
-    validate_rules,
-)
+from my_fastapi.internal.ui_form.form_validator import FieldValidationError, UiFormBase, validate_rules
 from my_fastapi.internal.ui_form.types import TenorBusDay, TenorYearMonth
 
 logger = logging.getLogger(__name__)
@@ -34,8 +30,6 @@ def end_must_be_a_date_when_start_is_date(form: ExampleForm) -> None:
 @router.post("/validate")
 def validate_ui_form(form: ExampleForm):
     # form is a valid `GeneralUiForm`, but we need to test it again the actual model
-    with validate_rules(
-        {"start_is_date": end_must_be_a_date_when_start_is_date}
-    ) as ctx:
+    with validate_rules({"start_is_date": end_must_be_a_date_when_start_is_date}) as ctx:
         validated = ExampleForm.model_validate(form, context=ctx)
         return {"validated": validated.model_dump(), "feedback": ctx["feedbacks"]}

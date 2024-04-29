@@ -1,0 +1,37 @@
+{
+  "$defs": {
+    "Strategy": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "namespace": {
+          "title": "Namespace",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "namespace"
+      ],
+      "title": "Strategy",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "strategy": {
+      "$ref": "#/$defs/Strategy"
+    },
+    "alloc": {
+      "title": "Alloc",
+      "type": "number"
+    }
+  },
+  "required": [
+    "strategy",
+    "alloc"
+  ],
+  "title": "Allocation",
+  "type": "object"
+}

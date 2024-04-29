@@ -21,9 +21,5 @@ class RegexPattern(str, Enum):
     tenor_business_day = r"[+-]?[1-9]\d*B"
 
 
-TenorYearMonth = Annotated[
-    str, AfterValidator(tenor_str_checker(RegexPattern.tenor_year_month))
-]
-TenorBusDay = Annotated[
-    str, AfterValidator(tenor_str_checker(RegexPattern.tenor_business_day))
-]
+TenorYearMonth = Annotated[str, AfterValidator(tenor_str_checker(RegexPattern.tenor_year_month))]
+TenorBusDay = Annotated[str, AfterValidator(tenor_str_checker(RegexPattern.tenor_business_day))]

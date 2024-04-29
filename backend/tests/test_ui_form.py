@@ -39,10 +39,7 @@ def test_tenor_year_month(value, valid):
             tym.validate_python(value)
 
 
-@pytest.mark.parametrize(
-    "value, valid",
-    [("1b", True), ("-1B", True), ("B", False), ("-B", False), ("1", False)],
-)
+@pytest.mark.parametrize("value, valid", [("1b", True), ("-1B", True), ("B", False), ("-B", False), ("1", False)])
 def test_tenor_bus_day(value, valid):
     if valid:
         assert tb.validate_python(value)
@@ -54,10 +51,7 @@ def test_tenor_bus_day(value, valid):
 @pytest.mark.parametrize(
     "value, expected_errors",
     [
-        (
-            {"start": "1y"},
-            [{"loc": ["body", "end"], "msg": "Field required", "type": "missing"}],
-        ),
+        ({"start": "1y"}, [{"loc": ["body", "end"], "msg": "Field required", "type": "missing"}]),
         (
             {"start": "1y", "end": 1},
             [
@@ -75,9 +69,7 @@ def test_invalid_ui_form(value, expected_errors):
     actual_errors = response.json()["errors"]
 
     for ee in expected_errors:
-        assert any(
-            e for e in actual_errors if all(e[key] == v for key, v in ee.items())
-        )
+        assert any(e for e in actual_errors if all(e[key] == v for key, v in ee.items()))
 
 
 @pytest.mark.parametrize(

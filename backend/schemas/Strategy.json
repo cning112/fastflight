@@ -1,0 +1,18 @@
+{
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "namespace": {
+      "title": "Namespace",
+      "type": "string"
+    }
+  },
+  "required": [
+    "id",
+    "namespace"
+  ],
+  "title": "Strategy",
+  "type": "object"
+}

@@ -10,15 +10,11 @@ class ValidateContext(TypedDict):
     feedbacks: list[str]
 
 
-_validate_context_var: ContextVar[None | ValidateContext] = ContextVar(
-    "_validate_rule_var", default=None
-)
+_validate_context_var: ContextVar[None | ValidateContext] = ContextVar("_validate_rule_var", default=None)
 
 
 @contextmanager
-def validate_rules(
-    rules: dict[str, Callable[[Any], None]],
-) -> Iterator[ValidateContext]:
+def validate_rules(rules: dict[str, Callable[[Any], None]]) -> Iterator[ValidateContext]:
     ctx: ValidateContext = dict(rules=rules, feedbacks=[])
     token = _validate_context_var.set(ctx)
     try:

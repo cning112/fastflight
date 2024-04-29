@@ -1,7 +1,7 @@
 from datetime import datetime
-from turtle import pd
 from typing import Annotated
 
+import pandas as pd
 from pydantic import BaseModel, ConfigDict, PlainSerializer
 
 
