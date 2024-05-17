@@ -1,10 +1,14 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
 from ..dependencies.settings import AppSettings, get_app_settings
+from ..utils.custom_logging import LoggingContext
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 @router.get("/")
@@ -14,6 +18,8 @@ async def root():
 
 @router.get("/hello/{name}")
 async def say_hello(name: str):
+    with LoggingContext(name=name):
+        logger.info(f"Hello {name}")
     return {"message": f"Hello {name}"}
 
 
