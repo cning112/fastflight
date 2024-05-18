@@ -1,4 +1,5 @@
 import contextvars
+import json
 import logging.config
 from contextlib import ContextDecorator
 from types import MappingProxyType
@@ -29,8 +30,30 @@ class LoggingContext(ContextDecorator):
 
 # Custom log formatter to handle the extra context
 class CustomFormatter(logging.Formatter):
+    def __init__(self, format_type="key_value", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.format_type = format_type
+        if self.format_type == "key_value":
+            self._style = logging.PercentStyle(
+                "timestamp=%(asctime)s name=%(name)s level=%(levelname)s message=%(message)s lineno=%(lineno)d %(extra)s"
+            )
+
     def format(self, record):
-        # Add the context attributes as a single 'extra' attribute
         context = LoggingContext.get_current_context()
-        record.extra = ", ".join(f"{key}={value}" for key, value in context.items())
-        return super().format(record)
+        if self.format_type == "json":
+            log_record = {
+                "timestamp": self.formatTime(record, self.datefmt),
+                "name": record.name,
+                "level": record.levelname,
+                "message": record.getMessage(),
+                "lineno": record.lineno,
+                "context": context,
+            }
+            if record.exc_info:
+                log_record["exc_info"] = self.formatException(record.exc_info)
+            return json.dumps(log_record)
+        else:
+            extra = " ".join(f"{key}={value}" for key, value in context.items())
+            # Add the context attributes as a single 'extra' attribute
+            record.extra = extra
+            return super().format(record)

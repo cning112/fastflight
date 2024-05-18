@@ -7,7 +7,8 @@ formatters:
     format: "%(asctime)s - %(module)s:%(lineno)d - %(name)s - %(levelname)s - %(message)s"
   custom:
     (): my_fastapi.utils.custom_logging.CustomFormatter
-    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s - [%(lineno)d] - %(extra)s'
+    #    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s - [%(lineno)d] - %(extra)s'
+    format_type: key_value  # Set this to 'json' for JSON format or 'key_value' for key-value format
 
 handlers:
   console:
