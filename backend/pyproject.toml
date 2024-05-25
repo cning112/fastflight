@@ -9,7 +9,7 @@ description = 'My fastapi app'
 version = '0.0.1'
 readme = 'README.md'
 requires-python = '>= 3.11'
-dependencies = ["email-validator", 'fastapi[all]>=0.110.2', 'pydantic>=2.0', 'pandas', 'pyarrow']
+dependencies = ["email-validator", 'fastapi[all]>=0.110.2', 'logfmter', 'pydantic>=2.0', 'pandas', 'pyarrow']
 
 [project.optional-dependencies]
 dev = ['jupyterlab', 'pre-commit', 'uv']

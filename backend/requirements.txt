@@ -154,6 +154,7 @@ jupyterlab-pygments==0.3.0
     # via nbconvert
 jupyterlab-server==2.25.3
     # via jupyterlab
+logfmter==0.0.7
 markupsafe==2.1.5
     # via
     #   jinja2
