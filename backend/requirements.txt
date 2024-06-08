@@ -154,7 +154,8 @@ jupyterlab-pygments==0.3.0
     # via nbconvert
 jupyterlab-server==2.25.3
     # via jupyterlab
-logfmter==0.0.7
+markdown-it-py==3.0.0
+    # via rich
 markupsafe==2.1.5
     # via
     #   jinja2
@@ -163,6 +164,8 @@ matplotlib-inline==0.1.6
     # via
     #   ipykernel
     #   ipython
+mdurl==0.1.2
+    # via markdown-it-py
 mistune==3.0.2
     # via nbconvert
 nbclient==0.9.0
@@ -242,6 +245,7 @@ pygments==2.17.2
     # via
     #   ipython
     #   nbconvert
+    #   rich
 pytest==8.0.2
     # via pytest-cov
 pytest-cov==4.1.0
@@ -286,6 +290,7 @@ rfc3986-validator==0.1.1
     # via
     #   jsonschema
     #   jupyter-events
+rich==13.7.1
 rpds-py==0.18.0
     # via
     #   jsonschema
@@ -311,6 +316,7 @@ stack-data==0.6.3
     # via ipython
 starlette==0.37.2
     # via fastapi
+structlog==24.2.0
 terminado==0.18.0
     # via
     #   jupyter-server
