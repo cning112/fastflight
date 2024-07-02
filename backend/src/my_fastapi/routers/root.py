@@ -1,14 +1,15 @@
 import logging
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Depends
 
 from ..dependencies.settings import AppSettings, get_app_settings
-from ..utils.custom_logging import LoggingContext
 
 router = APIRouter()
 
-logger = logging.getLogger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 @router.get("/")
@@ -18,8 +19,9 @@ async def root():
 
 @router.get("/hello/{name}")
 async def say_hello(name: str):
-    with LoggingContext(name=name):
-        logger.info(f"Hello {name}")
+    with structlog.contextvars.bound_contextvars(hello_name=name):
+        logger.info("structlog says hello to %s", name)
+        log.info("logging says hello  to " + name)
     return {"message": f"Hello {name}"}
 
 

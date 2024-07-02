@@ -1,115 +1,117 @@
-import contextvars
-import json
+# The logging setup in this file uses structlog-based formatter (`ProcessorFormatter`) to render both `logging`
+# and `structlog` log entries, and then send rendered log strings to `logging` handlers. See
+# https://www.structlog.org/en/stable/standard-library.html#rendering-using-structlog-based-formatters-within-logging
 import logging
-import logging.config
-import sys
-from contextlib import ContextDecorator
-from pathlib import Path
-from types import MappingProxyType
-from typing import Literal
 
-import yaml
+import structlog
 
-from ..dependencies.settings import get_app_settings
+from my_fastapi.dependencies.settings import get_app_settings
 
-
-class LoggingContext(ContextDecorator):
-    __log_context = contextvars.ContextVar("__logging_context_var", default={})
-
-    def __init__(self, **kwargs):
-        self.extra = kwargs
-
-    def __enter__(self):
-        current_context = self.__get_current_context()
-        self.token = self.__log_context.set({**current_context, **self.extra})
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__log_context.reset(self.token)
-
-    @classmethod
-    def __get_current_context(cls):
-        return cls.__log_context.get()
-
-    @classmethod
-    def get_current_context(cls):
-        # Return an immutable view of the current context
-        return MappingProxyType(cls.__get_current_context())
-
-
-_record_factory = logging.getLogRecordFactory()
-
-
-def custom_log_record_factory(*args, **kwargs):
-    record = _record_factory(*args, **kwargs)
-    for k, v in LoggingContext.get_current_context().items():
-        while hasattr(record, k):
-            k = "extra_" + k
-        setattr(record, k, v)
-    return record
-
-
-# Custom log formatter to handle the extra context
-class CustomFormatter(logging.Formatter):
-    def __init__(self, format_type: Literal["key_value", "json", "default"] = "default", *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.format_type = format_type
-        if self.format_type == "key_value":
-            self._style = logging.PercentStyle(
-                "timestamp=%(asctime)s name=%(name)s module=%(module)s level=%(levelname)s message=%(message)s lineno=%(lineno)d %(extra)s"
-            )
-        elif self.format_type == "default":
-            self._style = logging.PercentStyle(
-                "%(asctime)s - %(module)s:%(lineno)d - %(name)s - %(levelname)s - %(message)s %(extra)s"
-            )
-
-    def format(self, record):
-        context = LoggingContext.get_current_context()
-        if self.format_type == "json":
-            log_record = {
-                "timestamp": self.formatTime(record, self.datefmt),
-                "name": record.name,
-                "level": record.levelname,
-                "message": record.getMessage(),
-                "module": record.module,
-                "lineno": record.lineno,
-                "extra": context,
-            }
-            if record.exc_info:
-                log_record["exc_info"] = self.formatException(record.exc_info)
-            return json.dumps(log_record)
-        else:
-            extra = " ".join(f"{key}={value}" for key, value in context.items())
-            if extra:
-                extra = " - " + extra
-            # Add the context attributes as a single 'extra' attribute
-            record.extra = extra
-            return super().format(record)
+shared_processors = [
+    # If log level is too low, abort pipeline and throw away log entry.
+    structlog.stdlib.filter_by_level,
+    # Add the name of the logger to event dict.
+    structlog.stdlib.add_logger_name,
+    # Add log level to event dict.
+    structlog.stdlib.add_log_level,
+    # Perform %-style formatting.
+    structlog.stdlib.PositionalArgumentsFormatter(),
+    # Add a timestamp in ISO 8601 format.
+    structlog.processors.TimeStamper(fmt="iso", utc=True),
+    # If the "stack_info" key in the event dict is true, remove it and
+    # render the current stack trace in the "stack" key.
+    structlog.processors.StackInfoRenderer(),
+    # If the "exc_info" key in the event dict is either true or a
+    # sys.exc_info() tuple, remove "exc_info" and render the exception
+    # with traceback into the "exception" key.
+    structlog.processors.format_exc_info,
+    # If some value is in bytes, decode it to a Unicode str.
+    structlog.processors.UnicodeDecoder(),
+    # Add callsite parameters.
+    structlog.processors.CallsiteParameterAdder(
+        {
+            structlog.processors.CallsiteParameter.FILENAME,
+            structlog.processors.CallsiteParameter.FUNC_NAME,
+            structlog.processors.CallsiteParameter.LINENO,
+            structlog.processors.CallsiteParameter.THREAD_NAME,
+            structlog.processors.CallsiteParameter.PROCESS_NAME,
+        }
+    ),
+]
 
 
 def setup_logging():
-    logging.setLogRecordFactory(custom_log_record_factory)
+    structlog.configure(
+        processors=shared_processors
+        + [
+            # This is needed to convert the event dict to data that can be processed by the `ProcessorFormatter`
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter
+        ],
+        # `logger_factory` is used to create wrapped loggers that are used for
+        # OUTPUT. This one returns a `logging.Logger`. The final value (a JSON
+        # string) from the final processor (`JSONRenderer`) will be passed to
+        # the method of the same name as that you've called on the bound logger.
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        # Effectively freeze configuration after creating the first bound logger.
+        cache_logger_on_first_use=True,
+    )
 
-    settings = get_app_settings()
+    # The `ProcessorFormatter` has a `foreign_pre_chain` argument which is responsible for adding properties to
+    # events from the standard library – in other words, those that do not originate from a structlog logger – and
+    # which should in general match the processors argument to structlog.configure() so you get a consistent output.
+    foreign_pre_chain = shared_processors + [
+        # Add extra attributes of LogRecord objects to the event dictionary so that values passed in the extra
+        # parameter of log methods pass through to log output.
+        structlog.stdlib.ExtraAdder()
+    ]
 
-    if settings.log_config_file and settings.log_file:
-        Path(settings.log_file).parent.mkdir(parents=True, exist_ok=True)
+    root_logger = logging.getLogger()
+    app_settings = get_app_settings()
 
-        with open(settings.log_config_file, "r") as f:
-            log_config_text = f.read()
-
-        log_config_vars = {
-            "LOG_FILE_NAME": settings.log_file,
-            "CONSOLE_LOG_LEVEL": settings.console_log_level,
-            "FILE_LOG_LEVEL": settings.file_log_level,
+    logging.config.dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "plain": {
+                    "()": structlog.stdlib.ProcessorFormatter,
+                    "processors": [
+                        # Remove _record & _from_structlog from the event dict.
+                        structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                        structlog.dev.ConsoleRenderer(colors=False),
+                    ],
+                    "foreign_pre_chain": foreign_pre_chain,
+                    "logger": root_logger,
+                },
+                "colored": {
+                    "()": structlog.stdlib.ProcessorFormatter,
+                    "processors": [
+                        # Remove _record & _from_structlog from the event dict.
+                        structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                        structlog.dev.ConsoleRenderer(colors=True),
+                    ],
+                    "foreign_pre_chain": foreign_pre_chain,
+                    "logger": root_logger,
+                },
+            },
+            "handlers": {
+                "default": {
+                    "level": app_settings.console_log_level,
+                    "class": "logging.StreamHandler",
+                    "formatter": "colored",
+                },
+                "file": {
+                    "level": app_settings.file_log_level,
+                    "class": "logging.handlers.TimedRotatingFileHandler",
+                    "filename": str(app_settings.log_file),
+                    "formatter": "plain",
+                    "when": "midnight",
+                    "interval": 1,
+                    "backupCount": 7,
+                    "encoding": "utf-8",
+                },
+            },
+            "root": {"handlers": ["default", "file"], "level": "DEBUG", "propagate": True},
+            "loggers": {"uvicorn": {"level": "INFO", "handlers": ["default", "file"], "propagate": False}},
         }
-
-        for key, value in log_config_vars.items():
-            log_config_text = log_config_text.replace(f"${{{key}}}", str(value))
-
-        log_config = yaml.safe_load(log_config_text)
-        logging.config.dictConfig(log_config)
-
-    else:
-        handler = logging.StreamHandler(stream=sys.stdout)
-        handler.setFormatter(CustomFormatter())
-        logging.basicConfig(handlers=[handler], level=logging.DEBUG, force=True)
+    )

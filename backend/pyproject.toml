@@ -3,17 +3,17 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = 'my_fastapi'
-authors = [{ name = 'Chao Ning', email = 'chao.ning.uk@gmail.com' }]
-description = 'My fastapi app'
-version = '0.0.1'
-readme = 'README.md'
-requires-python = '>= 3.11'
-dependencies = ["email-validator", 'fastapi[all]>=0.110.2', 'logfmter', 'pydantic>=2.0', 'pandas', 'pyarrow']
+name = "my_fastapi"
+authors = [{ name = "Chao Ning", email = "chao.ning.uk@gmail.com" }]
+description = "My fastapi app"
+version = "0.0.1"
+readme = "README.md"
+requires-python = ">= 3.11"
+dependencies = ["email-validator", "fastapi[all]>=0.110.2", "pydantic>=2.0", "pandas", "pyarrow", "structlog"]
 
 [project.optional-dependencies]
-dev = ['jupyterlab', 'pre-commit', 'uv']
-test = ['nox', 'pytest', 'pytest-cov', 'ruff']
+dev = ["jupyterlab", "pre-commit", "uv", "rich"]
+test = ["nox", "pytest", "pytest-cov", "ruff"]
 
 [tool.ruff]
 line-length = 120
