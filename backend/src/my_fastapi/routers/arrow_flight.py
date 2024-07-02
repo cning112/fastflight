@@ -1,10 +1,11 @@
 import json
 import logging
+from contextlib import asynccontextmanager
 from typing import Optional
 
 import pyarrow as pa
 import pyarrow.flight as fl
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -23,17 +24,18 @@ POOL_SIZE = 10
 flight_pool: Optional[FlightConnectionPool] = None
 
 
-@router.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global flight_pool
+
+    # Startup event
     if flight_pool is None:
         flight_pool = FlightConnectionPool(HOST, PORT, POOL_SIZE)
         logger.info("FlightConnectionPool initialized")
 
+    yield
 
-@router.on_event("shutdown")
-async def shutdown_event():
-    global flight_pool
+    # Shutdown event
     # Close all connections in the pool
     if flight_pool is not None:
         while not flight_pool.pool.empty():
@@ -41,6 +43,9 @@ async def shutdown_event():
             client.close()
         flight_pool = None
         logger.info("FlightConnectionPool shut down")
+
+
+router.lifespan_context = lifespan
 
 
 class TimeSeriesRequest(BaseModel):
