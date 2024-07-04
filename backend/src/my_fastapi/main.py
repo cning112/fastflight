@@ -3,7 +3,7 @@ from fastapi import APIRouter, FastAPI
 from .routers import data_server, pd_data, root, ui_form
 from .utils.error_handling import setup_error_handling
 
-app = FastAPI()
+app = FastAPI(lifespan=data_server.combined_lifespan)
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(root.router)
