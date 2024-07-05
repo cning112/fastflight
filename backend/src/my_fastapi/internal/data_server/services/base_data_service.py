@@ -1,8 +1,8 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import ClassVar, Generic, Iterator, TypeVar
+from typing import ClassVar, Generic, TypeVar
 
-from pyarrow import RecordBatch, RecordBatchReader, Table
+from pyarrow import RecordBatchReader, Table
 
 from ..models.base_ticket import BaseTicket
 from ..models.data_source import DataSource
@@ -64,7 +64,7 @@ class BaseDataService(Generic[T], ABC):
         return data_service_cls
 
     @abstractmethod
-    def get_table(self, params: T) -> Table:
+    async def get_table(self, params: T) -> Table:
         """
         Fetch the entire dataset based on the given parameters.
 
@@ -76,7 +76,7 @@ class BaseDataService(Generic[T], ABC):
         """
         raise NotImplementedError
 
-    def create_batch_reader(self, params: T, batch_size: int = 100) -> Iterator[RecordBatch]:
+    async def create_batch_reader(self, params: T, batch_size: int = 100) -> RecordBatchReader:
         """
         Create a RecordBatchReader to read data in batches based on the given parameters.
 
@@ -91,7 +91,7 @@ class BaseDataService(Generic[T], ABC):
             Exception: If there is an error in creating the batch reader.
         """
         try:
-            table = self.get_table(params)
+            table = await self.get_table(params)
             batches = table.to_batches(max_chunksize=batch_size)
             return RecordBatchReader.from_batches(table.schema, batches)
         except Exception as e:

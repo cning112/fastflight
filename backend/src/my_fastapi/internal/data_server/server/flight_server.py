@@ -88,8 +88,8 @@ class FlightServer(flight.FlightServerBase):
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         try:
             actual_ticket, data_service = self.get_ticket_and_data_service(ticket.ticket)
-            batch_reader = data_service.create_batch_reader(actual_ticket, batch_size=512)
-            return flight.RecordBatchStream(batch_reader)
+            reader = asyncio.run(data_service.create_batch_reader(actual_ticket, batch_size=512))
+            return flight.RecordBatchStream(reader)
         except flight.FlightUnavailableError as e:
             raise e
         except Exception as e:

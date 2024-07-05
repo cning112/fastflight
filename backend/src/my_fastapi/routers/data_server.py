@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager, AsyncExitStack
-from typing import AsyncIterable
 
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.responses import StreamingResponse
@@ -59,7 +58,7 @@ async def get_body_bytes(request: Request) -> bytes:
 
 
 async def get_client_helper(request: Request) -> FlightClientHelper:
-    return await request.app.state.client_helper
+    return request.app.state.client_helper
 
 
 def ticket_request_dependency() -> BaseTicket:
@@ -74,8 +73,8 @@ def ticket_request_dependency() -> BaseTicket:
 @router.post("/")
 async def read_data(
     body_bytes: bytes = Depends(get_body_bytes),
-    ticket_request: BaseTicket = Depends(ticket_request_dependency),
-    client_helper: FlightClientHelper = Depends(),
+    # ticket_request: BaseTicket = Depends(ticket_request_dependency),
+    client_helper: FlightClientHelper = Depends(get_client_helper),
 ):
     """
     Endpoint to read data from the Flight server and stream it back in Arrow format.
@@ -88,10 +87,7 @@ async def read_data(
     Returns:
         StreamingResponse: The streamed response containing Arrow formatted data.
     """
-
-    async def data_generator() -> AsyncIterable[bytes]:
-        reader = await client_helper.fetch_data_async(body_bytes)
-        for batch in reader:
-            yield batch.data.to_bytes()
-
-    return StreamingResponse(data_generator(), media_type="application/vnd.apache.arrow.stream")
+    logger.debug("Received body bytes %s", body_bytes)
+    return StreamingResponse(
+        client_helper.fetch_arrow_stream_async(body_bytes), media_type="application/vnd.apache.arrow.stream"
+    )

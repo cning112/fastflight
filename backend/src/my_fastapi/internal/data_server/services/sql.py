@@ -1,3 +1,4 @@
+import pandas as pd
 import pyarrow as pa
 from pyarrow import Table
 
@@ -25,5 +26,5 @@ class SQLDataService(BaseDataService[T]):
             Table: The fetched data in the form of a PyArrow Table.
         """
         # Implement fetching logic for SQL
-        data = ...
+        data = pd.DataFrame(data={"a": [1, 2, 3], "b": [10, 20, 30]})
         return pa.Table.from_pandas(data)
