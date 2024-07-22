@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from contextlib import asynccontextmanager, AsyncExitStack
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.responses import StreamingResponse
@@ -73,7 +73,8 @@ def ticket_request_dependency() -> BaseTicket:
 @router.post("/")
 async def read_data(
     body_bytes: bytes = Depends(get_body_bytes),
-    # ticket_request: BaseTicket = Depends(ticket_request_dependency),
+    # TODO: this actually doesn't work. The swapper page doesn't show the expected data model
+    ticket_request: BaseTicket = Depends(ticket_request_dependency),
     client_helper: FlightClientHelper = Depends(get_client_helper),
 ):
     """
