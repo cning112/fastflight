@@ -308,8 +308,6 @@ rpds-py==0.18.0
     # via
     #   jsonschema
     #   referencing
-ruff==0.4.1
-    # via my-fastapi (backend/pyproject.toml)
 send2trash==1.8.2
     # via jupyter-server
 setuptools==69.5.1
