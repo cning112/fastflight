@@ -167,7 +167,8 @@ class FlightClientHelper:
 
     async def close(self):
         await self.client_pool.close()
-        self.executor.shutdown(wait=True)
+        if self.executor:
+            self.executor.shutdown(wait=True)
 
     def __enter__(self):
         return self
