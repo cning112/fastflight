@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="fastapi_app" type="Python.FastAPI">
-    <option name="file" value="$PROJECT_DIR$/backend/src/my_fastapi/main.py" />
+    <option name="file" value="$PROJECT_DIR$/src/my_fastapi/main.py" />
     <module name="my_fastapi" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
