@@ -6,12 +6,12 @@ from fastapi import APIRouter, Depends, FastAPI
 from fastapi.responses import StreamingResponse
 from starlette.requests import Request
 
-from ..internal.data_server.client_helpers import FlightClientHelper
-from ..internal.data_server.models.base_ticket import BaseTicket
-from ..internal.data_server.server.flight_server import FlightServer
+from ..internal.data_service.client.client_helpers import FlightClientHelper
+from ..internal.data_service.models.base_params import BaseParams
+from ..internal.data_service.server.flight_server import FlightServer
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/data_server")
+router = APIRouter(prefix="/data_service")
 
 
 @asynccontextmanager
@@ -39,7 +39,7 @@ async def flight_client_helper_lifespan(app: FastAPI):
         yield
     finally:
         logger.info("Stopping flight_client_helper_lifespan")
-        await client_helper.close()
+        await client_helper.close_async()
         logger.info("Ended flight_client_helper_lifespan")
 
 
@@ -61,20 +61,20 @@ async def get_client_helper(request: Request) -> FlightClientHelper:
     return request.app.state.client_helper
 
 
-def ticket_request_dependency() -> BaseTicket:
+def ticket_request_dependency() -> BaseParams:
     """
     This function doesn't actually parse the request body,
     but serves to indicate the expected request body type in OpenAPI documentation.
     """
     # Return a dummy instance just for OpenAPI documentation purposes
-    return BaseTicket.from_bytes(b'{"kind": "sql", "query": "1"}')
+    return BaseParams.from_bytes(b'{"kind": "sql", "query": "1"}')
 
 
 @router.post("/")
 async def read_data(
     body_bytes: bytes = Depends(get_body_bytes),
     # TODO: this actually doesn't work. The swapper page doesn't show the expected data model
-    ticket_request: BaseTicket = Depends(ticket_request_dependency),
+    ticket_request: BaseParams = Depends(ticket_request_dependency),
     client_helper: FlightClientHelper = Depends(get_client_helper),
 ):
     """
@@ -82,7 +82,7 @@ async def read_data(
 
     Args:
         body_bytes (bytes): The raw request body bytes.
-        ticket_request (BaseTicket): Only used for OpenAPI documentation purposes. Won't parse body data.
+        ticket_request (BaseParams): Only used for OpenAPI documentation purposes. Won't parse body data.
         client_helper(FlightClientHelper): The FlightClientHelper instance for fetching data from the Flight server.
 
     Returns:
@@ -90,5 +90,5 @@ async def read_data(
     """
     logger.debug("Received body bytes %s", body_bytes)
     return StreamingResponse(
-        client_helper.fetch_arrow_stream_async(body_bytes), media_type="application/vnd.apache.arrow.stream"
+        client_helper.aget_bytes_stream(body_bytes), media_type="application/vnd.apache.arrow.stream"
     )

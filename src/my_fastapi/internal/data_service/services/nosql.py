@@ -1,25 +1,24 @@
 import pyarrow as pa
-from pyarrow import Table
 
+from ..models.data_source import DataSourceKind
+from ..models.params import NoSqlParams
 from .base_data_service import BaseDataService
-from ..models.data_source import DataSource
-from ..models.tickets import NoSQLQueryTicket
 
-T = NoSQLQueryTicket
+T = NoSqlParams
 
 
-@BaseDataService.register(DataSource.NoSQL)
+@BaseDataService.register(DataSourceKind.NoSQL)
 class NoSQLDataService(BaseDataService[T]):
     """
     A data source class for NoSQL queries.
     """
 
-    async def get_table(self, params: T) -> Table:
+    async def aget_pa_table(self, params: T) -> pa.Table:
         """
         Fetch the entire dataset for NoSQL queries based on the given parameters.
 
         Args:
-            params (NoSQLQueryTicket): The parameters for fetching data.
+            params (NoSqlParams): The parameters for fetching data.
 
         Returns:
             Table: The fetched data in the form of a PyArrow Table.

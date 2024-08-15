@@ -35,7 +35,7 @@ class FlightClientPool:
         logger.info(f"Created FlightClientPool with {size} clients at {uri}")
 
     @asynccontextmanager
-    async def acquire(self):
+    async def acquire_async(self):
         """
         Acquires a FlightClient instance from the pool.
 
@@ -48,7 +48,7 @@ class FlightClientPool:
         finally:
             await self.queue.put(client)
 
-    async def close(self):
+    async def close_async(self):
         while not self.queue.empty():
             client = await self.queue.get()
             client.close()
@@ -77,12 +77,12 @@ class FlightClientHelper:
         self.loop = asyncio.get_running_loop()
         self.executor = executor
 
-    async def fetch_arrow_stream_async(self, ticket_bytes: bytes) -> AsyncIterable[bytes]:
-        reader = await self.fetch_data_reader_async(ticket_bytes)
-        async for data in flight_reader_to_arrow_stream(reader):
+    async def aget_bytes_stream(self, ticket_bytes: bytes) -> AsyncIterable[bytes]:
+        reader = await self.aget_stream_reader(ticket_bytes)
+        async for data in aread_stream_bytes(reader):
             yield data
 
-    async def fetch_data_reader_async(self, ticket_bytes: bytes) -> flight.FlightStreamReader:
+    async def aget_stream_reader(self, ticket_bytes: bytes) -> flight.FlightStreamReader:
         """
         Fetches arrow data from the Flight server using the provided ticket asynchronously.
 
@@ -92,7 +92,7 @@ class FlightClientHelper:
         Returns:
             flight.FlightStreamReader: A reader to stream data from the Flight server.
         """
-        async with self.client_pool.acquire() as client:
+        async with self.client_pool.acquire_async() as client:
             flight_ticket = flight.Ticket(ticket_bytes)
             try:
                 reader = await self.loop.run_in_executor(self.executor, client.do_get, flight_ticket)
@@ -101,35 +101,7 @@ class FlightClientHelper:
                 logger.error(f"Error fetching data: {e}")
                 raise
 
-    async def fetch_data_as_pandas_async(self, ticket_bytes: bytes) -> pd.DataFrame:
-        """
-        Fetches data from the Flight server and converts it to a Pandas DataFrame asynchronously.
-
-        Args:
-            ticket_bytes (bytes): The ticket bytes to request data from the Flight server.
-
-        Returns:
-            pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
-        """
-        reader = await self.fetch_data_reader_async(ticket_bytes)
-        batches = [await self.loop.run_in_executor(self.executor, batch.data.to_pandas) for batch in reader]
-        return pd.concat(batches, ignore_index=True)
-
-    async def fetch_data_as_arrow_async(self, ticket_bytes: bytes) -> pa.Table:
-        """
-        Fetches data from the Flight server and keeps it in Arrow format asynchronously.
-
-        Args:
-            ticket_bytes (bytes): The ticket bytes to request data from the Flight server.
-
-        Returns:
-            pa.Table: The data from the Flight server as an Arrow Table.
-        """
-        reader = await self.fetch_data_reader_async(ticket_bytes)
-        batches = [await self.loop.run_in_executor(self.executor, batch.data) for batch in reader]
-        return pa.Table.from_batches(batches)
-
-    def fetch_data_reader(self, ticket_bytes: bytes) -> flight.FlightStreamReader:
+    def get_stream_reader(self, ticket_bytes: bytes) -> flight.FlightStreamReader:
         """
         Fetches data from the Flight server using the provided ticket synchronously.
 
@@ -139,9 +111,23 @@ class FlightClientHelper:
         Returns:
             flight.FlightStreamReader: A reader to stream data from the Flight server.
         """
-        return asyncio.run(self.fetch_data_reader_async(ticket_bytes))
+        return asyncio.run(self.aget_stream_reader(ticket_bytes))
 
-    def fetch_data_as_pandas(self, ticket_bytes: bytes) -> pd.DataFrame:
+    async def aread_pd_df(self, ticket_bytes: bytes) -> pd.DataFrame:
+        """
+        Fetches data from the Flight server and converts it to a Pandas DataFrame asynchronously.
+
+        Args:
+            ticket_bytes (bytes): The ticket bytes to request data from the Flight server.
+
+        Returns:
+            pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
+        """
+        reader = await self.aget_stream_reader(ticket_bytes)
+        batches = [await self.loop.run_in_executor(self.executor, batch.data.to_pandas) for batch in reader]
+        return pd.concat(batches, ignore_index=True)
+
+    def read_pd_df(self, ticket_bytes: bytes) -> pd.DataFrame:
         """
         Fetches data from the Flight server and converts it to a Pandas DataFrame synchronously.
 
@@ -151,9 +137,23 @@ class FlightClientHelper:
         Returns:
             pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
         """
-        return asyncio.run(self.fetch_data_as_pandas_async(ticket_bytes))
+        return asyncio.run(self.aread_pd_df(ticket_bytes))
 
-    def fetch_data_as_arrow(self, ticket_bytes: bytes) -> pa.Table:
+    async def aread_pa_table(self, ticket_bytes: bytes) -> pa.Table:
+        """
+        Fetches data from the Flight server and keeps it in Arrow format asynchronously.
+
+        Args:
+            ticket_bytes (bytes): The ticket bytes to request data from the Flight server.
+
+        Returns:
+            pa.Table: The data from the Flight server as an Arrow Table.
+        """
+        reader = await self.aget_stream_reader(ticket_bytes)
+        batches = [await self.loop.run_in_executor(self.executor, batch.data) for batch in reader]
+        return pa.Table.from_batches(batches)
+
+    def read_pd_table(self, ticket_bytes: bytes) -> pa.Table:
         """
         Fetches data from the Flight server and keeps it in Arrow format synchronously.
 
@@ -163,10 +163,10 @@ class FlightClientHelper:
         Returns:
             pa.Table: The data from the Flight server as an Arrow Table.
         """
-        return asyncio.run(self.fetch_data_as_arrow_async(ticket_bytes))
+        return asyncio.run(self.aread_pa_table(ticket_bytes))
 
-    async def close(self):
-        await self.client_pool.close()
+    async def close_async(self):
+        await self.client_pool.close_async()
         if self.executor:
             self.executor.shutdown(wait=True)
 
@@ -174,18 +174,18 @@ class FlightClientHelper:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        asyncio.run(self.close())
+        asyncio.run(self.close_async())
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
+        await self.close_async()
 
 
-async def flight_reader_to_arrow_stream(reader: flight.FlightStreamReader) -> AsyncIterable[bytes]:
+async def aread_stream_bytes(reader: flight.FlightStreamReader, timeout: float = 10.0) -> AsyncIterable[bytes]:
     """
-    Convert a FlightStreamReader into an asynchronous generator of bytes.
+    Read stream of arrow bytes from a FlightStreamReader asynchronously.
 
     This function reads chunks from a FlightStreamReader, converts each chunk into
     a stream of bytes using Arrow IPC (Inter-Process Communication) format, and
@@ -195,6 +195,8 @@ async def flight_reader_to_arrow_stream(reader: flight.FlightStreamReader) -> As
     ----------
     reader : flight.FlightStreamReader
         A FlightStreamReader object to read data chunks from.
+    timeout : float
+        Timeout in seconds. Used in waiting for reading a chunk from the given FlightStreamReader.
 
     Yields
     ------
@@ -211,8 +213,9 @@ async def flight_reader_to_arrow_stream(reader: flight.FlightStreamReader) -> As
 
     while True:
         try:
-            chunk = await asyncio.wait_for(asyncio.to_thread(read_chunk), timeout=10.0)
+            chunk = await asyncio.wait_for(asyncio.to_thread(read_chunk), timeout=timeout)
             if chunk is None or chunk.data is None:
+                logger.info("Read empty chunk. Stopping the reader.")
                 break
             sink = pa.BufferOutputStream()
             with pa.ipc.new_stream(sink, schema) as writer:  # 使用获取的 schema
@@ -220,23 +223,28 @@ async def flight_reader_to_arrow_stream(reader: flight.FlightStreamReader) -> As
             buffer = sink.getvalue()
             yield buffer.to_pybytes()  # 将 pyarrow.Buffer 转换为 bytes
         except flight.FlightCancelledError:
-            print("Flight cancelled, stopping the reader.")
+            logger.info("Flight cancelled, stopping the reader.")
             break
         except asyncio.TimeoutError:
-            print("Read chunk timeout, stopping the reader.")
+            logger.info("Read chunk timeout, stopping the reader.")
             break
         except Exception as e:
-            print(f"An error occurred: {e}")
+            logger.info(f"An error occurred: {e}")
             break
 
 
 if __name__ == "__main__":
+    from ..models.params import SqlParams
 
     async def main():
         client = FlightClientHelper("grpc://localhost:8815")
-        ticket_bytes = b'{"kind": "sql", "query": "select 1 as a"}'
+        query_params = SqlParams(query="select 1 as a")
+        logger.info(query_params.to_bytes())
 
-        async for arrow_bytes in client.fetch_arrow_stream_async(ticket_bytes):
-            print(f"Received {len(arrow_bytes)} bytes")
+        async for arrow_bytes in client.aget_bytes_stream(query_params.to_bytes()):
+            logger.info(f"Received {len(arrow_bytes)} bytes")
+
+        df = await client.aread_pd_df(query_params.to_bytes())
+        print(df)
 
     asyncio.run(main())

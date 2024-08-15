@@ -2,6 +2,7 @@
 # and `structlog` log entries, and then send rendered log strings to `logging` handlers. See
 # https://www.structlog.org/en/stable/standard-library.html#rendering-using-structlog-based-formatters-within-logging
 import logging
+import logging.config
 
 import structlog
 

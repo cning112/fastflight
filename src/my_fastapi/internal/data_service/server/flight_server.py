@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from pyarrow import flight
 
-from ..models.base_ticket import BaseTicket
+from ..models.base_params import BaseParams
 from ..services.base_data_service import BaseDataService
 
 logger = logging.getLogger(__name__)
@@ -61,37 +61,42 @@ class FlightServer(flight.FlightServerBase):
         self._executor.shutdown(wait=True)
 
     @staticmethod
-    def get_ticket_and_data_service(ticket_bytes: bytes) -> tuple[BaseTicket, BaseDataService]:
+    def load_params_and_data_service(flight_ticket_bytes: bytes) -> tuple[BaseParams, BaseDataService]:
         """
-        Helper method to parse the ticket and get the corresponding data source instance.
+        Helper method to parse the params and get the corresponding data source instance.
 
         Args:
-            ticket_bytes (bytes): The raw ticket bytes.
+            flight_ticket_bytes (bytes): The raw params bytes.
 
         Returns:
             tuple: A tuple containing the parsed ticket and data source instance.
         """
-        actual_ticket = BaseTicket.from_bytes(ticket_bytes)
-        ticket_type = actual_ticket.kind
+        params = BaseParams.from_bytes(flight_ticket_bytes)
 
         try:
-            data_source_cls = BaseDataService.get_data_service_cls(ticket_type)
-            data_source = data_source_cls()
-            return actual_ticket, data_source
+            data_service_cls = BaseDataService.get_data_service_cls(params.kind)
+            data_service = data_service_cls()
+            return params, data_service
         except ValueError as e:
-            logger.error(f"Data service unavailable for ticket type {ticket_type}: {e}")
+            logger.error(f"Data service unavailable for ticket type {params.kind}: {e}")
             raise flight.FlightUnavailableError(f"Data service unavailable: {e}")
         except Exception as e:
-            logger.error(f"Error getting data source for ticket type {ticket_type}: {e}")
+            logger.error(f"Error getting data source for ticket type {params.kind}: {e}")
             raise
 
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         try:
-            actual_ticket, data_service = self.get_ticket_and_data_service(ticket.ticket)
-            reader = asyncio.run(data_service.create_batch_reader(actual_ticket, batch_size=512))
+            params, data_service = self.load_params_and_data_service(ticket.ticket)
+            reader = asyncio.run(data_service.aget_reader(params, batch_size=512))
             return flight.RecordBatchStream(reader)
         except flight.FlightUnavailableError as e:
             raise e
         except Exception as e:
             logger.error(f"Internal server error: {e}")
             raise flight.FlightInternalError(f"Internal server error: {e}")
+
+
+if __name__ == "__main__":
+    location = "grpc://0.0.0.0:8815"
+    fl_server = FlightServer(location)
+    fl_server.serve_blocking()

@@ -2,15 +2,15 @@ import logging
 from abc import ABC, abstractmethod
 from typing import ClassVar, Generic, TypeVar
 
-from pyarrow import RecordBatchReader, Table
+import pyarrow as pa
 
-from ..models.base_ticket import BaseTicket
-from ..models.data_source import DataSource
+from ..models.base_params import BaseParams
+from ..models.data_source import DataSourceKind
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T", bound=BaseTicket)
-DSC = type["BaseDataService"]
+T = TypeVar("T", bound=BaseParams)
+DataServiceCls = type["BaseDataService"]
 
 
 class BaseDataService(Generic[T], ABC):
@@ -20,21 +20,21 @@ class BaseDataService(Generic[T], ABC):
     registry for different data source types.
     """
 
-    registry: ClassVar[dict[DataSource, DSC]] = {}
+    registry: ClassVar[dict[DataSourceKind, DataServiceCls]] = {}
 
     @classmethod
-    def register(cls, kind: DataSource):
+    def register(cls, kind: DataSourceKind):
         """
         Register a data source type with its corresponding class.
 
         Args:
-            kind (DataSource): The type of the data source to register.
+            kind (DataSourceKind): The type of the data source to register.
 
         Returns:
             type[BaseDataService]: The registered data source class.
         """
 
-        def inner(subclass: DSC) -> DSC:
+        def inner(subclass: DataServiceCls) -> DataServiceCls:
             if kind in cls.registry:
                 raise ValueError(f"Data source type {kind} is already registered by {cls.registry[kind].__qualname__}.")
             cls.registry[kind] = subclass
@@ -44,12 +44,12 @@ class BaseDataService(Generic[T], ABC):
         return inner
 
     @classmethod
-    def get_data_service_cls(cls, kind: DataSource) -> DSC:
+    def get_data_service_cls(cls, kind: DataSourceKind) -> DataServiceCls:
         """
         Get the data service class associated with the given data source type.
 
         Args:
-            kind (DataSource): The type of the data source to retrieve.
+            kind (DataSourceKind): The type of the data source to retrieve.
 
         Returns:
             type[BaseDataService]: The data source class associated with the data source type.
@@ -64,7 +64,7 @@ class BaseDataService(Generic[T], ABC):
         return data_service_cls
 
     @abstractmethod
-    async def get_table(self, params: T) -> Table:
+    async def aget_pa_table(self, params: T) -> pa.Table:
         """
         Fetch the entire dataset based on the given parameters.
 
@@ -76,7 +76,7 @@ class BaseDataService(Generic[T], ABC):
         """
         raise NotImplementedError
 
-    async def create_batch_reader(self, params: T, batch_size: int = 100) -> RecordBatchReader:
+    async def aget_reader(self, params: T, batch_size: int = 100) -> pa.RecordBatchReader:
         """
         Create a RecordBatchReader to read data in batches based on the given parameters.
 
@@ -91,9 +91,9 @@ class BaseDataService(Generic[T], ABC):
             Exception: If there is an error in creating the batch reader.
         """
         try:
-            table = await self.get_table(params)
+            table = await self.aget_pa_table(params)
             batches = table.to_batches(max_chunksize=batch_size)
-            return RecordBatchReader.from_batches(table.schema, batches)
+            return pa.RecordBatchReader.from_batches(table.schema, batches)
         except Exception as e:
             logger.error(f"Error fetching batches: {e}")
             raise

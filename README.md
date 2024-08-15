@@ -1,8 +1,10 @@
-# pre-commit
+## Flight service
+[README](src/my_fastapi/internal/data_service/README.md)
 
-- prettier
-    - js/ts, css, json, yaml, toml
+## Development Settings
+
+### pre-commit
 - .py files
-    - isort
-    - black
+    - ruff lint
+    - ruff format
     - requirements.txt files

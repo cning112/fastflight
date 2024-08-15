@@ -1,6 +1,6 @@
 from enum import Enum
 
 
-class DataSource(str, Enum):
+class DataSourceKind(str, Enum):
     SQL = "sql"
     NoSQL = "nosql"
