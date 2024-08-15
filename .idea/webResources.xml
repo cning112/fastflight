@@ -5,9 +5,9 @@
       <entry url="file://$PROJECT_DIR$">
         <entryData>
           <resourceRoots>
-            <path value="file://$PROJECT_DIR$/backend/config" />
-            <path value="file://$PROJECT_DIR$/backend/schemas" />
-            <path value="file://$PROJECT_DIR$/backend/scripts" />
+            <path value="file://$PROJECT_DIR$/config" />
+            <path value="file://$PROJECT_DIR$/schemas" />
+            <path value="file://$PROJECT_DIR$/scripts" />
             <path value="file://$PROJECT_DIR$/frontend/scripts" />
             <path value="file://$PROJECT_DIR$/frontend/public" />
             <path value="file://$PROJECT_DIR$/my-nextjs/public" />

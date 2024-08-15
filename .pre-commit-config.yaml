@@ -3,18 +3,9 @@ default_stages: [ pre-commit ]
 repos:
   - repo: local
     hooks:
-      - id: local-biome-check
-        name: biome check
-        entry: npx biome check --apply --files-ignore-unknown=true --no-errors-on-unmatched
-        language: system
-        types: [ text ]
-        files: "\\.(jsx?|tsx?|c(js|ts)|m(js|ts)|d\\.(ts|cts|mts)|jsonc?)$"
-
-  - repo: local
-    hooks:
       - id: nox
         name: Nox
-        entry: nox -f backend/noxfile.py --session lint -- fix
+        entry: nox -f noxfile.py --session lint -- fix
         pass_filenames: false
         language: system
         types: [ python ]
@@ -25,7 +16,7 @@ repos:
       - id: uv-pip-compile
         name: uv pip-compile prod
         description: Automatically compile requirements.
-        entry: uv pip compile backend/pyproject.toml -o backend/prod-requirements.txt
+        entry: uv pip compile pyproject.toml -o prod-requirements.txt
         additional_dependencies: [ "uv" ]
         language: python
         files: (pyproject\.toml$|prod\-requirements\.txt$)
@@ -35,7 +26,7 @@ repos:
       - id: uv-pip-compile
         name: uv pip-compile dev
         description: Automatically compile requirements.
-        entry: uv pip compile backend/pyproject.toml --extra dev --extra test -o backend/requirements.txt
+        entry: uv pip compile pyproject.toml --extra dev --extra test -o requirements.txt
         additional_dependencies: [ "uv" ]
         language: python
         files: (pyproject\.toml$|requirements\.txt$)
@@ -45,7 +36,7 @@ repos:
       - id: uv-pip-compile
         name: uv pip-compile test
         description: Automatically compile requirements.
-        entry: uv pip compile backend/pyproject.toml --extra test -o backend/test-requirements.txt
+        entry: uv pip compile pyproject.toml --extra test -o test-requirements.txt
         additional_dependencies: [ "uv" ]
         language: python
         files: (pyproject\.toml$|test-requirements\.txt$)
