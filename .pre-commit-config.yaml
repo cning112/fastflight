@@ -1,44 +1,34 @@
 default_stages: [ pre-commit ]
 
 repos:
-  - repo: local
+#  - repo: local
+#    hooks:
+#      - id: nox
+#        name: Nox
+#        entry: nox -f noxfile.py --session style -- fix
+#        pass_filenames: false
+#        language: system
+#        types: [ python ]
+#        verbose: true
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.1
     hooks:
-      - id: nox
-        name: Nox
-        entry: nox -f noxfile.py --session lint -- fix
-        pass_filenames: false
-        language: system
-        types: [ python ]
-        verbose: true
+      - id: ruff
+        args: [ --fix ]
+        types_or: [ python, pyi, jupyter ]
+      - id: ruff-format
+        types_or: [ python, pyi, jupyter ]
 
-  - repo: local
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.2.37
     hooks:
-      - id: uv-pip-compile
-        name: uv pip-compile prod
-        description: Automatically compile requirements.
-        entry: uv pip compile pyproject.toml -o prod-requirements.txt
-        additional_dependencies: [ "uv" ]
-        language: python
-        files: (pyproject\.toml$|prod\-requirements\.txt$)
-        pass_filenames: false
-        always_run: false
-
-      - id: uv-pip-compile
-        name: uv pip-compile dev
-        description: Automatically compile requirements.
-        entry: uv pip compile pyproject.toml --extra dev --extra test -o requirements.txt
-        additional_dependencies: [ "uv" ]
-        language: python
-        files: (pyproject\.toml$|requirements\.txt$)
-        pass_filenames: false
-        always_run: false
-
-      - id: uv-pip-compile
-        name: uv pip-compile test
-        description: Automatically compile requirements.
-        entry: uv pip compile pyproject.toml --extra test -o test-requirements.txt
-        additional_dependencies: [ "uv" ]
-        language: python
-        files: (pyproject\.toml$|test-requirements\.txt$)
-        pass_filenames: false
-        always_run: false
+      - id: pip-compile
+        args: [pyproject.toml, -o, prod-requirements.txt]
+        files: ^(pyproject\.toml$|prod\-requirements\.txt$)
+      - id: pip-compile
+        args: [pyproject.toml, --extra, test, -o, test-requirements.txt]
+        files: ^(pyproject\.toml$|test\-requirements\.txt$)
+      - id: pip-compile
+        args: [pyproject.toml, --all-extras, -o, requirements.txt]
+        files: ^(pyproject\.toml$|requirements\.txt$)
