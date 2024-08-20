@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="flight_server" type="PythonConfigurationType" factoryName="Python">
-    <module name="my_fastapi" />
+    <module name="fastflight" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />

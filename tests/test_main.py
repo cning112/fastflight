@@ -1,7 +1,7 @@
 import pandas as pd
 from fastapi.testclient import TestClient
 
-from my_fastapi.main import app
+from fastflight.main import app
 
 client = TestClient(app)
 client.base_url = client.base_url.join("/api")

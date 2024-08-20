@@ -2,8 +2,8 @@ import pytest
 from pydantic import TypeAdapter
 from starlette.testclient import TestClient
 
-from my_fastapi.internal.ui_form.types import TenorBusDay, TenorYearMonth
-from my_fastapi.main import app
+from fastflight.internal.ui_form.types import TenorBusDay, TenorYearMonth
+from fastflight.main import app
 
 tym = TypeAdapter(TenorYearMonth)
 tb = TypeAdapter(TenorBusDay)

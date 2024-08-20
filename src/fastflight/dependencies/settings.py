@@ -2,7 +2,7 @@ import os
 from functools import cache
 from pathlib import Path
 
-from my_fastapi.internal.settings import AppSettings
+from fastflight.internal.settings import AppSettings
 
 
 @cache

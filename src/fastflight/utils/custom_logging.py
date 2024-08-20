@@ -6,7 +6,7 @@ import logging.config
 
 import structlog
 
-from my_fastapi.dependencies.settings import get_app_settings
+from fastflight.dependencies.settings import get_app_settings
 
 shared_processors = [
     # If log level is too low, abort pipeline and throw away log entry.

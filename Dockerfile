@@ -9,4 +9,4 @@ COPY config ./config
 COPY src .
 
 EXPOSE 80
-CMD ["uvicorn", "my_fastapi.main:app", "--host", "0.0.0.0", "--port", "80", "--log-config", "config/log-config.yaml"]
+CMD ["uvicorn", "fastflight.main:app", "--host", "0.0.0.0", "--port", "80", "--log-config", "config/log-config.yaml"]

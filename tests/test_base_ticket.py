@@ -1,5 +1,5 @@
-from my_fastapi.internal.data_server.models.base_ticket import BaseTicket
-from my_fastapi.internal.data_server.models.tickets import SQLQueryTicket
+from fastflight.internal.data_server.models.base_ticket import BaseTicket
+from fastflight.internal.data_server.models.tickets import SQLQueryTicket
 
 
 def test_base_ticket_serialization_and_deserialization():

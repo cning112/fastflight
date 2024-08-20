@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/my_fastapi.iml" filepath="$PROJECT_DIR$/.idea/my_fastapi.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/fastflight.iml" filepath="$PROJECT_DIR$/.idea/fastflight.iml" />
     </modules>
   </component>
 </project>

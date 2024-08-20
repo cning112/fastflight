@@ -34,7 +34,7 @@ def find_models(module: ModuleType) -> dict[str, Type[BaseModel]]:
 
 if __name__ == "__main__":
     output_dir = Path(__file__).parent.parent / "schemas"
-    modules = import_submodules("my_fastapi.internal.schemas")
+    modules = import_submodules("fastflight.internal.schemas")
     for mod_name, mod in modules.items():
         for model_name, model in find_models(mod).items():
             try:

@@ -4,8 +4,8 @@ from typing import Union
 
 from fastapi import APIRouter
 
-from my_fastapi.internal.ui_form.form_validator import FieldValidationError, UiFormBase, validate_rules
-from my_fastapi.internal.ui_form.types import TenorBusDay, TenorYearMonth
+from fastflight.internal.ui_form.form_validator import FieldValidationError, UiFormBase, validate_rules
+from fastflight.internal.ui_form.types import TenorBusDay, TenorYearMonth
 
 logger = logging.getLogger(__name__)
 

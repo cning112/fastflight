@@ -3,16 +3,30 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "my_fastapi"
+name = "fastflight"
 authors = [{ name = "Chao Ning", email = "chao.ning.uk@gmail.com" }]
-description = "My fastapi app"
-version = "0.0.1"
+description = "FastAPI and Arrow Flight integrated server offering efficient dual-protocol support for both REST and gRPC data streaming."
+version = "0.1.0"
 readme = "README.md"
 requires-python = ">= 3.11"
-dependencies = ["email-validator", "fastapi[all]>=0.110.2", "pydantic>=2.0", "pandas", "pyarrow>=14.0.0", "structlog"]
+dependencies = [
+    "email-validator",
+    "fastapi[all]>=0.110.2",
+    "pandas",
+    "pyarrow>=14.0.0",
+    "pydantic>=2.0",
+    "structlog",
+]
 
 [project.optional-dependencies]
-dev = ["jupyterlab", "nox", "pre-commit", "rich", "uv"]
+dev = [
+    "jupyterlab",
+    "nox",
+    "pre-commit",
+    "rich",
+    "ruff",
+    "uv",
+]
 test = ["pytest", "pytest-cov"]
 
 [tool.ruff]
