@@ -3,6 +3,7 @@
 # https://www.structlog.org/en/stable/standard-library.html#rendering-using-structlog-based-formatters-within-logging
 import logging
 import logging.config
+from pathlib import Path
 
 import structlog
 
@@ -68,6 +69,8 @@ def setup_logging():
 
     root_logger = logging.getLogger()
     app_settings = get_app_settings()
+
+    Path(app_settings.log_file).parent.mkdir(exist_ok=True, parents=True)
 
     logging.config.dictConfig(
         {
