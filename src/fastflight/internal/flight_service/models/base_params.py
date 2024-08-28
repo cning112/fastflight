@@ -1,7 +1,7 @@
 import json
 import logging
 from abc import ABC
-from typing import ClassVar, TypeVar
+from typing import ClassVar, TypeAlias, TypeVar
 
 from pydantic import BaseModel
 
@@ -10,7 +10,7 @@ from .data_source import DataSourceKind
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound="BaseParams")
-ParamsCls = type["BaseParams"]
+ParamsCls: TypeAlias = type["BaseParams"]
 
 
 class BaseParams(BaseModel, ABC):

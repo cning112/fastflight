@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic import Field
 
 from .base_params import BaseParams
@@ -13,3 +15,8 @@ class SqlParams(BaseParams):
 class NoSqlParams(BaseParams):
     collection: str = Field(...)
     filter: dict = Field(default={})
+
+
+@BaseParams.register(DataSourceKind.CSV)
+class CsvFileParams(BaseParams):
+    path: Path = Field(...)
