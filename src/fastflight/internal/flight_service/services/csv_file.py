@@ -1,7 +1,7 @@
 import pandas as pd
 import pyarrow as pa
 
-from ..models.data_source import DataSourceKind
+from ..models.data_source_kind import DataSourceKind
 from ..models.params import CsvFileParams
 from ..services.base_data_service import BaseDataService
 

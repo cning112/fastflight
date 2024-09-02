@@ -5,7 +5,7 @@ from typing import ClassVar, Generic, TypeVar
 import pyarrow as pa
 
 from ..models.base_params import BaseParams
-from ..models.data_source import DataSourceKind
+from ..models.data_source_kind import DataSourceKind
 
 logger = logging.getLogger(__name__)
 

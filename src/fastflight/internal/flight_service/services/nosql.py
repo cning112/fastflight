@@ -1,6 +1,6 @@
 import pyarrow as pa
 
-from ..models.data_source import DataSourceKind
+from ..models.data_source_kind import DataSourceKind
 from ..models.params import NoSqlParams
 from .base_data_service import BaseDataService
 

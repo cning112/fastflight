@@ -5,7 +5,7 @@ from typing import ClassVar, TypeAlias, TypeVar
 
 from pydantic import BaseModel
 
-from .data_source import DataSourceKind
+from .data_source_kind import DataSourceKind
 
 logger = logging.getLogger(__name__)
 
