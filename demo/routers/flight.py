@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, FastAPI
 from fastapi.responses import StreamingResponse
 from starlette.requests import Request
 
-from ..internal.flight_service.client.client_helpers import FlightClientHelper
-from ..internal.flight_service.models.base_params import BaseParams
-from ..internal.flight_service.server.flight_server import FlightServer
+from fastflight.client.client_helpers import FlightClientHelper
+from fastflight.models.base_params import BaseParams
+from fastflight.server.flight_server import FlightServer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/flight")

@@ -1,8 +1,8 @@
 import pyarrow as pa
 
-from ..models.data_source_kind import DataSourceKind
-from ..models.params import NoSqlParams
-from .base_data_service import BaseDataService
+from demo.internal.flight_service.models.params import NoSqlParams
+from fastflight.models.data_source_kind import DataSourceKind
+from fastflight.services.base_data_service import BaseDataService
 
 T = NoSqlParams
 

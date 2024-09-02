@@ -7,7 +7,7 @@ from pathlib import Path
 
 import structlog
 
-from fastflight.dependencies.settings import get_app_settings
+from demo.dependencies.settings import get_app_settings
 
 shared_processors = [
     # If log level is too low, abort pipeline and throw away log entry.

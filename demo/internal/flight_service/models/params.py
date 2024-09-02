@@ -2,8 +2,8 @@ from pathlib import Path
 
 from pydantic import Field
 
-from .base_params import BaseParams
-from .data_source_kind import DataSourceKind
+from fastflight.models.base_params import BaseParams
+from fastflight.models.data_source_kind import DataSourceKind
 
 
 @BaseParams.register(DataSourceKind.SQL)

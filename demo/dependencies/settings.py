@@ -2,7 +2,7 @@ import os
 from functools import cache
 from pathlib import Path
 
-from fastflight.internal.settings import AppSettings
+from demo.internal.settings import AppSettings
 
 
 @cache
