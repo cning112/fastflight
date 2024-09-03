@@ -16,11 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "nox",
-    "pre-commit",
-    "uv",
-]
+dev = ["pre-commit"]
 test = ["pytest", "pytest-cov"]
 
 [tool.ruff]
