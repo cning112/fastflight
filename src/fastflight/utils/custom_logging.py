@@ -6,7 +6,6 @@ import logging.config
 from pathlib import Path
 
 import structlog
-
 from demo.dependencies.settings import get_app_settings
 
 shared_processors = [

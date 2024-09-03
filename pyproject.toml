@@ -10,28 +10,22 @@ version = "0.1.0"
 readme = "README.md"
 requires-python = ">= 3.11"
 dependencies = [
-    "email-validator",
-    "fastapi[all]>=0.110.2",
-    "pandas",
+    "fastapi>=0.110.2",
     "pyarrow>=14.0.0",
     "pydantic>=2.0",
-    "structlog",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "jupyterlab",
     "nox",
     "pre-commit",
-    "rich",
-    "ruff",
     "uv",
 ]
 test = ["pytest", "pytest-cov"]
 
 [tool.ruff]
 line-length = 120
-src = ["src", "tests"]
+src = ["src", "tests", "demo"]
 
 [tool.ruff.format]
 skip-magic-trailing-comma = true
