@@ -1,14 +1,14 @@
 import pandas as pd
 import pyarrow as pa
 
+from demo.internal.flight_service.models.data_kinds import DataKind
 from demo.internal.flight_service.models.params import CsvFileParams
-from fastflight.models.data_source_kind import DataSourceKind
 from fastflight.services.base_data_service import BaseDataService
 
 T = CsvFileParams
 
 
-@BaseDataService.register(kind=DataSourceKind.CSV)
+@BaseDataService.register(kind_str=DataKind.CSV)
 class CsvFileService(BaseDataService[T]):
     async def aget_pa_table(self, params: T) -> pa.Table:
         if not (resolved := params.path.resolve()).exists():

@@ -1,13 +1,13 @@
 import pyarrow as pa
 
+from demo.internal.flight_service.models.data_kinds import DataKind
 from demo.internal.flight_service.models.params import NoSqlParams
-from fastflight.models.data_source_kind import DataSourceKind
 from fastflight.services.base_data_service import BaseDataService
 
 T = NoSqlParams
 
 
-@BaseDataService.register(DataSourceKind.NoSQL)
+@BaseDataService.register(DataKind.NoSQL)
 class NoSQLDataService(BaseDataService[T]):
     """
     A data source class for NoSQL queries.

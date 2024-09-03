@@ -234,10 +234,11 @@ async def aread_stream_bytes(reader: flight.FlightStreamReader, timeout: float =
 
 
 if __name__ == "__main__":
-    from ..models.params import SqlParams
 
     async def main():
         client = FlightClientHelper("grpc://localhost:8815")
+        from demo.internal.flight_service.models.params import SqlParams
+
         query_params = SqlParams(query="select 1 as a")
         logger.info(query_params.to_bytes())
 

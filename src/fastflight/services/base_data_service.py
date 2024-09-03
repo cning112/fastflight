@@ -4,8 +4,7 @@ from typing import ClassVar, Generic, TypeVar
 
 import pyarrow as pa
 
-from ..models.base_params import BaseParams
-from ..models.data_source_kind import DataSourceKind
+from fastflight.services.base_params import BaseParams
 
 logger = logging.getLogger(__name__)
 
@@ -20,36 +19,39 @@ class BaseDataService(Generic[T], ABC):
     registry for different data source types.
     """
 
-    registry: ClassVar[dict[DataSourceKind, DataServiceCls]] = {}
+    registry: ClassVar[dict[str, DataServiceCls]] = {}
 
     @classmethod
-    def register(cls, kind: DataSourceKind):
+    def register(cls, kind: str):
         """
         Register a data source type with its corresponding class.
 
         Args:
-            kind (DataSourceKind): The type of the data source to register.
+            kind: The type of the data source to register.
 
         Returns:
             type[BaseDataService]: The registered data source class.
         """
+        kind_str = str(kind)
 
         def inner(subclass: DataServiceCls) -> DataServiceCls:
-            if kind in cls.registry:
-                raise ValueError(f"Data source type {kind} is already registered by {cls.registry[kind].__qualname__}.")
-            cls.registry[kind] = subclass
-            logger.info(f"Registered data source type {kind} for class {subclass.__qualname__}")
+            if kind_str in cls.registry:
+                raise ValueError(
+                    f"Data source type {kind_str} is already registered by {cls.registry[kind_str].__qualname__}."
+                )
+            cls.registry[kind_str] = subclass
+            logger.info(f"Registered data source type {kind_str} for class {subclass.__qualname__}")
             return subclass
 
         return inner
 
     @classmethod
-    def get_data_service_cls(cls, kind: DataSourceKind) -> DataServiceCls:
+    def get_data_service_cls(cls, kind: str) -> DataServiceCls:
         """
         Get the data service class associated with the given data source type.
 
         Args:
-            kind (DataSourceKind): The type of the data source to retrieve.
+            kind (str): The type of the data source to retrieve.
 
         Returns:
             type[BaseDataService]: The data source class associated with the data source type.

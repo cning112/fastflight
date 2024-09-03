@@ -5,8 +5,6 @@ from typing import ClassVar, TypeAlias, TypeVar
 
 from pydantic import BaseModel
 
-from .data_source_kind import DataSourceKind
-
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound="BaseParams")
@@ -19,35 +17,38 @@ class BaseParams(BaseModel, ABC):
     and managing the registry for different params types.
     """
 
-    kind: ClassVar[DataSourceKind]
-    registry: ClassVar[dict[DataSourceKind, ParamsCls]] = {}
+    kind: ClassVar[str]
+    registry: ClassVar[dict[str, ParamsCls]] = {}
 
     @classmethod
-    def register(cls, kind: DataSourceKind):
+    def register(cls, kind):
         """
         Register a data source type with the corresponding params class.
 
         Args:
-            kind (DataSourceKind): The type of the params to register.
+            kind: The type of the params to register.
         """
+        kind_str = str(kind)
 
         def inner(sub_params_cls: ParamsCls) -> ParamsCls:
-            if kind in cls.registry:
-                raise ValueError(f"Params type {kind} is already registered by {cls.registry[kind].__qualname__}.")
-            setattr(sub_params_cls, "kind", kind)
-            cls.registry[kind] = sub_params_cls
-            logger.info(f"Registered params type {kind} for class {sub_params_cls.__qualname__}")
+            if kind_str in cls.registry:
+                raise ValueError(
+                    f"Params type {kind_str} is already registered by {cls.registry[kind_str].__qualname__}."
+                )
+            setattr(sub_params_cls, "kind", kind_str)
+            cls.registry[kind_str] = sub_params_cls
+            logger.info(f"Registered params type {kind_str} for class {sub_params_cls.__qualname__}")
             return sub_params_cls
 
         return inner
 
     @classmethod
-    def get_params_cls(cls, kind: DataSourceKind) -> ParamsCls:
+    def get_params_cls(cls, kind: str) -> ParamsCls:
         """
         Get the params class associated with the given params type.
 
         Args:
-            kind (DataSourceKind): The type of the params to retrieve.
+            kind (str): The type of the params to retrieve.
 
         Returns:
             type[BaseParams]: The params class associated with the params type.
@@ -74,8 +75,8 @@ class BaseParams(BaseModel, ABC):
         """
         try:
             json_data = json.loads(data)
-            params_type = DataSourceKind(json_data.pop("kind"))
-            params_cls = cls.get_params_cls(params_type)
+            kind = json_data.pop("kind")
+            params_cls = cls.get_params_cls(kind)
             return params_cls.model_validate(json_data)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Error deserializing params: {e}")
@@ -90,7 +91,7 @@ class BaseParams(BaseModel, ABC):
         """
         try:
             json_data = self.model_dump()
-            json_data["kind"] = self.kind.value
+            json_data["kind"] = str(self.kind)
             return json.dumps(json_data).encode("utf-8")
         except (TypeError, ValueError) as e:
             logger.error(f"Error serializing params: {e}")

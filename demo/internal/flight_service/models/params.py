@@ -2,21 +2,21 @@ from pathlib import Path
 
 from pydantic import Field
 
-from fastflight.models.base_params import BaseParams
-from fastflight.models.data_source_kind import DataSourceKind
+from demo.internal.flight_service.models.data_kinds import DataKind
+from fastflight.services.base_params import BaseParams
 
 
-@BaseParams.register(DataSourceKind.SQL)
+@BaseParams.register(DataKind.SQL)
 class SqlParams(BaseParams):
     query: str = Field(..., min_length=1)
 
 
-@BaseParams.register(DataSourceKind.NoSQL)
+@BaseParams.register(DataKind.NO_SQL)
 class NoSqlParams(BaseParams):
     collection: str = Field(...)
     filter: dict = Field(default={})
 
 
-@BaseParams.register(DataSourceKind.CSV)
+@BaseParams.register(DataKind.CSV)
 class CsvFileParams(BaseParams):
     path: Path = Field(...)

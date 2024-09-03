@@ -1,7 +1,7 @@
 import pandas as pd
 from fastapi.testclient import TestClient
 
-from fastflight.main import app
+from demo.main import app
 
 client = TestClient(app)
 client.base_url = client.base_url.join("/api")
@@ -22,7 +22,7 @@ def test_hello():
 def test_settings():
     response = client.get("/settings")
     assert response.status_code == 200
-    assert response.json() == {"env": "local"}
+    assert response.json()["env"] == "local"
 
 
 def test_csv_df():

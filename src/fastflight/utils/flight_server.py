@@ -4,8 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from pyarrow import flight
 
-from ..models.base_params import BaseParams
-from ..services.base_data_service import BaseDataService
+from fastflight.services.base_data_service import BaseDataService
+from fastflight.services.base_params import BaseParams
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +97,6 @@ class FlightServer(flight.FlightServerBase):
 
 
 if __name__ == "__main__":
-    location = "grpc://0.0.0.0:8815"
-    fl_server = FlightServer(location)
+    loc = "grpc://0.0.0.0:8815"
+    fl_server = FlightServer(loc)
     fl_server.serve_blocking()
