@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from starlette.requests import Request
 
-from fastflight.services.base_params import BaseParams
 from fastflight.utils.fastapi_utils.lifespan import get_flight_client
 from fastflight.utils.flight_client import PooledClient
 
@@ -38,28 +37,13 @@ async def _client_helper(request: Request) -> PooledClient:
     return get_flight_client(request.app)
 
 
-def _ticket_request() -> BaseParams:
-    """
-    This function doesn't actually parse the request body,
-    but serves to indicate the expected request body type in OpenAPI documentation.
-    """
-    # Return a dummy instance just for OpenAPI documentation purposes
-    return BaseParams.from_bytes(b'{"kind": "sql", "query": "1"}')
-
-
 @router.post("/")
-async def read_data(
-    body_bytes: bytes = Depends(_body_bytes),
-    # TODO: this actually doesn't work. The swapper page doesn't show the expected data model
-    ticket_request: BaseParams = Depends(_ticket_request),
-    client_helper: PooledClient = Depends(_client_helper),
-):
+async def read_data(body_bytes: bytes = Depends(_body_bytes), client_helper: PooledClient = Depends(_client_helper)):
     """
     Endpoint to read data from the Flight server and stream it back in Arrow format.
 
     Args:
         body_bytes (bytes): The raw request body bytes.
-        ticket_request (BaseParams): Only used for OpenAPI documentation purposes. Won't parse body data.
         client_helper(PooledClient): The FlightClientHelper instance for fetching data from the Flight server.
 
     Returns:

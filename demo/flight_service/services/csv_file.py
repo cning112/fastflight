@@ -8,7 +8,7 @@ from fastflight.services.base_data_service import BaseDataService
 T = CsvFileParams
 
 
-@BaseDataService.register(kind_str=DataKind.CSV)
+@BaseDataService.register(DataKind.CSV)
 class CsvFileService(BaseDataService[T]):
     async def aget_pa_table(self, params: T) -> pa.Table:
         if not (resolved := params.path.resolve()).exists():
