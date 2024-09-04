@@ -36,25 +36,25 @@ async def flight_server_lifespan(app: FastAPI):
 
 
 @asynccontextmanager
-async def flight_client_helper_lifespan(app: FastAPI):
+async def flight_client_lifespan(app: FastAPI):
     """
-    An asynchronous context manager that handles the lifespan of a flight client helper.
+    An asynchronous context manager that handles the lifespan of a flight client.
 
     This function initializes a flight client helper at a specified location, sets it as the client helper for the given FastAPI application, and yields control back to the caller. When the context is exited, it stops the flight client helper and awaits its termination.
 
     Parameters:
         app (FastAPI): The FastAPI application instance.
     """
-    logger.info("Starting flight_client_helper_lifespan")
+    logger.info("Starting flight_client_lifespan")
     location = "grpc://localhost:8815"
     client = PooledClient(location)
     set_flight_client(app, client)
     try:
         yield
     finally:
-        logger.info("Stopping flight_client_helper_lifespan")
+        logger.info("Stopping flight_client_lifespan")
         await client.close_async()
-        logger.info("Ended flight_client_helper_lifespan")
+        logger.info("Ended flight_client_lifespan")
 
 
 @asynccontextmanager
@@ -71,24 +71,24 @@ async def combined_lifespan(app: FastAPI):
     """
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(flight_server_lifespan(app))
-        await stack.enter_async_context(flight_client_helper_lifespan(app))
+        await stack.enter_async_context(flight_client_lifespan(app))
         logger.info("Entering combined lifespan")
         yield
         logger.info("Exiting combined lifespan")
 
 
-def set_flight_client(app: FastAPI, client_helper: PooledClient) -> None:
+def set_flight_client(app: FastAPI, client: PooledClient) -> None:
     """
     Sets the client helper for the given FastAPI application.
 
     Args:
         app (FastAPI): The FastAPI application instance.
-        client_helper (PooledClient): The client helper to be set.
+        client (PooledClient): The client helper to be set.
 
     Returns:
         None
     """
-    app.state._client_helper = client_helper
+    app.state._flight_client = client
 
 
 def get_flight_client(app: FastAPI) -> PooledClient:
@@ -101,9 +101,9 @@ def get_flight_client(app: FastAPI) -> PooledClient:
     Returns:
         PooledClient: The client helper associated with the given FastAPI application.
     """
-    helper = getattr(app.state, "client_helper", None)
+    helper = getattr(app.state, "_flight_client", None)
     if helper is None:
         raise ValueError(
-            "Flight client helper is not set in the FastAPI application. Use the :meth:`fastflight.utils.fastapi_utils.lifespan.combined_lifespan` lifespan in your FastAPI application."
+            "Flight client is not set in the FastAPI application. Use the :meth:`fastflight.utils.fastapi_utils.lifespan.combined_lifespan` lifespan in your FastAPI application."
         )
     return helper

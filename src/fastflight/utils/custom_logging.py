@@ -21,10 +21,6 @@ shared_processors = [
     # If the "stack_info" key in the event dict is true, remove it and
     # render the current stack trace in the "stack" key.
     structlog.processors.StackInfoRenderer(),
-    # If the "exc_info" key in the event dict is either true or a
-    # sys.exc_info() tuple, remove "exc_info" and render the exception
-    # with traceback into the "exception" key.
-    structlog.processors.format_exc_info,
     # If some value is in bytes, decode it to a Unicode str.
     structlog.processors.UnicodeDecoder(),
     # Add callsite parameters.
@@ -113,6 +109,10 @@ def setup_logging(
                 "plain": {
                     "()": structlog.stdlib.ProcessorFormatter,
                     "processors": [
+                        # If the "exc_info" key in the event dict is either true or a
+                        # sys.exc_info() tuple, remove "exc_info" and render the exception
+                        # with traceback into the "exception" key.
+                        structlog.processors.format_exc_info,
                         # Remove _record & _from_structlog from the event dict.
                         structlog.stdlib.ProcessorFormatter.remove_processors_meta,
                         structlog.dev.ConsoleRenderer(colors=False),
@@ -123,6 +123,10 @@ def setup_logging(
                 "colored": {
                     "()": structlog.stdlib.ProcessorFormatter,
                     "processors": [
+                        # If the "exc_info" key in the event dict is either true or a
+                        # sys.exc_info() tuple, remove "exc_info" and render the exception
+                        # with traceback into the "exception" key.
+                        structlog.processors.format_exc_info,
                         # Remove _record & _from_structlog from the event dict.
                         structlog.stdlib.ProcessorFormatter.remove_processors_meta,
                         structlog.dev.ConsoleRenderer(colors=True),

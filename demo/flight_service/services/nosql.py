@@ -7,7 +7,7 @@ from fastflight.services.base_data_service import BaseDataService
 T = NoSqlParams
 
 
-@BaseDataService.register(DataKind.NoSQL)
+@BaseDataService.register(DataKind.NO_SQL)
 class NoSQLDataService(BaseDataService[T]):
     """
     A data source class for NoSQL queries.

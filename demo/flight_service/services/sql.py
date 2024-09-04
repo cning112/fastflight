@@ -1,9 +1,14 @@
+import logging
+import sqlite3
+
 import pandas as pd
 import pyarrow as pa
 
 from demo.flight_service.models.data_kinds import DataKind
 from demo.flight_service.models.params import SqlParams
 from fastflight.services.base_data_service import BaseDataService
+
+logger = logging.getLogger(__name__)
 
 T = SqlParams
 
@@ -24,6 +29,8 @@ class SQLDataService(BaseDataService[T]):
         Returns:
             Table: The fetched data in the form of a PyArrow Table.
         """
-        # Implement fetching logic for SQL
-        data = pd.DataFrame(data={"a": [1, 2, 3], "b": [10, 20, 30]})
-        return pa.Table.from_pandas(data)
+        logger.debug("Received SqlParams %s", params.query)
+        with sqlite3.connect(":memory:") as conn:
+            # Implement fetching logic for SQL
+            df = pd.read_sql_query(params.query, conn)
+            return pa.Table.from_pandas(df)
