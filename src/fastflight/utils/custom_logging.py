@@ -6,7 +6,6 @@ import logging.config
 from pathlib import Path
 
 import structlog
-from demo.dependencies.settings import get_app_settings
 
 shared_processors = [
     # If log level is too low, abort pipeline and throw away log entry.
@@ -41,7 +40,43 @@ shared_processors = [
 ]
 
 
-def setup_logging():
+def setup_logging(
+    console_log_level: str | int = "INFO", log_file: Path | str = "app.log", file_log_level: str | int = "INFO"
+):
+    """
+    Set up the logging configuration for the application.
+
+    Args:
+        console_log_level (str | int): The log level for the console handler.
+        log_file (Path | str): The path to the log file.
+        file_log_level (str | int): The log level for the file handler.
+
+    Returns:
+        None
+
+    This function configures the logging system using the structlog library. It sets up the processors, logger factory,
+    and logging configuration. It also creates and configures the console and file handlers. The console handler logs
+    to the console with colored output, while the file handler logs to the specified log file in plain text format. The
+    log levels for both handlers are set based on the provided arguments. The root logger is configured to propagate
+    logs to both the console and file handlers. Additionally, the uvicorn logger is configured to log at the INFO level
+    and propagate logs to both handlers.
+
+    Note:
+        The `foreign_pre_chain` argument in the `ProcessorFormatter` is responsible for adding properties to events from
+        the standard library. It should match the processors argument to `structlog.configure()` to ensure consistent
+        output. The `ExtraAdder` processor adds extra attributes of LogRecord objects to the event dictionary, allowing
+        values passed in the extra parameter of log methods to be included in the log output.
+
+        The `structlog.dev.ConsoleRenderer` class is used to render log messages in colored or plain text format based on
+        the `colors` parameter. The `structlog.stdlib.ProcessorFormatter` class is used to convert the event dictionary
+        to data that can be processed by the formatter.
+
+        The `logging.config.dictConfig` function is used to configure the logging system using a dictionary-based
+        configuration. The configuration includes the formatters, handlers, and root logger configuration.
+
+        The `Path(log_file).parent.mkdir(exist_ok=True, parents=True)` line creates the parent directory of the log file if
+        it doesn't exist.
+    """
     structlog.configure(
         processors=shared_processors
         + [
@@ -67,9 +102,8 @@ def setup_logging():
     ]
 
     root_logger = logging.getLogger()
-    app_settings = get_app_settings()
 
-    Path(app_settings.log_file).parent.mkdir(exist_ok=True, parents=True)
+    Path(log_file).parent.mkdir(exist_ok=True, parents=True)
 
     logging.config.dictConfig(
         {
@@ -98,15 +132,11 @@ def setup_logging():
                 },
             },
             "handlers": {
-                "default": {
-                    "level": app_settings.console_log_level,
-                    "class": "logging.StreamHandler",
-                    "formatter": "colored",
-                },
+                "default": {"level": console_log_level, "class": "logging.StreamHandler", "formatter": "colored"},
                 "file": {
-                    "level": app_settings.file_log_level,
+                    "level": file_log_level,
                     "class": "logging.handlers.TimedRotatingFileHandler",
-                    "filename": str(app_settings.log_file),
+                    "filename": str(log_file),
                     "formatter": "plain",
                     "when": "midnight",
                     "interval": 1,

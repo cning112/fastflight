@@ -21,23 +21,20 @@ class BaseParams(BaseModel, ABC):
     registry: ClassVar[dict[str, ParamsCls]] = {}
 
     @classmethod
-    def register(cls, kind):
+    def register(cls, kind: str):
         """
         Register a data source type with the corresponding params class.
 
         Args:
-            kind: The type of the params to register.
+            kind (str): The type of the params to register.
         """
-        kind_str = str(kind)
 
         def inner(sub_params_cls: ParamsCls) -> ParamsCls:
-            if kind_str in cls.registry:
-                raise ValueError(
-                    f"Params type {kind_str} is already registered by {cls.registry[kind_str].__qualname__}."
-                )
-            setattr(sub_params_cls, "kind", kind_str)
-            cls.registry[kind_str] = sub_params_cls
-            logger.info(f"Registered params type {kind_str} for class {sub_params_cls.__qualname__}")
+            if kind in cls.registry:
+                raise ValueError(f"Params type {kind} is already registered by {cls.registry[kind].__qualname__}.")
+            setattr(sub_params_cls, "kind", kind)
+            cls.registry[kind] = sub_params_cls
+            logger.info(f"Registered params type {kind} for class {sub_params_cls.__qualname__}")
             return sub_params_cls
 
         return inner

@@ -27,20 +27,17 @@ class BaseDataService(Generic[T], ABC):
         Register a data source type with its corresponding class.
 
         Args:
-            kind: The type of the data source to register.
+            kind (str): The type of the data source to register.
 
         Returns:
             type[BaseDataService]: The registered data source class.
         """
-        kind_str = str(kind)
 
         def inner(subclass: DataServiceCls) -> DataServiceCls:
-            if kind_str in cls.registry:
-                raise ValueError(
-                    f"Data source type {kind_str} is already registered by {cls.registry[kind_str].__qualname__}."
-                )
-            cls.registry[kind_str] = subclass
-            logger.info(f"Registered data source type {kind_str} for class {subclass.__qualname__}")
+            if kind in cls.registry:
+                raise ValueError(f"Data source type {kind} is already registered by {cls.registry[kind].__qualname__}.")
+            cls.registry[kind] = subclass
+            logger.info(f"Registered data source type {kind} for class {subclass.__qualname__}")
             return subclass
 
         return inner
