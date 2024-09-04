@@ -1,4 +1,4 @@
-from demo.internal.flight_service.models.params import SqlParams
+from demo.flight_service.models.params import SqlParams
 from fastflight.services.base_params import BaseParams
 
 

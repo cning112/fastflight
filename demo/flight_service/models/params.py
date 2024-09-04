@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pydantic import Field
 
-from demo.internal.flight_service.models.data_kinds import DataKind
+from demo.flight_service.models.data_kinds import DataKind
 from fastflight.services.base_params import BaseParams
 
 
