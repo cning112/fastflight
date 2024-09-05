@@ -6,12 +6,13 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Publish Python Package
+name: Publish to PyPI
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_run:
+    workflows: [ "Manually Bump Version and Create Tag" ]
+    types:
+      - completed
 
 permissions:
   contents: read
