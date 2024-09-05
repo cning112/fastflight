@@ -26,6 +26,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install bump2version
 
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "GitHub Actions"
+
       - name: Bump version and create tag
         run: |
           bump2version ${{ github.event.inputs.version_type }} --allow-dirty
