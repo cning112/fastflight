@@ -104,6 +104,6 @@ def get_flight_client(app: FastAPI) -> PooledClient:
     helper = getattr(app.state, "_flight_client", None)
     if helper is None:
         raise ValueError(
-            "Flight client is not set in the FastAPI application. Use the :meth:`fastflight.utils.fastapi_utils.lifespan.combined_lifespan` lifespan in your FastAPI application."
+            "Flight client is not set in the FastAPI application. Use the :meth:`fastflight.utils.fastapi.lifespan.combined_lifespan` lifespan in your FastAPI application."
         )
     return helper

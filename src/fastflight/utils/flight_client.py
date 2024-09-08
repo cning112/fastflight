@@ -252,7 +252,7 @@ if __name__ == "__main__":
 
     async def main():
         client = PooledClient("grpc://localhost:8815")
-        from demo.internal.flight_service.models.params import SqlParams
+        from demo.flight_service.models.params import SqlParams
 
         query_params = SqlParams(query="select 1 as a")
         logger.info(query_params.to_bytes())

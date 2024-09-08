@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from starlette.requests import Request
 
-from fastflight.utils.fastapi_utils.lifespan import get_flight_client
+from fastflight.utils.fastapi.lifespan import get_flight_client
 from fastflight.utils.flight_client import PooledClient
 
 logger = logging.getLogger(__name__)
