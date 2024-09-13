@@ -10,12 +10,17 @@ version = "0.1.0"
 readme = "README.md"
 requires-python = ">= 3.11"
 dependencies = [
+    "aiomysql",
+    "aiosqlite",
+    "asyncpg",
+    "databases",
     "email-validator",
     "fastapi[all]>=0.110.2",
     "fastflight",
     "pandas",
     "pyarrow>=14.0.0",
     "pydantic>=2.0",
+    "pytest",
+    "SQLAlchemy",
     "structlog",
-    "pytest"
 ]

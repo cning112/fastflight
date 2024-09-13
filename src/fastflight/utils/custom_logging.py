@@ -37,7 +37,7 @@ shared_processors = [
 
 
 def setup_logging(
-    console_log_level: str | int = "INFO", log_file: Path | str = "app.log", file_log_level: str | int = "INFO"
+    console_log_level: str | int = "DEBUG", log_file: Path | str = "app.log", file_log_level: str | int = "INFO"
 ):
     """
     Set up the logging configuration for the application.

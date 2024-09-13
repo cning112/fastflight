@@ -15,9 +15,16 @@ handling both HTTP REST and gRPC requests efficiently.
 
 ## How does it work?
 
-Assuming the flight server is running, a user can create a client helper and use it to get data from various data
-sources.
-See the example in `client.client_helpers.py`
+### With FastAPI
+
+1. Run the flight server and the FastAPI server in separate processes
+2. Test by posting query params to the /fastflight/ endpoint
+
+### Without FastAPI
+
+1. RUn the flight server
+2. Test by posting flight ticket to the flight server endpoint.
+3. Or, use the flight_client to help with the data retrieval.
 
 ## How to add a new data source type?
 

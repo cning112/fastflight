@@ -1,11 +1,10 @@
-import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
 
 from pyarrow import flight
 
-from fastflight.services.base_data_service import BaseDataService
-from fastflight.services.base_params import BaseParams
+from fastflight.services.base import BaseDataService, BaseParams, create_kind_name
+from fastflight.utils.custom_logging import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +16,6 @@ class FlightServer(flight.FlightServerBase):
 
     Attributes:
         location (str): The location where the FlightServer will be hosted.
-        _executor (ThreadPoolExecutor): A thread pool executor to run the blocking serve method.
     """
 
     def __init__(self, location: str):
@@ -29,26 +27,6 @@ class FlightServer(flight.FlightServerBase):
         """
         super().__init__(location)
         self.location = location
-        self._executor = ThreadPoolExecutor(max_workers=1)
-
-    def serve_blocking(self):
-        """
-        Start the FlightServer in blocking mode.
-
-        This method will block the thread until the server is shut down.
-        """
-        logger.debug(f"FlightServer starting to serve at {self.location}")
-        self.serve()
-        logger.debug(f"FlightServer stopped serving at {self.location}")
-
-    async def serve_async(self):
-        """
-        Start the FlightServer in an asynchronous mode.
-
-        This method runs the blocking serve method in a thread pool executor to avoid blocking the asyncio event loop.
-        """
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(self._executor, self.serve_blocking)
 
     def shutdown(self):
         """
@@ -58,7 +36,6 @@ class FlightServer(flight.FlightServerBase):
         """
         logger.debug(f"FlightServer shutting down at {self.location}")
         super().shutdown()
-        self._executor.shutdown(wait=True)
 
     @staticmethod
     def load_params_and_data_service(flight_ticket_bytes: bytes) -> tuple[BaseParams, BaseDataService]:
@@ -72,31 +49,41 @@ class FlightServer(flight.FlightServerBase):
             tuple: A tuple containing the parsed ticket and data source instance.
         """
         params = BaseParams.from_bytes(flight_ticket_bytes)
+        kind_str = create_kind_name(params.kind)
 
         try:
-            data_service_cls = BaseDataService.get_data_service_cls(params.kind)
+            data_service_cls = BaseDataService.get_data_service_cls(kind_str)
             data_service = data_service_cls()
             return params, data_service
         except ValueError as e:
-            logger.error(f"Data service unavailable for ticket type {params.kind}: {e}")
+            logger.error(f"Data service unavailable for ticket type {kind_str}: {e}")
             raise flight.FlightUnavailableError(f"Data service unavailable: {e}")
         except Exception as e:
-            logger.error(f"Error getting data source for ticket type {params.kind}: {e}")
+            logger.error(f"Error getting data source for ticket type {kind_str}: {e}")
             raise
 
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         try:
+            logger.debug("FlightServer received ticket: %s", ticket.ticket)
             params, data_service = self.load_params_and_data_service(ticket.ticket)
-            reader = asyncio.run(data_service.aget_reader(params, batch_size=512))
+            reader = data_service.get_batch_reader(params)
             return flight.RecordBatchStream(reader)
-        except flight.FlightUnavailableError as e:
-            raise e
+        except flight.FlightUnavailableError:
+            logger.error("Data service unavailable")
+            raise
         except Exception as e:
             logger.error(f"Internal server error: {e}")
             raise flight.FlightInternalError(f"Internal server error: {e}")
 
 
+def start_flight_server(location: str):
+    server = FlightServer(location)
+    logger.info("Serving FlightServer in process %s", multiprocessing.current_process().name)
+    server.serve()
+
+
 if __name__ == "__main__":
+    setup_logging(log_file="flight_server.log")
+
     loc = "grpc://0.0.0.0:8815"
-    fl_server = FlightServer(loc)
-    fl_server.serve_blocking()
+    start_flight_server(loc)
