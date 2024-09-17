@@ -7,7 +7,7 @@ from pydantic import Field
 
 from fastflight.services.base import BaseDataService, BaseParams
 from fastflight.services.data_sources import DataSource
-from fastflight.utils.streams import stream_to_batches
+from fastflight.utils.stream_utils import stream_to_batches
 
 logger = logging.getLogger(__name__)
 
@@ -73,5 +73,7 @@ class PostgresSQLDataService(BaseDataService[T]):
 
     async def aget_batches(self, params: T, batch_size: int = 100) -> AsyncIterable[pa.RecordBatch]:
         # FIXME: this method doesn't return an AsyncIterable
+        logger.info("Running query: %s", params.query)
         stream = run_query_stream(params.connection_string, params.query)
+        logger.info("Got Stream")
         return stream_to_batches(stream, batch_size=params.batch_size or batch_size)

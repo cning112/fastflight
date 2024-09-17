@@ -9,7 +9,6 @@ import pyarrow as pa
 import pyarrow.flight as flight
 
 from fastflight.utils.custom_logging import setup_logging
-from fastflight.utils.streams import EventLoopContext
 
 logger = logging.getLogger(__name__)
 
@@ -92,14 +91,13 @@ class PooledClient:
             flight.FlightStreamReader: A reader to stream data from the Flight server.
         """
         async with self.client_pool.acquire_async() as client:
-            with EventLoopContext() as loop:
-                flight_ticket = flight.Ticket(ticket_bytes)
-                try:
-                    reader = await loop.run_in_executor(self.executor, client.do_get, flight_ticket)
-                    return reader
-                except Exception as e:
-                    logger.error(f"Error fetching data: {e}")
-                    raise
+            flight_ticket = flight.Ticket(ticket_bytes)
+            try:
+                reader = await asyncio.to_thread(client.do_get, flight_ticket)
+                return reader
+            except Exception as e:
+                logger.error(f"Error fetching data: {e}")
+                raise
 
     async def aget_stream(self, ticket_bytes: bytes) -> AsyncIterable[bytes]:
         """
@@ -126,9 +124,6 @@ class PooledClient:
             pa.Table: The data from the Flight server as an Arrow Table.
         """
         reader = await self.aget_stream_reader(ticket_bytes)
-        # with EventLoopContext() as loop:
-        #     batches = [await loop.run_in_executor(self.executor, batch.data) for batch in reader]
-        #     return pa.Table.from_batches(batches)
         return reader.read_all()
 
     async def aread_pd_df(self, ticket_bytes: bytes) -> pd.DataFrame:
@@ -141,10 +136,6 @@ class PooledClient:
         Returns:
             pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
         """
-        # reader = await self.aget_stream_reader(ticket_bytes)
-        # with EventLoopContext() as loop:
-        #     batches = [await loop.run_in_executor(self.executor, batch.data.to_pandas) for batch in reader]
-        #     return pd.concat(batches, ignore_index=True)
         table = await self.aread_pa_table(ticket_bytes)
         return table.to_pandas()
 
@@ -266,5 +257,9 @@ if __name__ == "__main__":
         reader = await client.aget_stream_reader(b)
         for batch in reader:
             logger.info("read batch %s", batch.data)
+
+        b = b'{"value": 5, "kind": "Demo"}'
+        df = await client.aread_pd_df(b)
+        print(df)
 
     asyncio.run(main())

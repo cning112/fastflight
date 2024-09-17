@@ -9,7 +9,7 @@ import pyarrow as pa
 from pyarrow import RecordBatchReader
 from pydantic import BaseModel
 
-from fastflight.utils.streams import syncify_async_iter
+from fastflight.utils.stream_utils import syncify_async_iter
 
 logger = logging.getLogger(__name__)
 

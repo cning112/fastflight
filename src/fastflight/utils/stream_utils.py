@@ -1,9 +1,10 @@
-import asyncio
 import logging
 from typing import AsyncIterable, Awaitable, Iterator, TypeVar
 
 import pandas as pd
 import pyarrow as pa
+
+from fastflight.utils.utils import EventLoopContext
 
 T = TypeVar("T")
 logger = logging.getLogger(__name__)
@@ -28,33 +29,6 @@ def syncify_async_iter(aiter: AsyncIterable[T] | Awaitable[AsyncIterable[T]]) ->
                 # yield asyncio.run(ait.__anext__())
             except StopAsyncIteration:
                 break
-
-
-class EventLoopContext:
-    def __enter__(self):
-        try:
-            # from python 3.10, asyncio.get_event_loop() raises RuntimeError if there is no running event loop
-            self.loop = asyncio.get_event_loop()
-
-            if self.loop.is_closed():
-                raise RuntimeError("Event loop is closed")
-
-            # An event loop automatically starts when running in jupyter notebook a GUI framework (Pycharm) or a web framework (FastAPI)
-            if self.loop.is_running():
-                raise RuntimeError("Event loop is already running")
-
-        except RuntimeError as e:
-            logger.debug("Need to create a new event loop: %s", e)
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
-            self.new_loop = True
-        else:
-            self.new_loop = False
-        return self.loop
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.new_loop:
-            self.loop.close()
 
 
 async def stream_to_batches(

@@ -1,37 +1,14 @@
-import functools
 import logging
 import multiprocessing
+import sys
 
 from pyarrow import flight
 
 from fastflight.services.base import BaseDataService, BaseParams, create_kind_name
 from fastflight.utils.custom_logging import setup_logging
+from fastflight.utils.utils import debuggable
 
 logger = logging.getLogger(__name__)
-
-
-def debuggable(func):
-    """A decorator to enable GUI (i.e. PyCharm) debugging in the
-    decorated Arrow Flight RPC Server function.
-
-    See: https://github.com/apache/arrow/issues/36844
-    for more details...
-    """
-
-    @functools.wraps(func)
-    def wrapper_decorator(*args, **kwargs):
-        try:
-            import pydevd
-
-            pydevd.connected = True
-            pydevd.settrace(suspend=False)
-        except ImportError:
-            # Not running in debugger
-            pass
-        value = func(*args, **kwargs)
-        return value
-
-    return wrapper_decorator
 
 
 class FlightServer(flight.FlightServerBase):
@@ -102,9 +79,12 @@ class FlightServer(flight.FlightServerBase):
             raise flight.FlightInternalError(f"Internal server error: {e}")
 
 
-def start_flight_server(location: str):
+def start_flight_server(location: str, debug: bool = False):
     server = FlightServer(location)
     logger.info("Serving FlightServer in process %s", multiprocessing.current_process().name)
+    if debug or sys.gettrace() is not None:
+        logger.info("Enabling debug mode")
+        server.do_get = debuggable(server.do_get)
     server.serve()
 
 
