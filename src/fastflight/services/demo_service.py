@@ -6,12 +6,11 @@ import pandas as pd
 import pyarrow as pa
 
 from fastflight.services.base import BaseDataService, BaseParams
-from fastflight.services.data_sources import DataSource
 
 logger = logging.getLogger(__name__)
 
 
-@BaseParams.register(DataSource.Demo)
+@BaseParams.register("Demo")
 class DemoParams(BaseParams):
     value: int
 
@@ -19,7 +18,7 @@ class DemoParams(BaseParams):
 T = DemoParams
 
 
-@BaseDataService.register(DataSource.Demo)
+@BaseDataService.register("Demo")
 class DemoDataService(BaseDataService[T]):
     async def aget_batches(self, params: T, batch_size: int = 100) -> AsyncIterable[pa.RecordBatch]:
         for i in range(params.value):

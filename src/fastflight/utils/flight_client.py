@@ -262,6 +262,7 @@ if __name__ == "__main__":
 
     async def main():
         b = b'{"connection_string": "sqlite:///example.db", "query": "select 1 as a", "batch_size": 1000, "kind": "DataSource.PostgresSQL"}'
+        b = b'{"value": 5, "kind": "Demo"}'
         reader = await client.aget_stream_reader(b)
         for batch in reader:
             logger.info("read batch %s", batch.data)

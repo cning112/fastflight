@@ -33,11 +33,18 @@ def syncify_async_iter(aiter: AsyncIterable[T] | Awaitable[AsyncIterable[T]]) ->
 class EventLoopContext:
     def __enter__(self):
         try:
+            # from python 3.10, asyncio.get_event_loop() raises RuntimeError if there is no running event loop
             self.loop = asyncio.get_event_loop()
+
             if self.loop.is_closed():
                 raise RuntimeError("Event loop is closed")
-        except RuntimeError:
-            # from python 3.10, asyncio.get_event_loop() raises RuntimeError if there is no running event loop
+
+            # An event loop automatically starts when running in jupyter notebook a GUI framework (Pycharm) or a web framework (FastAPI)
+            if self.loop.is_running():
+                raise RuntimeError("Event loop is already running")
+
+        except RuntimeError as e:
+            logger.debug("Need to create a new event loop: %s", e)
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
             self.new_loop = True

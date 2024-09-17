@@ -1,3 +1,4 @@
+import functools
 import logging
 import multiprocessing
 
@@ -7,6 +8,30 @@ from fastflight.services.base import BaseDataService, BaseParams, create_kind_na
 from fastflight.utils.custom_logging import setup_logging
 
 logger = logging.getLogger(__name__)
+
+
+def debuggable(func):
+    """A decorator to enable GUI (i.e. PyCharm) debugging in the
+    decorated Arrow Flight RPC Server function.
+
+    See: https://github.com/apache/arrow/issues/36844
+    for more details...
+    """
+
+    @functools.wraps(func)
+    def wrapper_decorator(*args, **kwargs):
+        try:
+            import pydevd
+
+            pydevd.connected = True
+            pydevd.settrace(suspend=False)
+        except ImportError:
+            # Not running in debugger
+            pass
+        value = func(*args, **kwargs)
+        return value
+
+    return wrapper_decorator
 
 
 class FlightServer(flight.FlightServerBase):
@@ -62,6 +87,7 @@ class FlightServer(flight.FlightServerBase):
             logger.error(f"Error getting data source for ticket type {kind_str}: {e}")
             raise
 
+    @debuggable
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         try:
             logger.debug("FlightServer received ticket: %s", ticket.ticket)
@@ -84,6 +110,8 @@ def start_flight_server(location: str):
 
 if __name__ == "__main__":
     setup_logging(log_file="flight_server.log")
+
+    logger.info("Registered params types: %s", BaseParams.registry.keys())
 
     loc = "grpc://0.0.0.0:8815"
     start_flight_server(loc)
