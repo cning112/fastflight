@@ -8,6 +8,8 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.flight as flight
 
+from fastflight.utils.custom_logging import setup_logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,7 +78,6 @@ class PooledClient:
             executor (ThreadPoolExecutor | None): An optional executor to use in event loops. If not provided, will use the default executor.
         """
         self.client_pool = ClientPool(flight_server_location, client_pool_size)
-        self.loop = asyncio.get_running_loop()
         self.executor = executor
 
     async def aget_stream_reader(self, ticket_bytes: bytes) -> flight.FlightStreamReader:
@@ -92,13 +93,13 @@ class PooledClient:
         async with self.client_pool.acquire_async() as client:
             flight_ticket = flight.Ticket(ticket_bytes)
             try:
-                reader = await self.loop.run_in_executor(self.executor, client.do_get, flight_ticket)
+                reader = await asyncio.to_thread(client.do_get, flight_ticket)
                 return reader
             except Exception as e:
                 logger.error(f"Error fetching data: {e}")
                 raise
 
-    async def aget_bytes_stream(self, ticket_bytes: bytes) -> AsyncIterable[bytes]:
+    async def aget_stream(self, ticket_bytes: bytes) -> AsyncIterable[bytes]:
         """
         Generates a stream of bytes of arrow data from a Flight server ticket data asynchronously.
 
@@ -112,20 +113,6 @@ class PooledClient:
         async for data in aread_stream_bytes(reader):
             yield data
 
-    async def aread_pd_df(self, ticket_bytes: bytes) -> pd.DataFrame:
-        """
-        Returns a pandas dataframe from the Flight server using the provided flight ticket data asynchronously.
-
-        Args:
-            ticket_bytes (bytes): The ticket bytes to request data from the Flight server.
-
-        Returns:
-            pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
-        """
-        reader = await self.aget_stream_reader(ticket_bytes)
-        batches = [await self.loop.run_in_executor(self.executor, batch.data.to_pandas) for batch in reader]
-        return pd.concat(batches, ignore_index=True)
-
     async def aread_pa_table(self, ticket_bytes: bytes) -> pa.Table:
         """
         Returns a pyarrow table from the Flight server using the provided flight ticket data asynchronously.
@@ -137,8 +124,20 @@ class PooledClient:
             pa.Table: The data from the Flight server as an Arrow Table.
         """
         reader = await self.aget_stream_reader(ticket_bytes)
-        batches = [await self.loop.run_in_executor(self.executor, batch.data) for batch in reader]
-        return pa.Table.from_batches(batches)
+        return reader.read_all()
+
+    async def aread_pd_df(self, ticket_bytes: bytes) -> pd.DataFrame:
+        """
+        Returns a pandas dataframe from the Flight server using the provided flight ticket data asynchronously.
+
+        Args:
+            ticket_bytes (bytes): The ticket bytes to request data from the Flight server.
+
+        Returns:
+            pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
+        """
+        table = await self.aread_pa_table(ticket_bytes)
+        return table.to_pandas()
 
     def get_stream_reader(self, ticket_bytes: bytes) -> flight.FlightStreamReader:
         """
@@ -152,6 +151,18 @@ class PooledClient:
         """
         return asyncio.run(self.aget_stream_reader(ticket_bytes))
 
+    def read_pa_table(self, ticket_bytes: bytes) -> pa.Table:
+        """
+        A synchronous version of :meth:`FlightClientHelper.aread_pa_table`.
+
+        Args:
+            ticket_bytes (bytes): The ticket bytes to request data from the Flight server.
+
+        Returns:
+            pa.Table: The data from the Flight server as an Arrow Table.
+        """
+        return asyncio.run(self.aread_pa_table(ticket_bytes))
+
     def read_pd_df(self, ticket_bytes: bytes) -> pd.DataFrame:
         """
         A synchronous version of :meth:`FlightClientHelper.aread_pd_df`.
@@ -163,18 +174,6 @@ class PooledClient:
             pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
         """
         return asyncio.run(self.aread_pd_df(ticket_bytes))
-
-    def read_pd_table(self, ticket_bytes: bytes) -> pa.Table:
-        """
-        A synchronous version of :meth:`FlightClientHelper.aread_pa_table`.
-
-        Args:
-            ticket_bytes (bytes): The ticket bytes to request data from the Flight server.
-
-        Returns:
-            pa.Table: The data from the Flight server as an Arrow Table.
-        """
-        return asyncio.run(self.aread_pa_table(ticket_bytes))
 
     async def close_async(self, close_executor: bool = True) -> None:
         """
@@ -249,18 +248,18 @@ async def aread_stream_bytes(reader: flight.FlightStreamReader, timeout: float =
 
 
 if __name__ == "__main__":
+    setup_logging(log_file="flight_client.log")
+    client = PooledClient("grpc://localhost:8815")
 
     async def main():
-        client = PooledClient("grpc://localhost:8815")
-        from demo.internal.flight_service.models.params import SqlParams
+        b = b'{"connection_string": "sqlite:///example.db", "query": "select 1 as a", "batch_size": 1000, "kind": "DataSource.PostgresSQL"}'
+        b = b'{"value": 5, "kind": "Demo"}'
+        reader = await client.aget_stream_reader(b)
+        for batch in reader:
+            logger.info("read batch %s", batch.data)
 
-        query_params = SqlParams(query="select 1 as a")
-        logger.info(query_params.to_bytes())
-
-        async for arrow_bytes in client.aget_bytes_stream(query_params.to_bytes()):
-            logger.info(f"Received {len(arrow_bytes)} bytes")
-
-        df = await client.aread_pd_df(query_params.to_bytes())
+        b = b'{"value": 5, "kind": "Demo"}'
+        df = await client.aread_pd_df(b)
         print(df)
 
     asyncio.run(main())
