@@ -1,34 +1,73 @@
+import asyncio
+import concurrent.futures
 import logging
-from typing import AsyncIterable, Awaitable, Iterator, TypeVar
+import threading
+from typing import AsyncIterable, Awaitable, Iterator, TypeVar, Union
 
 import pandas as pd
 import pyarrow as pa
-
-from fastflight.utils.utils import EventLoopContext
 
 T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
-def syncify_async_iter(aiter: AsyncIterable[T] | Awaitable[AsyncIterable[T]]) -> Iterator[T]:
+class AsyncToSyncConverter:
+    def __init__(self):
+        # 创建一个独立的事件循环并运行它
+        self.loop = asyncio.new_event_loop()
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.loop_thread = threading.Thread(target=self._start_loop, daemon=True)
+        self.loop_thread.start()
+
+    def _start_loop(self):
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
+
+    def stop_loop(self):
+        self.loop.call_soon_threadsafe(self.loop.stop)
+        self.executor.shutdown()
+
+    def run_coroutine(self, coro):
+        """
+        将协程提交到独立线程中的事件循环，并同步等待其结果。
+        """
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        return future.result()
+
+
+converter = AsyncToSyncConverter()
+
+
+def syncify_async_iter(aiter: Union[AsyncIterable[T], Awaitable[AsyncIterable[T]]]) -> Iterator[T]:
     """
-    Convert an async iterable to a sync iterator.
-    :param aiter: An async iterable or an awaitable that returns an async iterable
-    :return: A synchronous iterator
+    将异步生成器转换为同步迭代器。
+    :param aiter: 一个异步可迭代对象或一个可等待的返回异步可迭代对象的对象
+    :param converter: AsyncToSyncConverter 用于在线程中管理事件循环
+    :return: 一个同步迭代器
     """
 
-    async def _iterate():
-        async for item in aiter:
-            yield item
+    async def _iterate(queue: asyncio.Queue):
+        # 处理可能是 Awaitable 的情况
+        if asyncio.iscoroutine(aiter):
+            aiter_resolved = await aiter
+        else:
+            aiter_resolved = aiter
+        async for item in aiter_resolved:
+            await queue.put(item)
+        await queue.put(None)  # 标记结束
 
-    ait = _iterate()
-    with EventLoopContext() as loop:
-        while True:
-            try:
-                yield loop.run_until_complete(ait.__anext__())
-                # yield asyncio.run(ait.__anext__())
-            except StopAsyncIteration:
-                break
+    # 创建一个队列来管理生成器的值
+    queue = asyncio.Queue()
+
+    # 将生成器提交到事件循环中异步执行
+    converter.loop.call_soon_threadsafe(lambda: asyncio.ensure_future(_iterate(queue)))
+
+    # 从队列中同步获取结果
+    while True:
+        result = converter.run_coroutine(queue.get())
+        if result is None:
+            break
+        yield result
 
 
 async def stream_to_batches(
