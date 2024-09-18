@@ -1,11 +1,14 @@
+import itertools
 import logging
 import multiprocessing
 import sys
 
-from pyarrow import flight
+import pyarrow as pa
+from pyarrow import RecordBatchReader, flight
 
 from fastflight.services.base import BaseDataService, BaseParams, create_kind_name
 from fastflight.utils.custom_logging import setup_logging
+from fastflight.utils.stream_utils import AsyncToSyncConverter
 from fastflight.utils.utils import debuggable
 
 logger = logging.getLogger(__name__)
@@ -29,6 +32,7 @@ class FlightServer(flight.FlightServerBase):
         """
         super().__init__(location)
         self.location = location
+        self._converter = AsyncToSyncConverter()
 
     def shutdown(self):
         """
@@ -37,6 +41,7 @@ class FlightServer(flight.FlightServerBase):
         This method stops the server and shuts down the thread pool executor.
         """
         logger.debug(f"FlightServer shutting down at {self.location}")
+        self._converter.close()
         super().shutdown()
 
     @staticmethod
@@ -69,7 +74,7 @@ class FlightServer(flight.FlightServerBase):
         try:
             logger.debug("FlightServer received ticket: %s", ticket.ticket)
             params, data_service = self.load_params_and_data_service(ticket.ticket)
-            reader = data_service.get_batch_reader(params)
+            reader = self._get_batch_reader(data_service, params)
             return flight.RecordBatchStream(reader)
         except flight.FlightUnavailableError:
             logger.error("Data service unavailable")
@@ -77,6 +82,22 @@ class FlightServer(flight.FlightServerBase):
         except Exception as e:
             logger.error(f"Internal server error: {e}")
             raise flight.FlightInternalError(f"Internal server error: {e}")
+
+    def _get_batch_reader(
+        self, data_service: BaseDataService, params: BaseParams, batch_size: int = 100
+    ) -> pa.RecordBatchReader:
+        """
+        Args:
+            data_service (BaseDataService): The data service instance.
+            params (BaseParams): The parameters for fetching data.
+            batch_size (int): The maximum size of each batch. Defaults to 100.
+
+        Returns:
+            RecordBatchReader: A RecordBatchReader instance to read the data in batches.
+        """
+        batch_iter = self._converter.syncify_async_iter(data_service.aget_batches(params, batch_size))
+        first = next(batch_iter)
+        return RecordBatchReader.from_batches(first.schema, itertools.chain((first,), batch_iter))
 
 
 def start_flight_server(location: str, debug: bool = False):

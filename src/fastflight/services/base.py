@@ -1,15 +1,10 @@
-import asyncio
-import itertools
 import json
 import logging
 from abc import ABC, abstractmethod
 from typing import AsyncIterable, ClassVar, Generic, TypeAlias, TypeVar
 
 import pyarrow as pa
-from pyarrow import RecordBatchReader
 from pydantic import BaseModel
-
-from fastflight.utils.stream_utils import syncify_async_iter
 
 logger = logging.getLogger(__name__)
 
@@ -178,40 +173,3 @@ class BaseDataService(Generic[T], ABC):
 
         """
         raise NotImplementedError
-
-    async def aget_batch_reader(self, params: T, batch_size: int = 100) -> pa.RecordBatchReader:
-        """
-        Create a RecordBatchReader to read data in batches based on the given parameters.
-
-        Args:
-            params (T): The parameters for fetching data.
-            batch_size (int): The maximum size of each batch. Defaults to 100.
-
-        Returns:
-            RecordBatchReader: A RecordBatchReader instance to read the data in batches.
-
-        Raises:
-            Exception: If there is an error in creating the batch reader.
-        """
-        try:
-            batch_iter = syncify_async_iter(self.aget_batches(params, batch_size))
-            first = next(batch_iter)
-            return RecordBatchReader.from_batches(first.schema, itertools.chain((first,), batch_iter))
-        except Exception as e:
-            logger.error(f"Error fetching batches: {e}")
-            raise
-
-    def get_batch_reader(self, params: T, batch_size: int = 100) -> pa.RecordBatchReader:
-        """
-        The synonymous version of `aget_batch_reader` method.
-        Args:
-            params (T): The parameters for fetching data.
-            batch_size (int): The maximum size of each batch. Defaults to 100.
-
-        Returns:
-            RecordBatchReader: A RecordBatchReader instance to read the data in batches.
-
-        Raises:
-            Exception: If there is an error in creating the batch reader.
-        """
-        return asyncio.run(self.aget_batch_reader(params, batch_size))
