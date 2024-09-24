@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.flight as flight
 
-from fastflight.utils.custom_logging import setup_logging
+from fastflight.utils.stream_utils import stream_arrow_data
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +110,7 @@ class PooledClient:
             bytes: A stream of bytes from the Flight server.
         """
         reader = await self.aget_stream_reader(ticket_bytes)
-        async for data in aread_stream_bytes(reader):
-            yield data
+        return await stream_arrow_data(reader)
 
     async def aread_pa_table(self, ticket_bytes: bytes) -> pa.Table:
         """
@@ -200,66 +199,3 @@ class PooledClient:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close_async()
-
-
-async def aread_stream_bytes(reader: flight.FlightStreamReader, timeout: float = 10.0) -> AsyncIterable[bytes]:
-    """
-    Yields a stream of Arrow data in bytes format from the given FlightStreamReader asynchronously.
-
-    This function reads chunks from a FlightStreamReader, converts each chunk into
-    a stream of bytes using Arrow IPC (Inter-Process Communication) format, and
-    yields these bytes asynchronously.
-
-    Args:
-        reader (flight.FlightStreamReader): A FlightStreamReader object to read data chunks from.
-        timeout (float): Timeout in seconds. Used in waiting for reading a chunk from the given FlightStreamReader.
-
-    Yields:
-        bytes: Serialized Arrow data in bytes format.
-    """
-    schema = reader.schema
-
-    def next_chunk() -> flight.FlightStreamChunk | None:
-        try:
-            return reader.read_chunk()
-        except StopIteration:
-            pass
-
-    while True:
-        try:
-            chunk = await asyncio.wait_for(asyncio.to_thread(next_chunk), timeout=timeout)
-            if chunk is None or chunk.data is None:
-                logger.info("Read empty chunk. Stopping the reader.")
-                break
-            sink = pa.BufferOutputStream()
-            with pa.ipc.new_stream(sink, schema) as writer:
-                writer.write_batch(chunk.data)
-            buffer: pa.Buffer = sink.getvalue()
-            yield buffer.to_pybytes()
-        except flight.FlightCancelledError:
-            logger.info("Flight cancelled, stopping the reader.")
-            break
-        except asyncio.TimeoutError:
-            logger.info("Read chunk timeout, stopping the reader.")
-            break
-        except Exception as e:
-            logger.info(f"An error occurred: {e}")
-            break
-
-
-if __name__ == "__main__":
-    setup_logging(log_file="flight_client.log")
-    client = PooledClient("grpc://localhost:8815")
-
-    async def main():
-        b = b'{"connection_string": "sqlite:///example.db", "query": "select 1 as a", "batch_size": 1000, "kind": "DataSource.PostgresSQL"}'
-        b = b'{"value": 5, "kind": "Demo"}'
-        reader = await client.aget_stream_reader(b)
-        for batch in reader:
-            logger.info("read batch %s", batch.data)
-
-        b = b'{"value": 5, "kind": "Demo"}'
-        df = await client.aread_pd_df(b)
-        print(df)
-
-    asyncio.run(main())

@@ -6,6 +6,7 @@ from starlette.requests import Request
 
 from fastflight.utils.fastapi.lifespan import get_flight_client
 from fastflight.utils.flight_client import PooledClient
+from fastflight.utils.stream_utils import stream_arrow_data
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fastflight")
@@ -50,4 +51,6 @@ async def read_data(body_bytes: bytes = Depends(_body_bytes), client_helper: Poo
         StreamingResponse: The streamed response containing Arrow formatted data.
     """
     logger.debug("Received body bytes %s", body_bytes)
-    return StreamingResponse(client_helper.aget_stream(body_bytes), media_type="application/vnd.apache.arrow.stream")
+    stream_reader = await client_helper.aget_stream_reader(body_bytes)
+    stream = await stream_arrow_data(stream_reader)
+    return StreamingResponse(stream, media_type="application/vnd.apache.arrow.stream")

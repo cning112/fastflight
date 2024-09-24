@@ -1,10 +1,11 @@
 import asyncio
 import logging
 import threading
-from typing import AsyncIterable, Awaitable, Iterator, Optional, TypeVar, Union
+from typing import AsyncGenerator, AsyncIterable, Awaitable, Iterable, Iterator, List, Optional, TypeVar, Union
 
 import pandas as pd
 import pyarrow as pa
+from pyarrow import RecordBatch, flight
 
 logger = logging.getLogger(__name__)
 
@@ -146,13 +147,13 @@ class AsyncToSyncConverter:
         self.close()
 
 
-async def stream_to_batches(
+async def record_batches_from_stream(
     stream: AsyncIterable[T] | Awaitable[AsyncIterable[T]], schema: pa.Schema | None = None, batch_size: int = 100
 ) -> AsyncIterable[pa.RecordBatch]:
     """
     Similar to `more_itertools.chunked`, but returns an async iterable of Arrow RecordBatch.
     Args:
-        stream (AsyncIterable[T]): An async iterable.
+        stream (AsyncIterable[T]): An async iterable of data of type T. A list of T must be used to create a pd.DataFrame
         schema (pa.Schema | None, optional): The schema of the stream. Defaults to None and will be inferred.
         batch_size (int): The maximum size of each batch. Defaults to 100.
 
@@ -172,3 +173,100 @@ async def stream_to_batches(
         df = pd.DataFrame(buffer)
         batch = pa.RecordBatch.from_pandas(df, schema=schema)
         yield batch
+
+
+async def stream_arrow_data(reader: flight.FlightStreamReader, *, buffer_size=10) -> AsyncGenerator[bytes, None]:
+    """
+    Convert a FlightStreamReader into an AsyncGenerator of bytes in Arrow IPC format
+
+    :param reader: a FlightStreamReader
+    :buffer_size: max size of the queue. WHen the queue is full, the producer will block.
+    :return: AsyncGenerator of bytes
+    """
+    queue: asyncio.Queue[Optional[bytes]] = asyncio.Queue(maxsize=buffer_size)
+    end_of_stream = object()
+
+    def next_chunk():
+        try:
+            return reader.read_chunk()
+        except StopIteration:
+            return end_of_stream
+
+    async def produce() -> None:
+        try:
+            logger.debug("Start producing Arrow IPC bytes from FlightStreamReader %s", id(reader))
+            while True:
+                # Not using reader.read_chunk() directly as it throws StopIteration
+                chunk = await asyncio.to_thread(next_chunk)
+
+                if chunk is end_of_stream:
+                    break
+
+                sink = pa.BufferOutputStream()
+                with pa.ipc.new_stream(sink, chunk.data.schema) as writer:
+                    writer.write_batch(chunk.data)
+                buffer: pa.Buffer = sink.getvalue()
+                await queue.put(buffer.to_pybytes())
+        except Exception as e:
+            logger.error("Error during producing Arrow IPC bytes", e)
+        finally:
+            await queue.put(end_of_stream)
+            logger.debug("End producing Arrow IPC bytes from FlightStreamReader %s", id(reader))
+
+    async def consume() -> AsyncGenerator[bytes, None]:
+        while True:
+            data: Optional[bytes] = await queue.get()
+            if data is end_of_stream:
+                break
+            yield data
+
+    asyncio.create_task(produce())
+
+    return consume()
+
+
+def read_table_from_arrow_stream(stream: Iterable[bytes]) -> Optional[pa.Table]:
+    """
+    Reads Arrow IPC data from the given iterable of byte streams and returns a pyarrow.Table.
+
+    :param stream: Iterable of byte streams.
+    :return: pyarrow.Table if data is available; otherwise, returns None.
+    """
+    all_batches: List[RecordBatch] = []
+    buffer = b""  # Buffer to accumulate byte data
+
+    for data in stream:
+        buffer += data
+
+        # Attempt to create a RecordBatchStreamReader from the read data
+        buffer_reader = pa.BufferReader(buffer)
+        try:
+            stream_reader = pa.ipc.RecordBatchStreamReader(buffer_reader)
+        except pa.ArrowInvalid:
+            # If there is not enough data to create a RecordBatch, continue reading more data from the stream
+            continue
+
+        while True:
+            # Read each record batch
+            try:
+                batch = stream_reader.read_next_batch()
+                all_batches.append(batch)
+            except StopIteration:
+                # Exit the loop if there are no more record batches
+                break
+            except pa.ArrowInvalid:
+                # If the remaining buffer does not contain enough data to parse a RecordBatch, continue to read more data from the stream
+                break
+
+        # Update buffer to remove processed data
+        if buffer_reader is not None:
+            buffer = buffer[buffer_reader.tell() :]  # Remaining unprocessed data
+
+    if all_batches:
+        return pa.Table.from_batches(all_batches)
+
+
+def read_dataframe_from_arrow_stream(stream: Iterable[bytes]) -> Optional[pa.Table]:
+    table = read_table_from_arrow_stream(stream)
+    if table is not None:
+        return table.to_pandas()
