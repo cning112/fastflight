@@ -1,6 +1,5 @@
 from typing import AsyncIterable
 
-import pandas as pd
 import pyarrow as pa
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Result
@@ -27,23 +26,17 @@ class SQLDataService(BaseDataService[SQLParams]):
     """
 
     async def aget_batches(self, params: SQLParams, batch_size: int = 100) -> AsyncIterable[pa.RecordBatch]:
-        # Create an SQLAlchemy engine
         engine = create_engine(params.connection_string)
-
         with engine.connect() as connection:
-            # Execute the query with optional parameters
             result: Result = connection.execute(text(params.query), params.parameters or {})
 
-            # Fetch rows in batches
             while True:
                 rows = result.fetchmany(batch_size)
                 if not rows:
                     break
 
-                # Convert rows to Pandas DataFrame and then to Arrow Table
-                df = pd.DataFrame(rows, columns=result.keys())
-                table = pa.Table.from_pandas(df)
-
-                # Yield each batch of Arrow RecordBatch
+                # Create a PyArrow Table from rows
+                arrays = [pa.array([row[i] for row in rows]) for i in range(len(result.keys()))]
+                table = pa.Table.from_arrays(arrays, list(result.keys()))
                 for batch in table.to_batches():
                     yield batch

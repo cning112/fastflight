@@ -109,6 +109,12 @@ def start_flight_server(location: str, debug: bool = False):
 
 
 if __name__ == "__main__":
+    # Explicitly import for data service registration
+    from fastflight.data_services.demo_service import DemoDataService
+    from fastflight.data_services.sql_service import SQLDataService
+
+    __all__ = [DemoDataService, SQLDataService]  # Avoids IDE optimization
+
     setup_logging(log_file="flight_server.log")
 
     logger.info("Registered params types: %s", BaseParams.registry.keys())
