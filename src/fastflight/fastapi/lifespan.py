@@ -4,7 +4,7 @@ from typing import AsyncContextManager, Callable
 
 from fastapi import FastAPI
 
-from fastflight.utils.flight_client import PooledClient
+from fastflight.flight_client import FlightClientManager
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ async def flight_client_lifespan(app: FastAPI):
     """
     logger.info("Starting flight_client_lifespan")
     location = "grpc://localhost:8815"
-    client = PooledClient(location)
+    client = FlightClientManager(location)
     set_flight_client(app, client)
     try:
         yield
@@ -49,13 +49,13 @@ async def combined_lifespan(app: FastAPI, *other: Callable[[FastAPI], AsyncConte
         logger.info("Exiting combined lifespan")
 
 
-def set_flight_client(app: FastAPI, client: PooledClient) -> None:
+def set_flight_client(app: FastAPI, client: FlightClientManager) -> None:
     """
     Sets the client helper for the given FastAPI application.
 
     Args:
         app (FastAPI): The FastAPI application instance.
-        client (PooledClient): The client helper to be set.
+        client (FlightClientManager): The client helper to be set.
 
     Returns:
         None
@@ -63,7 +63,7 @@ def set_flight_client(app: FastAPI, client: PooledClient) -> None:
     app.state._flight_client = client
 
 
-def get_flight_client(app: FastAPI) -> PooledClient:
+def get_flight_client(app: FastAPI) -> FlightClientManager:
     """
     Retrieves the client helper for the given FastAPI application.
 
@@ -71,11 +71,11 @@ def get_flight_client(app: FastAPI) -> PooledClient:
         app (FastAPI): The FastAPI application instance.
 
     Returns:
-        PooledClient: The client helper associated with the given FastAPI application.
+        FlightClientManager: The client helper associated with the given FastAPI application.
     """
     helper = getattr(app.state, "_flight_client", None)
     if helper is None:
         raise ValueError(
-            "Flight client is not set in the FastAPI application. Use the :meth:`fastflight.utils.py.fastapi.lifespan.combined_lifespan` lifespan in your FastAPI application."
+            "Flight client is not set in the FastAPI application. Use the :meth:`fastflight.debug.py.fastapi.lifespan.combined_lifespan` lifespan in your FastAPI application."
         )
     return helper

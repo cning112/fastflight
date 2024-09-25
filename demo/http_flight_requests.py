@@ -4,7 +4,7 @@ from typing import Callable, Iterable, TypeVar
 
 import httpx
 
-from fastflight.utils.flight_client import PooledClient
+from fastflight.flight_client import FlightClientManager
 from fastflight.utils.stream_utils import read_dataframe_from_arrow_stream
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     print("read df from http", df)
 
     # grpc request
-    client = PooledClient("grpc://localhost:8815")
+    client = FlightClientManager("grpc://localhost:8815")
 
     async def main():
         # b = b'{"connection_string": "sqlite:///example.db", "query": "select 1 as a", "batch_size": 1000, "kind": "DataSource.PostgresSQL"}'

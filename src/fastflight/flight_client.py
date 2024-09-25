@@ -13,7 +13,7 @@ from fastflight.utils.stream_utils import stream_arrow_data
 logger = logging.getLogger(__name__)
 
 
-class ClientPool:
+class FlightClientPool:
     """
     Manages a pool of clients to connect to an Arrow Flight server.
 
@@ -56,12 +56,12 @@ class ClientPool:
             client.close()
 
 
-class PooledClient:
+class FlightClientManager:
     """
     A helper class to get data from flight server using a pool of `FlightClient`s.
 
     Attributes:
-        client_pool (ClientPool): The pool of FlightClient instances.
+        client_pool (FlightClientPool): The pool of FlightClient instances.
         executor (concurrent.futures.ThreadPoolExecutor | None): The executor to run blocking calls in a separate thread.
         loop (asyncio.AbstractEventLoop): The current event loop.
     """
@@ -77,7 +77,7 @@ class PooledClient:
             client_pool_size (int): The number of FlightClient instances to maintain in the pool.
             executor (ThreadPoolExecutor | None): An optional executor to use in event loops. If not provided, will use the default executor.
         """
-        self.client_pool = ClientPool(flight_server_location, client_pool_size)
+        self.client_pool = FlightClientPool(flight_server_location, client_pool_size)
         self.executor = executor
 
     async def aget_stream_reader(self, ticket_bytes: bytes) -> flight.FlightStreamReader:
