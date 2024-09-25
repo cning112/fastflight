@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "fastflight"
 authors = [{ name = "Chao Ning", email = "chao.ning.uk@gmail.com" }]
 description = "FastAPI and Arrow Flight integrated server offering efficient dual-protocol support for both REST and gRPC data streaming."
-version = "0.2.1"
+version = "0.2.2"
 readme = "README.md"
 requires-python = ">= 3.10"
 dependencies = [
