@@ -69,7 +69,6 @@ class FlightServer(flight.FlightServerBase):
             logger.error(f"Error getting data source for ticket type {kind_str}: {e}")
             raise
 
-    @debuggable
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         try:
             logger.debug("FlightServer received ticket: %s", ticket.ticket)
