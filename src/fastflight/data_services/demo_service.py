@@ -5,7 +5,7 @@ from typing import AsyncIterable
 import pandas as pd
 import pyarrow as pa
 
-from fastflight.services.base import BaseDataService, BaseParams
+from fastflight.data_service_base import BaseDataService, BaseParams
 
 logger = logging.getLogger(__name__)
 

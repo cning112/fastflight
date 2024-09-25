@@ -6,7 +6,7 @@ import sys
 import pyarrow as pa
 from pyarrow import RecordBatchReader, flight
 
-from fastflight.services.base import BaseDataService, BaseParams, create_kind_name
+from fastflight.data_service_base import BaseDataService, BaseParams, create_kind_name
 from fastflight.utils.custom_logging import setup_logging
 from fastflight.utils.debug import debuggable
 from fastflight.utils.stream_utils import AsyncToSyncConverter
