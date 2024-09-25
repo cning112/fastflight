@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "fastflight"
 authors = [{ name = "Chao Ning", email = "chao.ning.uk@gmail.com" }]
-description = "FastAPI and Arrow Flight integrated server offering efficient dual-protocol support for both REST and gRPC data streaming."
+description = "FastFlight is a high-performance data transfer framework that integrates Apache Arrow Flight to fetch and stream large-scale data from multiple sources, using a modular, pluggable architecture for various data services, and offers optional FastAPI integration for HTTP-based access."
 version = "0.2.2"
 readme = "README.md"
 requires-python = ">= 3.10"
