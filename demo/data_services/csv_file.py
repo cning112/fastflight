@@ -1,9 +1,9 @@
-from dataclasses import Field
 from pathlib import Path
 from typing import AsyncIterable
 
 import pyarrow as pa
 import pyarrow.csv as csv
+from pydantic import Field
 
 from fastflight.data_service_base import BaseDataService, BaseParams
 
