@@ -21,7 +21,7 @@ def request_for_data(url: str, json_data: dict, read_fn: Callable[[Iterable[byte
 if __name__ == "__main__":
     # http request
     df = request_for_data(
-        "http://127.0.0.1:8000/fastflight/", {"kind": "Demo", "value": 5}, read_dataframe_from_arrow_stream
+        "http://127.0.0.1:8000/fastflight/", {"kind": "Demo", "value": 3}, read_dataframe_from_arrow_stream
     )
     print("read df from http", df)
 
@@ -30,17 +30,17 @@ if __name__ == "__main__":
 
     async def main():
         # b = b'{"connection_string": "sqlite:///example.db", "query": "select 1 as a", "batch_size": 1000, "kind": "DataSource.PostgresSQL"}'
-        b = b'{"value": 5, "kind": "Demo"}'
+        b = b'{"value": 3, "kind": "Demo"}'
         reader = await client.aget_stream_reader(b)
         for batch in reader:
             print("read batch from grpc", batch.data)
 
-        b = b'{"value": 5, "kind": "Demo"}'
+        b = b'{"query": "select 1 as a", "kind": "SQL", "connection_string": "sqlite:///example.db"}'
         df = await client.aread_pd_df(b)
         print("read df from grpc", df)
 
     asyncio.run(main())
 
-    b = b'{"value": 5, "kind": "Demo"}'
+    b = b'{"value": 2, "kind": "Demo"}'
     df = client.read_pd_df(b)
     print("read df from grpc", df)
