@@ -111,10 +111,15 @@ class AsyncToSyncConverter:
             Internal function to iterate over the async iterable and place results into the queue.
             Runs within the event loop.
             """
-            async for item in aiter:
-                await queue.put(item)
-            logger.debug("Queueing sentinel to indicate end of iteration.")
-            await queue.put(sentinel)  # Put sentinel to signal the end of the iteration.
+            try:
+                async for item in aiter:
+                    await queue.put((False, item))
+            except Exception as e:
+                logger.error("Error during iteration: %s", e)
+                await queue.put((True, e))
+            finally:
+                logger.debug("Queueing sentinel to indicate end of iteration.")
+                await queue.put(sentinel)  # Put sentinel to signal the end of the iteration.
 
         logger.debug("Scheduling the async iterable to run in the event loop.")
         # Schedule the async iterable to run in the event loop.
@@ -126,7 +131,13 @@ class AsyncToSyncConverter:
             if result is sentinel:
                 logger.info("End of iteration reached.")
                 break
-            yield result
+            if isinstance(result, tuple):
+                is_exception, item = result
+                if is_exception:
+                    logger.error(f"Reraising exception from async iterable: {item}")
+                    raise item
+                else:
+                    yield item
 
     def __enter__(self) -> "AsyncToSyncConverter":
         """

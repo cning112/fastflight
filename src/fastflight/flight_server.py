@@ -6,7 +6,7 @@ import sys
 import pyarrow as pa
 from pyarrow import RecordBatchReader, flight
 
-from fastflight.services.base import BaseDataService, BaseParams, create_kind_name
+from fastflight.data_service_base import BaseDataService, BaseParams, create_kind_name
 from fastflight.utils.custom_logging import setup_logging
 from fastflight.utils.debug import debuggable
 from fastflight.utils.stream_utils import AsyncToSyncConverter
@@ -69,7 +69,6 @@ class FlightServer(flight.FlightServerBase):
             logger.error(f"Error getting data source for ticket type {kind_str}: {e}")
             raise
 
-    @debuggable
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         try:
             logger.debug("FlightServer received ticket: %s", ticket.ticket)
@@ -110,6 +109,12 @@ def start_flight_server(location: str, debug: bool = False):
 
 
 if __name__ == "__main__":
+    # Explicitly import for data service registration
+    from fastflight.data_services.demo_service import DemoDataService
+    from fastflight.data_services.sql_service import SQLDataService
+
+    __all__ = [DemoDataService, SQLDataService]  # Avoids IDE optimization
+
     setup_logging(log_file="flight_server.log")
 
     logger.info("Registered params types: %s", BaseParams.registry.keys())
