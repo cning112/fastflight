@@ -1,7 +1,7 @@
 # FastFlight
 
-**FastFlight** is a high-performance framework for fetching and transferring data from multiple data sources using *
-*Apache Arrow Flight**. It focuses on improving data transfer efficiency, particularly in scenarios requiring
+**FastFlight** is a high-performance framework for fetching and transferring data from multiple data sources using
+**Apache Arrow Flight**. It focuses on improving data transfer efficiency, particularly in scenarios requiring
 large-scale data retrieval, by using Arrow's columnar data format and gRPC for efficient streaming.
 
 ---
