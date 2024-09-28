@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
     __all__ = [DemoDataService, SQLDataService]  # Avoids IDE optimization
 
-    setup_logging(log_file="flight_server.log")
+    setup_logging(log_file=None)
 
     logger.info("Registered params types: %s", BaseParams.registry.keys())
 
