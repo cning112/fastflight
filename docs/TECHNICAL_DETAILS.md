@@ -1,10 +1,8 @@
-from fastflight.flight_client import FlightClientManager
-
 # Technical Details
 
 This document provides in-depth technical explanations of the key components and architecture of the **FastFlight**
-project. The focus is on how the system uses **Apache Arrow Flight** for high-performance data transfer and the modular
-architecture for handling various data sources.
+project. It focuses on how the system uses **Apache Arrow Flight** for high-performance data transfer and its modular
+design for integrating various data sources.
 
 ---
 
@@ -12,84 +10,116 @@ architecture for handling various data sources.
 
 ### Overview:
 
-FastFlight uses a **pluggable data service architecture** that allows for easy integration of different data sources (
-SQL databases, data lakes, cloud storage). Each data source is represented by a subclass of `BaseDataService`, and the
-corresponding parameters are defined as subclasses of `BaseParams`.
+FastFlight employs a **pluggable data service architecture** that allows users to easily integrate various data
+sources (e.g., SQL databases, data lakes, cloud storage). Each data source is represented by a subclass of
+`BaseDataService`, while parameters are defined through subclasses of `BaseParams`.
 
 ### Key Concepts:
 
-- **`BaseParams`**: Handles serialization and deserialization of query parameters, enabling efficient data transfer
-  between the client and the server.
+- **`BaseParams`**: Manages serialization and deserialization of query parameters, enabling efficient data transfer
+  between the client and server.
     - **Registration**: Data source types are registered using `BaseParams.register`, allowing the system to dynamically
-      load the correct parameter class based on a request.
+      load the correct parameter class based on the request.
 
-- **`BaseDataService`**: Defines the core interface for interacting with data sources. This includes an asynchronous
-  method `aget_batches`, which fetches data in batches using Arrow's `RecordBatch` format.
-    - **Example Service**: The `DemoDataService` shows how to implement a custom service for a specific data source.
+- **`BaseDataService`**: Defines the interface for interacting with data sources, including the asynchronous
+  `aget_batches` method, which fetches data in Arrow's `RecordBatch` format.
+    - **Custom Services**: Users can easily implement their own data services for specific data sources by subclassing
+      `BaseDataService` and `BaseParams`.
 
 ### Example Implementation:
 
-The pluggable architecture allows for extending FastFlight easily by creating new subclasses of `BaseParams` and
-`BaseDataService` to handle different data sources such as SQL, cloud, or local files.
+The pluggable architecture allows for easy extension by creating new subclasses for specific data sources, such as SQL,
+cloud, or file systems.
 
 ```python
 @BaseParams.register("SQL")
 class SQLParams(BaseParams):
-    # SQL-specific query parameters
-    pass
+    query: str  # SQL-specific query parameter
+    limit: int
 
 
 @BaseDataService.register("SQL")
 class SQLDataService(BaseDataService[SQLParams]):
-    # Fetch data from a SQL database and return RecordBatches
-    pass
+    async def aget_batches(self, params: SQLParams, batch_size: int = 100):
+        # Fetch data from a SQL database and return RecordBatches
+        pass
 ```
 
 ---
 
-## 2. **Flight Server Architecture**
+## 2. **Typed Requests with Pydantic**
 
 ### Overview:
 
-The **Flight server** in FastFlight handles user requests, dispatches calls to the appropriate data service, and returns
-data to the client using **Arrow Flight** via **gRPC**.
+FastFlight uses **Pydantic** models to define structured, typed requests, ensuring validated and type-safe data queries.
+Each request type is associated with a specific data service implementation, ensuring that appropriate parameters are
+passed to the relevant service.
+
+### Key Concepts:
+
+- **Request Validation**: Each data service has an associated request type, defined as a Pydantic model. These request
+  types are validated and serialized for efficient data transfer.
+- **Custom Request Models**: Developers can define request models based on their data service requirements, providing
+  flexibility and control over the request/response flow.
+
+### Example:
+
+```python
+@BaseParams.register("SQL")
+class SQLParams(BaseParams):
+    query: str
+    limit: int
+
+
+@BaseDataService.register("SQL")
+class SQLDataService(BaseDataService[SQLParams]):
+    async def aget_batches(self, params: SQLParams, batch_size: int = 100):
+        # Fetch and return data in RecordBatch format
+        pass
+```
+
+---
+
+## 3. **Flight Server Architecture**
+
+### Overview:
+
+The **Flight Server** manages incoming requests, invokes the appropriate data service, and returns data to the client
+via **Arrow Flight** using **gRPC**.
 
 ### Key Components:
 
-- **`FlightServer`**: The server processes client requests, extracts parameters from the `Ticket` object, and calls the
-  appropriate data service to retrieve data.
-    - **`do_get` Method**: This is where the server retrieves the data from a data service and streams the results back
-      to the client using a `RecordBatchReader`.
+- **`FlightServer`**: Processes client requests, extracts parameters from `Ticket` objects, and uses registered data
+  services to retrieve data asynchronously.
+    - **`do_get`**: The core method that dispatches requests to data services and streams the results back to the client
+      using `RecordBatchReader`.
 
-- **Asynchronous Data Fetching**: The `FlightServer` leverages the `AsyncToSyncConverter` to convert asynchronous data
-  fetching into synchronous data streaming for Flight's gRPC interface.
+- **Asynchronous Data Fetching**: Data is fetched asynchronously using the `AsyncToSyncConverter`, which converts async
+  operations into synchronous ones for compatibility with gRPC.
 
 ### Example Workflow:
 
 1. Client sends a request with a **Ticket**.
-2. `FlightServer.do_get` method extracts the parameters from the ticket.
-3. The server dispatches the call to the registered data service, which fetches data asynchronously in batches.
+2. `FlightServer.do_get` extracts the request parameters.
+3. The server dispatches the request to the appropriate data service, which retrieves data asynchronously in batches.
 4. Data is streamed back to the client using Arrow's **RecordBatchStream**.
 
 ---
 
-## 3. **Flight Client Design**
+## 4. **Flight Client Design**
 
 ### Overview:
 
-The **Flight client** is designed to interact with the Flight server, fetch data, and deserialize it into user-friendly
-formats like **Pandas DataFrames** or **PyArrow Tables**.
+The **Flight client** interacts with the Flight server, fetching data and converting it into formats like **Pandas
+DataFrames** or **PyArrow Tables**.
 
 ### Key Components:
 
-- **`FlightClientManager`**: Manages a pool of Flight clients for concurrent requests. This ensures efficient resource
-  usage
-  and allows multiple requests to be handled concurrently.
-
+- **`FlightClientManager`**: Manages a pool of Flight clients to handle multiple concurrent requests efficiently.
 - **Data Fetching Methods**:
-    - **`aget_stream_reader`**: Asynchronously fetches data from the server and returns a **FlightStreamReader**.
-    - **`aread_pa_table`**: Asynchronously fetches data and converts it to a **PyArrow Table**.
-    - **`aread_pd_df`**: Fetches data from the server and converts it into a **Pandas DataFrame**.
+    - **`aget_stream_reader`**: Fetches data asynchronously and returns a **FlightStreamReader**.
+    - **`aread_pa_table`**: Fetches and converts data into a **PyArrow Table**.
+    - **`aread_pd_df`**: Fetches and converts data into a **Pandas DataFrame**.
 
 ### Example:
 
@@ -101,64 +131,60 @@ ticket = b"<ticket bytes>"
 data_frame = client.read_pd_df(ticket)
 ```
 
-The client can work in both synchronous and asynchronous environments, allowing for flexible usage in different
-application contexts.
-
 ---
 
-## 4. **Utility Functions**
+## 5. **Utility Functions**
 
 ### `AsyncToSyncConverter`
 
-The `AsyncToSyncConverter` class converts asynchronous iterables into synchronous ones by managing an **asyncio event
-loop**. This is useful when integrating asynchronous data fetching (used by `BaseDataService`) with Arrow Flight's
-synchronous gRPC interface.
+This utility class converts asynchronous iterators into synchronous ones, managing an **asyncio event loop**. It ensures
+compatibility between async data fetching (used by `BaseDataService`) and Arrow Flight’s synchronous gRPC interface.
 
 #### Key Methods:
 
-- **`syncify_async_iter`**: Converts an async iterable into a synchronous iterator.
+- **`syncify_async_iter`**: Converts an asynchronous iterable into a synchronous iterator.
 - **`run_coroutine`**: Submits a coroutine to the event loop and retrieves the result synchronously.
 
 ### `stream_arrow_data`
 
-Streams **Arrow IPC** data from a `FlightStreamReader` into an asynchronous byte generator. This method enables
+This function streams **Arrow IPC** data from a `FlightStreamReader` into an asynchronous byte generator. It enables
 efficient, large-scale data transfer between the Flight server and the client.
 
 ---
 
-## 5. **FastAPI Integration (Optional)**
+## 6. **FastAPI Integration (Optional)**
 
 ### Overview:
 
-The FastAPI integration is an optional feature of FastFlight that allows exposing the data services via an HTTP API. It
-utilizes FastAPI’s asynchronous capabilities to handle requests efficiently.
+FastFlight offers optional **FastAPI integration**, which exposes data services via HTTP APIs. FastAPI’s asynchronous
+capabilities ensure efficient handling of requests, making it an ideal interface for web-based access.
 
 ### Components:
 
-- **`api_router.py`**: Defines FastAPI routes that handle client requests, forward them to the Flight server, and stream
+- **`api_router.py`**: Defines FastAPI routes to handle client requests, forward them to the Flight server, and stream
   the resulting data back.
-- **`lifespan.py`**: Manages the lifecycle of Flight clients within the FastAPI application.
+- **`lifespan.py`**: Manages the lifecycle of Flight clients within a FastAPI application.
 
 For more details, see the separate [FastAPI README](../src/fastflight/fastapi/README.md).
 
 ---
 
-## 6. **Performance Benefits of Arrow Flight**
+## 7. **Performance Benefits of Arrow Flight**
 
-Using **Apache Arrow Flight** significantly enhances the performance of data transfer compared to traditional methods
-like JDBC/ODBC:
+Using **Apache Arrow Flight** provides significant performance improvements over traditional data transfer methods like
+JDBC/ODBC:
 
-- **Columnar Data Format**: Arrow’s columnar format is optimized for in-memory analytics, reducing serialization
+- **Columnar Data Format**: Apache Arrow’s columnar format is optimized for in-memory analytics, reducing serialization
   overhead and improving I/O performance.
-- **gRPC Streaming**: Flight leverages gRPC for efficient network communication, providing lower latency and higher
-  throughput for large datasets.
-- **Zero-Copy Data Transfer**: Arrow Flight minimizes data copying between processes, further improving performance,
-  especially in distributed systems.
+- **gRPC Streaming**: Arrow Flight uses gRPC for efficient network communication, providing low-latency, high-throughput
+  data transfer.
+- **Zero-Copy Data Transfer**: Arrow Flight minimizes data copying between processes, improving performance in
+  distributed systems.
 
 ---
 
 ## Conclusion
 
-FastFlight is a flexible and high-performance framework designed for efficient data transfer using Arrow Flight. The
-modular design allows it to adapt to various data sources, making it an ideal solution for projects that need to handle
-large-scale data retrieval and transfer efficiently.
+FastFlight is a flexible and high-performance framework designed for efficient data transfer using Arrow Flight. Its
+modular design allows it to integrate various data sources easily, making it ideal for projects that require large-scale
+data retrieval and transfer.
