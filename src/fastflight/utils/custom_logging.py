@@ -37,15 +37,15 @@ shared_processors = [
 
 
 def setup_logging(
-    console_log_level: str | int = "DEBUG", log_file: Path | str = "app.log", file_log_level: str | int = "INFO"
+    console_log_level: str | int = "DEBUG", log_file: None | Path | str = "app.log", file_log_level: str | int = "INFO"
 ):
     """
     Set up the logging configuration for the application.
 
     Args:
         console_log_level (str | int): The log level for the console handler.
-        log_file (Path | str): The path to the log file.
-        file_log_level (str | int): The log level for the file handler.
+        log_file (Path | str | None): The path to the log file. If None, no file handler will be created.
+        file_log_level (str | int): The log level for the file handler if log_file is not None.
 
     Returns:
         None
@@ -71,7 +71,7 @@ def setup_logging(
         configuration. The configuration includes the formatters, handlers, and root logger configuration.
 
         The `Path(log_file).parent.mkdir(exist_ok=True, parents=True)` line creates the parent directory of the log file if
-        it doesn't exist.
+        it is not None and doesn't exist.
     """
     structlog.configure(
         processors=shared_processors
@@ -99,7 +99,30 @@ def setup_logging(
 
     root_logger = logging.getLogger()
 
-    Path(log_file).parent.mkdir(exist_ok=True, parents=True)
+    if log_file is not None:
+        Path(log_file).parent.mkdir(exist_ok=True, parents=True)
+
+    file_handler = (
+        {}
+        if log_file is None
+        else {
+            "file": {
+                "level": file_log_level,
+                "class": "logging.handlers.TimedRotatingFileHandler",
+                "filename": str(log_file),
+                "formatter": "plain",
+                "when": "midnight",
+                "interval": 1,
+                "backupCount": 7,
+                "encoding": "utf-8",
+            }
+        }
+    )
+
+    handlers = {
+        "default": {"level": console_log_level, "class": "logging.StreamHandler", "formatter": "colored"},
+        **file_handler,
+    }
 
     logging.config.dictConfig(
         {
@@ -135,20 +158,7 @@ def setup_logging(
                     "logger": root_logger,
                 },
             },
-            "handlers": {
-                "default": {"level": console_log_level, "class": "logging.StreamHandler", "formatter": "colored"},
-                "file": {
-                    "level": file_log_level,
-                    "class": "logging.handlers.TimedRotatingFileHandler",
-                    "filename": str(log_file),
-                    "formatter": "plain",
-                    "when": "midnight",
-                    "interval": 1,
-                    "backupCount": 7,
-                    "encoding": "utf-8",
-                },
-            },
-            "root": {"handlers": ["default", "file"], "level": "DEBUG", "propagate": True},
-            "loggers": {"uvicorn": {"level": "INFO", "handlers": ["default", "file"], "propagate": False}},
+            "handlers": handlers,
+            "root": {"handlers": list(handlers.keys()), "level": "DEBUG", "propagate": True},
         }
     )
