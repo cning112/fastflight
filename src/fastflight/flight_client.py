@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import AsyncIterable
 
@@ -8,7 +7,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.flight as flight
 
-from fastflight.utils.stream_utils import stream_arrow_data
+from fastflight.utils.stream_utils import AsyncToSyncConverter, stream_arrow_data
 
 logger = logging.getLogger(__name__)
 
@@ -66,19 +65,16 @@ class FlightClientManager:
         loop (asyncio.AbstractEventLoop): The current event loop.
     """
 
-    def __init__(
-        self, flight_server_location: str, client_pool_size: int = 5, executor: ThreadPoolExecutor | None = None
-    ):
+    def __init__(self, flight_server_location: str, client_pool_size: int = 5):
         """
         Initializes the FlightClientHelper.
 
         Args:
             flight_server_location (str): The URI of the Flight server.
             client_pool_size (int): The number of FlightClient instances to maintain in the pool.
-            executor (ThreadPoolExecutor | None): An optional executor to use in event loops. If not provided, will use the default executor.
         """
         self.client_pool = FlightClientPool(flight_server_location, client_pool_size)
-        self.executor = executor
+        self._converter = AsyncToSyncConverter()
 
     async def aget_stream_reader(self, ticket_bytes: bytes) -> flight.FlightStreamReader:
         """
@@ -148,7 +144,7 @@ class FlightClientManager:
         Returns:
             flight.FlightStreamReader: A reader to stream data from the Flight server.
         """
-        return asyncio.run(self.aget_stream_reader(ticket_bytes))
+        return self._converter.run_coroutine(self.aget_stream_reader(ticket_bytes))
 
     def read_pa_table(self, ticket_bytes: bytes) -> pa.Table:
         """
@@ -174,19 +170,11 @@ class FlightClientManager:
         """
         return asyncio.run(self.aread_pd_df(ticket_bytes))
 
-    async def close_async(self, close_executor: bool = True) -> None:
+    async def close_async(self) -> None:
         """
         Closes the client asynchronously.
-
-        Args:
-            close_executor (bool, optional): Whether to close the executor if it is not None. Defaults to True.
-
-        Returns:
-            None
         """
         await self.client_pool.close_async()
-        if close_executor and self.executor:
-            self.executor.shutdown(wait=True)
 
     def __enter__(self):
         return self
