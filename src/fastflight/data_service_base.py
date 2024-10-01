@@ -160,13 +160,13 @@ class BaseDataService(Generic[T], ABC):
         return data_service_cls
 
     @abstractmethod
-    async def aget_batches(self, params: T, batch_size: int = 100) -> AsyncIterable[pa.RecordBatch]:
+    async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
         """
         Fetch data in batches based on the given parameters.
 
         Args:
             params (T): The parameters for fetching data.
-            batch_size: The maximum size of each batch. Defaults to 100.
+            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
 
         Yields:
             pa.RecordBatch: An async iterable of RecordBatches.

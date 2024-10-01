@@ -25,7 +25,7 @@ class SQLDataService(BaseDataService[SQLParams]):
     Executes the SQL query and returns data in Arrow batches.
     """
 
-    async def aget_batches(self, params: SQLParams, batch_size: int = 100) -> AsyncIterable[pa.RecordBatch]:
+    async def aget_batches(self, params: SQLParams, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
         engine = create_engine(params.connection_string)
         with engine.connect() as connection:
             result: Result = connection.execute(text(params.query), params.parameters or {})
