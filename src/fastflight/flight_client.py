@@ -133,7 +133,7 @@ class FlightClientManager:
         reader = await self.aget_stream_reader(ticket)
         return reader.read_all()
 
-    async def aread_pd_df(self, ticket: TicketType) -> pd.DataFrame:
+    async def aread_pd_dataframe(self, ticket: TicketType) -> pd.DataFrame:
         """
         Returns a pandas dataframe from the Flight server using the provided flight ticket data asynchronously.
 
