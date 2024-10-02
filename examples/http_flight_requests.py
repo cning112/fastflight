@@ -19,6 +19,8 @@ def request_for_data(url: str, json_data: dict, read_fn: Callable[[Iterable[byte
 
 
 if __name__ == "__main__":
+    server_ip = "localhost"
+
     # http request
     df = request_for_data(
         "http://127.0.0.1:8000/fastflight/", {"kind": "Demo", "value": 3}, read_dataframe_from_arrow_stream
@@ -26,7 +28,7 @@ if __name__ == "__main__":
     print("read df from http", df)
 
     # grpc request
-    client = FlightClientManager("grpc://localhost:8815")
+    client = FlightClientManager(f"grpc://{server_ip}:8815")
 
     async def main():
         # b = b'{"connection_string": "sqlite:///example.db", "query": "select 1 as a", "batch_size": 1000, "kind": "DataSource.PostgresSQL"}'
@@ -36,11 +38,11 @@ if __name__ == "__main__":
             print("read batch from grpc", batch.data)
 
         b = b'{"query": "select 1 as a", "kind": "SQL", "connection_string": "sqlite:///example.db"}'
-        df = await client.aread_pd_df(b)
+        df = await client.aread_pd_dataframe(b)
         print("read df from grpc", df)
 
     asyncio.run(main())
 
     b = b'{"value": 2, "kind": "Demo"}'
-    df = client.read_pd_df(b)
+    df = client.read_pd_dataframe(b)
     print("read df from grpc", df)
