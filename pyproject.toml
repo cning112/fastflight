@@ -10,8 +10,6 @@ version = "0.2.3"
 readme = "README.md"
 requires-python = ">= 3.10"
 dependencies = [
-    "asyncpg",
-    "fastapi>=0.110.2",
     "pandas",
     "pyarrow>=14.0.0",
     "pydantic>=2.0",
@@ -20,6 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+fastapi = ["fastapi"]
 dev = ["pre-commit"]
 test = ["pytest", "pytest-cov"]
 

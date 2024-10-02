@@ -26,7 +26,7 @@ through API calls.
 1. Ensure that the **Flight server** is running.
 2. Start the FastAPI server:
    ```bash
-   uvicorn demo.main:app --reload
+   uvicorn examples.main:app --reload
    ```
 
 ### Lifespan Management

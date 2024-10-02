@@ -12,7 +12,7 @@ T = TypeVar("T", bound="BaseParams")
 ParamsCls: TypeAlias = type["BaseParams"]
 
 
-def create_kind_name(kind: any) -> str:
+def to_name(kind: any) -> str:
     return str(kind)
 
 
@@ -33,7 +33,7 @@ class BaseParams(BaseModel, ABC):
         Args:
             kind: The type of the params to register.
         """
-        kind_str = create_kind_name(kind)
+        kind_str = to_name(kind)
 
         def inner(sub_params_cls: ParamsCls) -> ParamsCls:
             if kind_str in cls.registry:
@@ -48,12 +48,12 @@ class BaseParams(BaseModel, ABC):
         return inner
 
     @classmethod
-    def get_params_cls(cls, kind: str) -> ParamsCls:
+    def lookup(cls, kind) -> ParamsCls:
         """
         Get the params class associated with the given params type.
 
         Args:
-            kind (str): The type of the params to retrieve.
+            kind: The type of the params to retrieve.
 
         Returns:
             type[BaseParams]: The params class associated with the params type.
@@ -61,10 +61,11 @@ class BaseParams(BaseModel, ABC):
         Raises:
             ValueError: If the params type is not registered.
         """
-        params_cls = cls.registry.get(kind)
+        kind_str = to_name(kind)
+        params_cls = cls.registry.get(kind_str)
         if params_cls is None:
-            logger.error(f"Params type {kind} is not registered.")
-            raise ValueError(f"Params type {kind} is not registered.")
+            logger.error(f"Params type {kind_str} is not registered.")
+            raise ValueError(f"Params type {kind_str} is not registered.")
         return params_cls
 
     @classmethod
@@ -80,8 +81,8 @@ class BaseParams(BaseModel, ABC):
         """
         try:
             json_data = json.loads(data)
-            kind = json_data.pop("kind")
-            params_cls = cls.get_params_cls(kind)
+            kind_str = json_data.pop("kind")
+            params_cls = cls.lookup(kind_str)
             return params_cls.model_validate(json_data)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Error deserializing params: {e}")
@@ -96,7 +97,7 @@ class BaseParams(BaseModel, ABC):
         """
         try:
             json_data = self.model_dump()
-            json_data["kind"] = create_kind_name(self.kind)
+            json_data["kind"] = to_name(self.kind)
             return json.dumps(json_data).encode("utf-8")
         except (TypeError, ValueError) as e:
             logger.error(f"Error serializing params: {e}")
@@ -126,7 +127,7 @@ class BaseDataService(Generic[T], ABC):
         Returns:
             type[BaseDataService]: The registered data source class.
         """
-        kind_str = create_kind_name(kind)
+        kind_str = to_name(kind)
 
         def inner(subclass: DataServiceCls) -> DataServiceCls:
             if kind_str in cls.registry:
@@ -140,12 +141,12 @@ class BaseDataService(Generic[T], ABC):
         return inner
 
     @classmethod
-    def get_data_service_cls(cls, kind: str) -> DataServiceCls:
+    def lookup(cls, kind) -> DataServiceCls:
         """
         Get the data service class associated with the given data source type.
 
         Args:
-            kind (str): The type of the data source to retrieve.
+            kind: The type of the data source to retrieve.
 
         Returns:
             type[BaseDataService]: The data source class associated with the data source type.
@@ -153,20 +154,21 @@ class BaseDataService(Generic[T], ABC):
         Raises:
             ValueError: If the data source type is not registered.
         """
-        data_service_cls = cls.registry.get(kind)
+        kind_str = to_name(kind)
+        data_service_cls = cls.registry.get(kind_str)
         if data_service_cls is None:
-            logger.error(f"Data source type {kind} is not registered.")
-            raise ValueError(f"Data source type {kind} is not registered.")
+            logger.error(f"Data source type {kind_str} is not registered.")
+            raise ValueError(f"Data source type {kind_str} is not registered.")
         return data_service_cls
 
     @abstractmethod
-    async def aget_batches(self, params: T, batch_size: int = 100) -> AsyncIterable[pa.RecordBatch]:
+    async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
         """
         Fetch data in batches based on the given parameters.
 
         Args:
             params (T): The parameters for fetching data.
-            batch_size: The maximum size of each batch. Defaults to 100.
+            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
 
         Yields:
             pa.RecordBatch: An async iterable of RecordBatches.

@@ -95,6 +95,7 @@ class AsyncToSyncConverter:
     def syncify_async_iter(self, aiter: Union[AsyncIterable[T], Awaitable[AsyncIterable[T]]]) -> Iterator[T]:
         """
         Converts an asynchronous iterable into a synchronous iterator.
+        Note that this method doesn't load the entire async iterable into memory and then iterates over it.
 
         Args:
             aiter (Union[AsyncIterable[T], Awaitable[AsyncIterable[T]]]): The async iterable or awaitable returning an async iterable.
