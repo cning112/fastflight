@@ -6,7 +6,7 @@ import sys
 import pyarrow as pa
 from pyarrow import RecordBatchReader, flight
 
-from fastflight.data_service_base import BaseDataService, BaseParams, create_kind_name
+from fastflight.data_service_base import BaseDataService, BaseParams, to_name
 from fastflight.utils.debug import debuggable
 from fastflight.utils.stream_utils import AsyncToSyncConverter
 
@@ -73,9 +73,9 @@ class FlightServer(flight.FlightServerBase):
             logger.error(f"Error parsing params: {e}")
             raise
 
-        kind_str = create_kind_name(params.kind)
+        kind_str = to_name(params.kind)
         try:
-            data_service_cls = BaseDataService.get_data_service_cls(kind_str)
+            data_service_cls = BaseDataService.lookup(kind_str)
             data_service = data_service_cls()
             return params, data_service
         except ValueError as e:
