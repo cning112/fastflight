@@ -128,7 +128,7 @@ from fastflight.flight_client import FlightClientManager
 
 client = FlightClientManager("grpc://localhost:8815")
 ticket = b"<ticket bytes>"
-data_frame = client.read_pd_df(ticket)
+data_frame = client.read_pd_dataframe(ticket)
 ```
 
 ---
