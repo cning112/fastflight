@@ -1,5 +1,6 @@
-from examples.data_services.mock_data import MockDataService
 from fastflight.flight_server import start_flight_server
+
+from .mock_data_service import MockDataService
 
 if __name__ == "__main__":
     # Explicitly import for data service registration
