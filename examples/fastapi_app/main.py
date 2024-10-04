@@ -1,6 +1,6 @@
+from examples.data_services import load_all
 from fastapi import FastAPI
 
-from examples.data_services import load_all
 from fastflight.fastapi.api_router import router as ff_router
 from fastflight.fastapi.lifespan import combined_lifespan
 

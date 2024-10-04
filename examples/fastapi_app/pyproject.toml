@@ -9,8 +9,4 @@ description = "Demo of FastFlight, including benchmarking of synchronous and asy
 version = "0.1.0"
 readme = "README.md"
 requires-python = ">= 3.11"
-dependencies = [
-    "fastflight",
-    "httpx",
-    "psutil"
-]
+dependencies = ["fastflight", "fastapi[standard]"]

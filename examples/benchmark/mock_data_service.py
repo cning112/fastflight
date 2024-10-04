@@ -1,5 +1,5 @@
 import logging
-from typing import AsyncIterable
+from typing import AsyncIterable, TypeAlias
 
 import numpy as np
 import pyarrow as pa
@@ -18,7 +18,7 @@ class MockDataParams(BaseParams):
     batch_size: int
 
 
-T = MockDataParams
+T: TypeAlias = MockDataParams
 
 # to generate the same data for the same dimension
 np.random.seed(0)

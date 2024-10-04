@@ -4,8 +4,9 @@ from datetime import datetime
 import psutil
 import pyarrow as pa
 
-from examples.data_services.mock_data import MockDataParams
 from fastflight.flight_client import FlightClientManager
+
+from .mock_data_service import MockDataParams
 
 # Server and client details
 SERVER_LOCATION = "grpc://localhost:8815"
