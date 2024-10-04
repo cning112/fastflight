@@ -13,8 +13,6 @@ kind = "MockData"
 
 @BaseParams.register(kind)
 class MockDataParams(BaseParams):
-    nrows: int
-    ncols: int
     batch_size: int
 
 
@@ -31,20 +29,12 @@ def create_large_pyarrow_table(total_rows, total_cols):
     return pa.table(columns, names=column_names)
 
 
-# Function to return a slice of the large table
-def get_table_slice(table, rows, cols):
-    # Slice rows and columns
-    sliced_table = table.slice(0, rows).select([f"col{i + 1}" for i in range(cols)])
-    return sliced_table
-
-
-# Pre-create a large table (for example, 1 million rows and 100 columns)
-TABLE = create_large_pyarrow_table(total_rows=10_000_000, total_cols=200)
+# Pre-create a large table 1 million rows and 50 columns
+TABLE = create_large_pyarrow_table(total_rows=1_000_000, total_cols=50)
 
 
 @BaseDataService.register(kind)
 class MockDataService(BaseDataService[T]):
     async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
-        table = get_table_slice(TABLE, params.nrows, params.ncols)
-        for b in table.to_batches(params.batch_size or batch_size):
+        for b in TABLE.to_batches(params.batch_size or batch_size):
             yield b
