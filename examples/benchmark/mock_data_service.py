@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import AsyncIterable, TypeAlias
 
@@ -13,7 +14,8 @@ kind = "MockData"
 
 @BaseParams.register(kind)
 class MockDataParams(BaseParams):
-    batch_size: int
+    records_per_batch: int
+    batch_generation_delay: float
 
 
 T: TypeAlias = MockDataParams
@@ -36,5 +38,7 @@ TABLE = create_large_pyarrow_table(total_rows=1_000_000, total_cols=50)
 @BaseDataService.register(kind)
 class MockDataService(BaseDataService[T]):
     async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
-        for b in TABLE.to_batches(params.batch_size or batch_size):
+        for b in TABLE.to_batches(params.records_per_batch):
+            # simulate an I/O wait time
+            await asyncio.sleep(params.batch_generation_delay)
             yield b

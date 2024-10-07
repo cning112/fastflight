@@ -1,9 +1,9 @@
 import dataclasses
-from collections import defaultdict
+import os
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
 
-import matplotlib.pyplot as plt
+import pandas as pd
 import pyarrow as pa
 from mock_data_service import MockDataParams
 
@@ -17,7 +17,6 @@ def calculate_throughput(start, end, data_size):
 
 
 def get_data(client: FlightClientManager, params: MockDataParams) -> tuple[pa.Table, datetime, datetime]:
-    """Send the generated data to the client and collect metrics."""
     start_time = datetime.now()
     table = client.read_pa_table(params)
     end_time = datetime.now()
@@ -26,101 +25,79 @@ def get_data(client: FlightClientManager, params: MockDataParams) -> tuple[pa.Ta
 
 @dataclasses.dataclass
 class Result:
-    latency_seconds: float
-    throughputMB: float
+    records_per_batch: int
+    concurrent_requests: int
+    batch_generation_delay: float
+    average_latency: float
+    throughput_MBps: float
 
 
-@dataclasses.dataclass
-class ResultList:
-    results: list[Result]
-
-    @property
-    def latency_seconds(self) -> float:
-        return sum(result.latency_seconds for result in self.results) / len(self.results)
-
-    @property
-    def throughputMB(self) -> float:
-        return sum(result.throughputMB for result in self.results) / len(self.results)
-
-
-def run(client: FlightClientManager, batch_size: int) -> Result:
-    # Send data and collect time
-    table, start_time, end_time = get_data(client, MockDataParams(batch_size=batch_size))
-
-    # Data size in bytes
+def run(client: FlightClientManager, records_per_batch: int, batch_generation_delay: float) -> Result:
+    table, start_time, end_time = get_data(
+        client, MockDataParams(records_per_batch=records_per_batch, batch_generation_delay=batch_generation_delay)
+    )
     data_size = table.nbytes
-
-    # Calculate latency and throughput
     latency = (end_time - start_time).total_seconds()
     throughput = calculate_throughput(start_time.timestamp(), end_time.timestamp(), data_size)
-
-    # Output results
-    # print(f"Latency: {latency:.2f} seconds")
-    # print(f"Throughput: {throughput:.2f} MB/s")
-    return Result(latency, throughput)
+    return Result(records_per_batch, 1, batch_generation_delay, latency, throughput)
 
 
-def run_concurrently(client: FlightClientManager, concurrency_level: int, batch_size: int) -> ResultList:
+def run_concurrently(
+    client: FlightClientManager, concurrent_requests: int, records_per_batch: int, batch_generation_delay: float
+) -> Result:
     futures = []
-    with ThreadPoolExecutor(max_workers=concurrency_level) as executor:
-        f = executor.submit(run, client, batch_size)
+    with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
+        f = executor.submit(run, client, records_per_batch, batch_generation_delay)
         futures.append(f)
 
     wait(futures)
 
-    return ResultList([f.result() for f in futures])
-
-
-def plot_results(async_results: dict[int, dict[int, ResultList]], sync_results: dict[int, dict[int, ResultList]]):
-    plt.figure(figsize=(10, 6))
-
-    batch_sizes = sorted(async_results.keys())
-    colors = ["r", "g", "b", "c", "m", "y", "k", "w"]
-
-    for color, batch_size in zip(colors, batch_sizes):
-        concurrency_levels = sorted(async_results[batch_size].keys())
-
-        plt.plot(
-            concurrency_levels,
-            [sync_results[batch_size][c].throughputMB for c in concurrency_levels],
-            label=f"Sync (batch_size={batch_size})",
-            marker="o",
-            linestyle="--",
-            color=color,
-        )
-        plt.plot(
-            concurrency_levels,
-            [async_results[batch_size][c].throughputMB for c in concurrency_levels],
-            label=f"Async (batch_size={batch_size})",
-            marker="^",
-            linestyle="-",
-            color=color,
-        )
-        plt.xlabel("Concurrency Level")
-        plt.ylabel("Throughput (MB/s)")
-        plt.title("Throughput Comparison")
-        plt.legend()
-        plt.grid(True)
-    plt.show()
+    return Result(
+        records_per_batch=records_per_batch,
+        concurrent_requests=concurrent_requests,
+        batch_generation_delay=batch_generation_delay,
+        average_latency=sum(f.result().average_latency for f in futures) / len(futures),
+        throughput_MBps=sum(f.result().throughput_MBps for f in futures) / len(futures),
+    )
 
 
 if __name__ == "__main__":
     async_loc = "grpc://127.0.0.1:8815"
     sync_loc = "grpc://127.0.0.1:8816"
 
-    async_results = defaultdict(dict)
-    sync_results = defaultdict(dict)
+    async_results, sync_results = [], []
 
     # async i/o should be more performant with larger batch size
-    for batch_size in [100, 1000, 10_000, 20_000]:
-        for concurrency_level in [1, 5, 10, 50, 100]:
-            async_client = FlightClientManager(async_loc, concurrency_level)
-            sync_client = FlightClientManager(sync_loc, concurrency_level)
-            # pre-warm
-            run_concurrently(async_client, concurrency_level, batch_size)
-            async_results[batch_size][concurrency_level] = run_concurrently(async_client, concurrency_level, batch_size)
-            # pre-warm
-            run_concurrently(sync_client, concurrency_level, batch_size)
-            sync_results[batch_size][concurrency_level] = run_concurrently(sync_client, concurrency_level, batch_size)
+    for batch_generation_delay in [0.001, 0.01, 0.1]:
+        for records_per_batch in [1000, 5000, 10_000]:
+            for concurrent_requests in [10, 100, 500, 1000, 2000]:
+                print(f"running {records_per_batch=}, {concurrent_requests=}, {batch_generation_delay=}")
+                async_client = FlightClientManager(async_loc, concurrent_requests)
+                sync_client = FlightClientManager(sync_loc, concurrent_requests)
 
-    plot_results(async_results, sync_results)
+                # pre-warm
+                run_concurrently(async_client, concurrent_requests, records_per_batch, 0.0)
+                print("async pre-warm done")
+                async_results.append(
+                    run_concurrently(async_client, concurrent_requests, records_per_batch, batch_generation_delay)
+                )
+                print("async done")
+
+                # pre-warm
+                run_concurrently(sync_client, concurrent_requests, records_per_batch, 0.0)
+                print("sync pre-warm done")
+                sync_results.append(
+                    run_concurrently(sync_client, concurrent_requests, records_per_batch, batch_generation_delay)
+                )
+                print("sync done")
+
+    results_df = pd.concat(
+        [
+            pd.DataFrame(data=[{**dataclasses.asdict(r), "type": "sync"} for r in sync_results]),
+            pd.DataFrame(data=[{**dataclasses.asdict(r), "type": "async"} for r in async_results]),
+        ]
+    )
+    if os.path.exists("results.csv"):
+        prev_df = pd.read_csv("results.csv")
+        results_df = pd.concat([prev_df, results_df]).drop_duplicates()
+    results_df.to_csv("results.csv", index=False)
