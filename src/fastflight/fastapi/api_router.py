@@ -6,7 +6,7 @@ from starlette.requests import Request
 
 from fastflight.fastapi.lifespan import get_flight_client
 from fastflight.flight_client import FlightClientManager
-from fastflight.utils.stream_utils import stream_arrow_data
+from fastflight.utils.stream_utils import write_arrow_data_to_stream
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fastflight")
@@ -54,5 +54,5 @@ async def read_data(
     """
     logger.debug("Received body bytes %s", body_bytes)
     stream_reader = await client_helper.aget_stream_reader(body_bytes)
-    stream = await stream_arrow_data(stream_reader)
+    stream = await write_arrow_data_to_stream(stream_reader)
     return StreamingResponse(stream, media_type="application/vnd.apache.arrow.stream")
