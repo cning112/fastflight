@@ -1,7 +1,7 @@
 import asyncio
+import io
 import logging
 import threading
-from io import BytesIO
 from typing import AsyncGenerator, AsyncIterable, Awaitable, Iterable, Iterator, Optional, TypeVar, Union
 
 import pandas as pd
@@ -240,11 +240,33 @@ async def write_arrow_data_to_stream(
     return consume()
 
 
+class IterableBytesIO(io.RawIOBase):
+    def __init__(self, iterable: Iterable[bytes]):
+        self.iterable = iter(iterable)
+        self.buffer = b""
+
+    def read(self, size=-1) -> bytes:
+        if size == -1:
+            return b"".join(self.iterable)
+
+        while len(self.buffer) < size:
+            try:
+                self.buffer += next(self.iterable)
+            except StopIteration:
+                break
+
+        result, self.buffer = self.buffer[:size], self.buffer[size:]
+        return result
+
+    def readable(self) -> bool:
+        return True
+
+
 def read_table_from_arrow_stream(stream: Iterable[bytes]) -> pa.Table:
-    return pa.ipc.RecordBatchStreamReader(BytesIO(b"".join(stream))).read_all()
+    stream_io = IterableBytesIO(stream)
+    return pa.ipc.RecordBatchStreamReader(stream_io).read_all()
 
 
-def read_dataframe_from_arrow_stream(stream: Iterable[bytes]) -> Optional[pa.Table]:
+def read_dataframe_from_arrow_stream(stream: Iterable[bytes]) -> pa.Table:
     table = read_table_from_arrow_stream(stream)
-    if table is not None:
-        return table.to_pandas()
+    return table.to_pandas()
