@@ -8,7 +8,7 @@ import pyarrow as pa
 import pyarrow.flight as flight
 
 from fastflight.data_service_base import BaseParams
-from fastflight.utils.stream_utils import AsyncToSyncConverter, stream_arrow_data
+from fastflight.utils.stream_utils import AsyncToSyncConverter, write_arrow_data_to_stream
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ class FlightClientManager:
             bytes: A stream of bytes from the Flight server.
         """
         reader = await self.aget_stream_reader(ticket)
-        return await stream_arrow_data(reader)
+        return await write_arrow_data_to_stream(reader)
 
     async def aread_pa_table(self, ticket: TicketType) -> pa.Table:
         """
