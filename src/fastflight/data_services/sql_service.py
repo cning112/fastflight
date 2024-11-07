@@ -36,7 +36,8 @@ class SQLDataService(BaseDataService[SQLParams]):
                     break
 
                 # Create a PyArrow Table from rows
-                arrays = [pa.array([row[i] for row in rows]) for i in range(len(result.keys()))]
-                table = pa.Table.from_arrays(arrays, list(result.keys()))
+                columns = list(result.keys())
+                arrays = [pa.array([row[i] for row in rows]) for i in range(len(columns))]
+                table = pa.Table.from_arrays(arrays, columns)
                 for batch in table.to_batches():
                     yield batch
