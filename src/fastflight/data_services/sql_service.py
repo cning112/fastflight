@@ -19,7 +19,7 @@ class SQLParams(BaseParams):
 
 
 @BaseDataService.register("SQL")
-class SQLDataService(BaseDataService[SQLParams]):
+class SQLService(BaseDataService[SQLParams]):
     """
     Data service for SQL-based sources using SQLAlchemy for flexible database connectivity.
     Executes the SQL query and returns data in Arrow batches.
