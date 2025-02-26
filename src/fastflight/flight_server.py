@@ -6,7 +6,7 @@ import sys
 import pyarrow as pa
 from pyarrow import RecordBatchReader, flight
 
-from fastflight.data_service_base import BaseDataService, BaseParams, to_name
+from fastflight.data_service_base import BaseDataService, BaseParams
 from fastflight.utils.debug import debuggable
 from fastflight.utils.stream_utils import AsyncToSyncConverter
 
@@ -59,13 +59,24 @@ class FlightServer(flight.FlightServerBase):
     @staticmethod
     def load_params_and_data_service(flight_ticket_bytes: bytes) -> tuple[BaseParams, BaseDataService]:
         """
-        Helper method to parse the params and get the corresponding data source instance.
+        Parses the flight ticket bytes into a BaseParams instance and retrieves the associated data service.
+
+        This method first converts the raw flight ticket bytes into a BaseParams object by calling
+        `BaseParams.from_bytes`. It then obtains the fully qualified name of the BaseParams instance using
+        the `qual_name()` method. This fully qualified name is used as a unique key to look up the corresponding
+        BaseDataService subclass from the registry. This design enforces a one-to-one binding between each
+        DataParams subclass and its corresponding DataService subclass.
 
         Args:
-            flight_ticket_bytes (bytes): The raw params bytes.
+            flight_ticket_bytes (bytes): The raw flight ticket bytes representing the data parameters.
 
         Returns:
-            tuple: A tuple containing the parsed ticket and data source instance.
+            tuple[BaseParams, BaseDataService]: A tuple containing the parsed BaseParams instance and an instance
+                                                 of the corresponding BaseDataService.
+
+        Raises:
+            flight.FlightUnavailableError: If no matching data service is found for the given parameters.
+            Exception: Propagates exceptions raised during parameter parsing or service lookup.
         """
         try:
             params = BaseParams.from_bytes(flight_ticket_bytes)
@@ -73,16 +84,16 @@ class FlightServer(flight.FlightServerBase):
             logger.error(f"Error parsing params: {e}")
             raise
 
-        kind_str = to_name(params.kind)
+        params_qual_name = params.qual_name()
         try:
-            data_service_cls = BaseDataService.lookup(kind_str)
+            data_service_cls = BaseDataService.lookup(params_qual_name)
             data_service = data_service_cls()
             return params, data_service
         except ValueError as e:
-            logger.error(f"Data service unavailable for ticket type {kind_str}: {e}")
+            logger.error(f"Data service unavailable for ticket type {params_qual_name}: {e}")
             raise flight.FlightUnavailableError(f"Data service unavailable: {e}")
         except Exception as e:
-            logger.error(f"Error getting data source for ticket type {kind_str}: {e}")
+            logger.error(f"Error getting data source for ticket type {params_qual_name}: {e}")
             raise
 
     def _get_batch_reader(

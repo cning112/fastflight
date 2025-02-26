@@ -22,38 +22,44 @@ class BaseParams(BaseModel, ABC):
     and managing the registry for different params types.
     """
 
-    kind: ClassVar
+    kind: ClassVar[str]
     registry: ClassVar[dict[str, ParamsCls]] = {}
 
     @classmethod
-    def register(cls, kind):
+    def register(cls):
         """
-        Register a data source type with the corresponding params class.
+        Decorator for registering a DataParams subclass.
 
-        Args:
-            kind: The type of the params to register.
+        This decorator registers a DataParams subclass in the global registry using its fully
+        qualified name (i.e., "<module>.<qualname>") as the unique key. It also sets the 'kind'
+        attribute of the subclass to this fully qualified name, ensuring a one-to-one binding
+        between a DataParams subclass and its corresponding DataService.
+
+        Returns:
+            function: A decorator function that takes a DataParams subclass, registers it, and returns the subclass.
+
+        Raises:
+            ValueError: If a DataParams subclass with the same fully qualified name is already registered.
         """
-        kind_str = to_name(kind)
 
         def inner(sub_params_cls: ParamsCls) -> ParamsCls:
-            if kind_str in cls.registry:
-                raise ValueError(
-                    f"Params type {kind_str} is already registered by {cls.registry[kind_str].__qualname__}."
-                )
-            setattr(sub_params_cls, "kind", kind)
-            cls.registry[kind_str] = sub_params_cls
-            logger.info(f"Registered params type {kind_str} for class {sub_params_cls.__qualname__}")
+            qual_name = sub_params_cls.qual_name()
+            if qual_name in cls.registry:
+                raise ValueError(f"Params type {qual_name=} is already registered by {cls.registry[qual_name]}.")
+            setattr(sub_params_cls, "kind", qual_name)
+            cls.registry[qual_name] = sub_params_cls
+            logger.info(f"Registered params type {qual_name} for class {sub_params_cls}")
             return sub_params_cls
 
         return inner
 
     @classmethod
-    def lookup(cls, kind) -> ParamsCls:
+    def lookup(cls, qual_name: str) -> ParamsCls:
         """
         Get the params class associated with the given params type.
 
         Args:
-            kind: The type of the params to retrieve.
+            qual_name: The type of the params to retrieve.
 
         Returns:
             type[BaseParams]: The params class associated with the params type.
@@ -61,11 +67,10 @@ class BaseParams(BaseModel, ABC):
         Raises:
             ValueError: If the params type is not registered.
         """
-        kind_str = to_name(kind)
-        params_cls = cls.registry.get(kind_str)
+        params_cls = cls.registry.get(qual_name)
         if params_cls is None:
-            logger.error(f"Params type {kind_str} is not registered.")
-            raise ValueError(f"Params type {kind_str} is not registered.")
+            logger.error(f"Params type {qual_name} is not registered.")
+            raise ValueError(f"Params type {qual_name} is not registered.")
         return params_cls
 
     @classmethod
@@ -81,8 +86,8 @@ class BaseParams(BaseModel, ABC):
         """
         try:
             json_data = json.loads(data)
-            kind_str = json_data.pop("kind")
-            params_cls = cls.lookup(kind_str)
+            qual_name = json_data.pop("kind")
+            params_cls = cls.lookup(qual_name)
             return params_cls.model_validate(json_data)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Error deserializing params: {e}")
@@ -97,11 +102,15 @@ class BaseParams(BaseModel, ABC):
         """
         try:
             json_data = self.model_dump()
-            json_data["kind"] = to_name(self.kind)
+            json_data["kind"] = self.qual_name()
             return json.dumps(json_data).encode("utf-8")
         except (TypeError, ValueError) as e:
             logger.error(f"Error serializing params: {e}")
             raise
+
+    @classmethod
+    def qual_name(cls):
+        return f"{cls.__module__}.{cls.__qualname__}"
 
 
 DataServiceCls = type["BaseDataService"]
@@ -117,36 +126,56 @@ class BaseDataService(Generic[T], ABC):
     registry: ClassVar[dict[str, DataServiceCls]] = {}
 
     @classmethod
-    def register(cls, kind):
+    def register(cls, params_cls: type[ParamsCls]):
         """
-        Register a data source type with its corresponding class.
+        Decorator for registering a DataService subclass for a given DataParams type.
+
+        This method first registers the given DataParams type by calling BaseParams.register()(params_cls).
+        It then acts as a decorator for a DataService subclass, registering the subclass in the global registry
+        under two keys:
+          - The fully qualified name of the DataParams type.
+          - The fully qualified name of the DataService subclass.
+        This dual-key registration enforces a one-to-one binding between a DataParams subclass and its
+        corresponding DataService subclass.
 
         Args:
-            kind: The type of the data source to register.
+            params_cls (type[ParamsCls]): The DataParams subclass that the DataService handles.
 
         Returns:
-            type[BaseDataService]: The registered data source class.
+            function: A decorator function that takes a DataService subclass, registers it, and returns the subclass.
+
+        Raises:
+            ValueError: If a DataService for the given DataParams type is already registered either under the
+                        DataParams key or the DataService subclass's own fully qualified name.
         """
-        kind_str = to_name(kind)
+        BaseParams.register()(params_cls)
 
         def inner(subclass: DataServiceCls) -> DataServiceCls:
-            if kind_str in cls.registry:
+            cls_qual_name = f"{subclass.__module__}.{subclass.__qualname__}"
+            params_qual_name = params_cls.qual_name()
+            if params_qual_name in cls.registry:
                 raise ValueError(
-                    f"Data source type {kind_str} is already registered by {cls.registry[kind_str].__qualname__}."
+                    f"Data source type {params_qual_name} is already registered by {cls.registry[params_qual_name]}."
                 )
-            cls.registry[kind_str] = subclass
-            logger.info(f"Registered data source type {kind_str} for class {subclass.__qualname__}")
+            if cls_qual_name in cls.registry:
+                raise ValueError(
+                    f"Data source type {cls_qual_name} is already registered by {cls.registry[cls_qual_name]}."
+                )
+            cls.registry[params_qual_name] = cls.registry[cls_qual_name] = subclass
+            logger.info(
+                f"Registered data source type for class {subclass} with keys {params_qual_name} and {cls_qual_name}"
+            )
             return subclass
 
         return inner
 
     @classmethod
-    def lookup(cls, kind) -> DataServiceCls:
+    def lookup(cls, qual_name: str) -> DataServiceCls:
         """
         Get the data service class associated with the given data source type.
 
         Args:
-            kind: The type of the data source to retrieve.
+            qual_name: The type of the data source to retrieve, it can be either the params type or the data source type.
 
         Returns:
             type[BaseDataService]: The data source class associated with the data source type.
@@ -154,11 +183,10 @@ class BaseDataService(Generic[T], ABC):
         Raises:
             ValueError: If the data source type is not registered.
         """
-        kind_str = to_name(kind)
-        data_service_cls = cls.registry.get(kind_str)
+        data_service_cls = cls.registry.get(qual_name)
         if data_service_cls is None:
-            logger.error(f"Data source type {kind_str} is not registered.")
-            raise ValueError(f"Data source type {kind_str} is not registered.")
+            logger.error(f"Data source type {qual_name} is not registered.")
+            raise ValueError(f"Data source type {qual_name} is not registered.")
         return data_service_cls
 
     @abstractmethod
@@ -175,3 +203,7 @@ class BaseDataService(Generic[T], ABC):
 
         """
         raise NotImplementedError
+
+
+def bind_service(params_cls: type[T], service_cls: type[BaseDataService[T]], *, alias: str | None = None) -> None:
+    BaseParams.register()(params_cls)

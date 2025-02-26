@@ -7,15 +7,12 @@ from pydantic import Field
 
 from fastflight.data_service_base import BaseDataService, BaseParams
 
-TYPE = "CSV"
 
-
-@BaseParams.register(TYPE)
 class CsvFileParams(BaseParams):
     path: Path = Field(...)
 
 
-@BaseDataService.register(TYPE)
+@BaseDataService.register(CsvFileParams)
 class CsvFileService(BaseDataService[CsvFileParams]):
     async def aget_batches(self, params: CsvFileParams, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
         with csv.open_csv(params.path, read_options=csv.ReadOptions(block_size=batch_size)) as reader:

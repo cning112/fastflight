@@ -7,7 +7,6 @@ from sqlalchemy.engine import Result
 from fastflight.data_service_base import BaseDataService, BaseParams
 
 
-@BaseParams.register("SQL")
 class SQLParams(BaseParams):
     """
     Parameters for SQL-based data data_services, including connection string and query details.
@@ -18,7 +17,7 @@ class SQLParams(BaseParams):
     parameters: dict | None = None  # Optional query parameters
 
 
-@BaseDataService.register("SQL")
+@BaseDataService.register(SQLParams)
 class SQLService(BaseDataService[SQLParams]):
     """
     Data service for SQL-based sources using SQLAlchemy for flexible database connectivity.
