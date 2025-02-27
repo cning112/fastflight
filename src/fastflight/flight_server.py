@@ -120,3 +120,12 @@ def start_flight_server(location: str, debug: bool = False):
         logger.info("Enabling debug mode")
         server.do_get = debuggable(server.do_get)
     server.serve()
+
+
+if __name__ == "__main__":
+    from fastflight.data_services import load_all
+    from fastflight.utils.custom_logging import setup_logging
+
+    setup_logging()
+    load_all()
+    start_flight_server("grpc://0.0.0.0:8815")
