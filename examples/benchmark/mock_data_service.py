@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import AsyncIterable, TypeAlias
+from typing import AsyncIterable
 
 import numpy as np
 import pyarrow as pa
@@ -9,16 +9,11 @@ from fastflight.data_service_base import BaseDataService, BaseParams
 
 logger = logging.getLogger(__name__)
 
-kind = "MockData"
 
-
-@BaseParams.register(kind)
 class MockDataParams(BaseParams):
     records_per_batch: int
     batch_generation_delay: float
 
-
-T: TypeAlias = MockDataParams
 
 # to generate the same data for the same dimension
 np.random.seed(0)
@@ -35,9 +30,11 @@ def create_large_pyarrow_table(total_rows, total_cols):
 TABLE = create_large_pyarrow_table(total_rows=1_000_000, total_cols=50)
 
 
-@BaseDataService.register(kind)
-class MockDataService(BaseDataService[T]):
-    async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
+@BaseDataService.register(MockDataParams)
+class MockDataService(BaseDataService[MockDataParams]):
+    async def aget_batches(
+        self, params: MockDataParams, batch_size: int | None = None
+    ) -> AsyncIterable[pa.RecordBatch]:
         for b in TABLE.to_batches(params.records_per_batch):
             # simulate an I/O wait time
             await asyncio.sleep(params.batch_generation_delay)

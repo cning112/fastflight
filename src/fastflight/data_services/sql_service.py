@@ -7,7 +7,6 @@ from sqlalchemy.engine import Result
 from fastflight.data_service_base import BaseDataService, BaseParams
 
 
-@BaseParams.register("SQL")
 class SQLParams(BaseParams):
     """
     Parameters for SQL-based data data_services, including connection string and query details.
@@ -18,8 +17,8 @@ class SQLParams(BaseParams):
     parameters: dict | None = None  # Optional query parameters
 
 
-@BaseDataService.register("SQL")
-class SQLDataService(BaseDataService[SQLParams]):
+@BaseDataService.register(SQLParams)
+class SQLService(BaseDataService[SQLParams]):
     """
     Data service for SQL-based sources using SQLAlchemy for flexible database connectivity.
     Executes the SQL query and returns data in Arrow batches.
@@ -36,7 +35,8 @@ class SQLDataService(BaseDataService[SQLParams]):
                     break
 
                 # Create a PyArrow Table from rows
-                arrays = [pa.array([row[i] for row in rows]) for i in range(len(result.keys()))]
-                table = pa.Table.from_arrays(arrays, list(result.keys()))
+                columns = list(result.keys())
+                arrays = [pa.array([row[i] for row in rows]) for i in range(len(columns))]
+                table = pa.Table.from_arrays(arrays, columns)
                 for batch in table.to_batches():
                     yield batch
