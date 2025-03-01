@@ -1,7 +1,9 @@
 import asyncio
+import contextlib
+import inspect
 import logging
 from contextlib import asynccontextmanager
-from typing import AsyncIterable, Union
+from typing import Any, AsyncGenerator, AsyncIterable, Callable, Generator, TypeAlias, TypeVar, Union
 
 import pandas as pd
 import pyarrow as pa
@@ -37,26 +39,41 @@ class FlightClientPool:
         logger.info(f"Created FlightClientPool with {size} clients at {flight_server_location}")
 
     @asynccontextmanager
-    async def acquire_async(self):
-        """
-        Acquires a FlightClient instance from the pool.
+    async def acquire_async(self, timeout: float = None) -> AsyncGenerator[flight.FlightClient, Any]:
+        try:
+            client = await asyncio.wait_for(self.queue.get(), timeout=timeout)
+        except asyncio.TimeoutError:
+            raise RuntimeError("Timeout waiting for FlightClient from pool")
 
-        Yields:
-            flight.FlightClient: An instance of FlightClient from the pool.
-        """
-        client = await self.queue.get()
         try:
             yield client
         finally:
             await self.queue.put(client)
 
+    @contextlib.contextmanager
+    def acquire(self, timeout: float = None) -> Generator[flight.FlightClient, Any, None]:
+        try:
+            client = asyncio.run(asyncio.wait_for(self.queue.get(), timeout=timeout))
+        except asyncio.TimeoutError:
+            raise RuntimeError("Timeout waiting for FlightClient from pool")
+
+        try:
+            yield client
+        finally:
+            self.queue.put_nowait(client)
+
     async def close_async(self):
         while not self.queue.empty():
             client = await self.queue.get()
-            client.close()
+            try:
+                await asyncio.to_thread(client.close)
+            except Exception as e:
+                logger.error("Error closing client: %s", e, exc_info=True)
 
 
 TicketType = Union[bytes, BaseParams, flight.Ticket]
+
+R: TypeAlias = TypeVar("R")
 
 
 def to_flight_ticket(ticket: TicketType) -> flight.Ticket:
@@ -88,6 +105,30 @@ class FlightClientManager:
         self._client_pool = FlightClientPool(flight_server_location, client_pool_size)
         self._converter = AsyncToSyncConverter()
 
+    async def aget_stream_reader_with_callback(
+        self, ticket: TicketType, callback: Callable[[flight.FlightStreamReader], R]
+    ) -> R:
+        try:
+            flight_ticket = to_flight_ticket(ticket)
+            async with self._client_pool.acquire_async() as client:
+                # client.do_get is a synchronous call, so we call it directly.
+                reader = client.do_get(flight_ticket)
+                if inspect.iscoroutinefunction(callback):
+                    # If the callback is an async function, call it directly.
+                    result = await callback(reader)
+                else:
+                    # Otherwise, run the callback in a background thread.
+                    result = await asyncio.to_thread(lambda: callback(reader))
+
+                # If the result is awaitable (e.g. a coroutine), await it.
+                if asyncio.iscoroutine(result):
+                    return await result
+                else:
+                    return result
+        except Exception as e:
+            logger.error(f"Error fetching data: {e}", exc_info=True)
+            raise
+
     async def aget_stream_reader(self, ticket: TicketType) -> flight.FlightStreamReader:
         """
         Gets a reader to a stream of Arrow data in bytes format using the provided flight ticket data asynchronously.
@@ -98,14 +139,33 @@ class FlightClientManager:
         Returns:
             flight.FlightStreamReader: A reader to stream data from the Flight server.
         """
-        async with self._client_pool.acquire_async() as client:
-            flight_ticket = to_flight_ticket(ticket)
-            try:
-                reader = await asyncio.to_thread(client.do_get, flight_ticket)
-                return reader
-            except Exception as e:
-                logger.error(f"Error fetching data: {e}")
-                raise
+        return await self.aget_stream_reader_with_callback(ticket, callback=lambda x: x)
+
+    async def aread_pa_table(self, ticket: TicketType) -> pa.Table:
+        """
+        Returns a pyarrow table from the Flight server using the provided flight ticket data asynchronously.
+
+        Args:
+            ticket: The ticket data to request data from the Flight server.
+
+        Returns:
+            pa.Table: The data from the Flight server as an Arrow Table.
+        """
+        return await self.aget_stream_reader_with_callback(ticket, callback=lambda reader: reader.read_all())
+
+    async def aread_pd_dataframe(self, ticket: TicketType) -> pd.DataFrame:
+        """
+        Returns a pandas dataframe from the Flight server using the provided flight ticket data asynchronously.
+
+        Args:
+            ticket: The ticket data to request data from the Flight server.
+
+        Returns:
+            pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
+        """
+        return await self.aget_stream_reader_with_callback(
+            ticket, callback=lambda reader: reader.read_all().to_pandas()
+        )
 
     async def aget_stream(self, ticket: TicketType) -> AsyncIterable[bytes]:
         """
@@ -118,33 +178,8 @@ class FlightClientManager:
             bytes: A stream of bytes from the Flight server.
         """
         reader = await self.aget_stream_reader(ticket)
-        return await write_arrow_data_to_stream(reader)
-
-    async def aread_pa_table(self, ticket: TicketType) -> pa.Table:
-        """
-        Returns a pyarrow table from the Flight server using the provided flight ticket data asynchronously.
-
-        Args:
-            ticket: The ticket data to request data from the Flight server.
-
-        Returns:
-            pa.Table: The data from the Flight server as an Arrow Table.
-        """
-        reader = await self.aget_stream_reader(ticket)
-        return reader.read_all()
-
-    async def aread_pd_dataframe(self, ticket: TicketType) -> pd.DataFrame:
-        """
-        Returns a pandas dataframe from the Flight server using the provided flight ticket data asynchronously.
-
-        Args:
-            ticket: The ticket data to request data from the Flight server.
-
-        Returns:
-            pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
-        """
-        table = await self.aread_pa_table(ticket)
-        return table.to_pandas()
+        async for chunk in await write_arrow_data_to_stream(reader):
+            yield chunk
 
     def get_stream_reader(self, ticket: TicketType) -> flight.FlightStreamReader:
         """
@@ -156,7 +191,14 @@ class FlightClientManager:
         Returns:
             flight.FlightStreamReader: A reader to stream data from the Flight server.
         """
-        return self._converter.run_coroutine(self.aget_stream_reader(ticket))
+        # return self._converter.run_coroutine(self.aget_stream_reader(ticket))
+        try:
+            flight_ticket = to_flight_ticket(ticket)
+            with self._client_pool.acquire() as client:
+                return client.do_get(flight_ticket)
+        except Exception as e:
+            logger.error(f"Error fetching data: {e}")
+            raise
 
     def read_pa_table(self, ticket: TicketType) -> pa.Table:
         """

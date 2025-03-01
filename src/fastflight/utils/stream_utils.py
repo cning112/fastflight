@@ -2,11 +2,12 @@ import asyncio
 import io
 import logging
 import threading
-from typing import AsyncGenerator, AsyncIterable, Awaitable, Iterable, Iterator, Optional, TypeVar, Union
+from typing import AsyncIterable, Awaitable, Iterable, Iterator, Optional, TypeVar, Union
 
 import pandas as pd
 import pyarrow as pa
 from pyarrow import flight
+from pyarrow._flight import FlightStreamChunk
 
 logger = logging.getLogger(__name__)
 
@@ -188,55 +189,88 @@ async def read_record_batches_from_stream(
         yield batch
 
 
-async def write_arrow_data_to_stream(
-    reader: flight.FlightStreamReader, *, buffer_size=10
-) -> AsyncGenerator[bytes, None]:
+async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffer_size=10) -> AsyncIterable[bytes]:
     """
-    Convert a FlightStreamReader into an AsyncGenerator of bytes in Arrow IPC format
+    Convert a FlightStreamReader into an AsyncGenerator of bytes in Arrow IPC format.
 
-    :param reader: a FlightStreamReader
-    :buffer_size: max size of the queue. WHen the queue is full, the producer will block.
-    :return: AsyncGenerator of bytes
+    This function employs a producer-consumer pattern:
+    - The producer reads data from the FlightStreamReader by calling its blocking `read_chunk` method.
+    - To avoid blocking the event loop, the blocking call is wrapped in `asyncio.to_thread`, which
+      runs it in a background thread.
+    - The producer converts each chunk into Arrow IPC formatted bytes and puts them into an async queue.
+    - The consumer asynchronously yields bytes from the queue.
+
+    :param reader: A FlightStreamReader instance.
+    :param buffer_size: Maximum size of the internal queue. When full, the producer will block.
+    :return: An AsyncGenerator that yields bytes in Arrow IPC format.
     """
+    # Create an async queue to hold produced byte chunks.
     queue: asyncio.Queue[Optional[bytes]] = asyncio.Queue(maxsize=buffer_size)
+    # Sentinel object to signal the end of the stream.
     end_of_stream = object()
 
-    def next_chunk():
+    def next_chunk() -> FlightStreamChunk | object:
+        """
+        Wrap the synchronous read_chunk call and handle StopIteration.
+
+        Since reader.read_chunk() is a blocking call, this helper function allows us to run it in a
+        background thread using asyncio.to_thread.
+        """
         try:
             return reader.read_chunk()
         except StopIteration:
             return end_of_stream
 
     async def produce() -> None:
+        """
+        Producer coroutine that continuously retrieves data chunks from the reader,
+        converts them into Arrow IPC formatted bytes, and puts them into the queue.
+
+        The blocking call to read_chunk is executed in a background thread using asyncio.to_thread
+        to ensure the event loop remains responsive.
+        """
         try:
             logger.debug("Start producing Arrow IPC bytes from FlightStreamReader %s", id(reader))
             while True:
-                # Not using reader.read_chunk() directly as it throws StopIteration
+                # Wrap the blocking next_chunk() call in asyncio.to_thread to run it without blocking the event loop.
                 chunk = await asyncio.to_thread(next_chunk)
-
                 if chunk is end_of_stream:
+                    # If the sentinel is received, break the loop.
                     break
 
+                # Convert the chunk's data into Arrow IPC format.
                 sink = pa.BufferOutputStream()
+                # Using the new_stream context manager to write IPC data based on the chunk's schema.
                 with pa.ipc.new_stream(sink, chunk.data.schema) as writer:
                     writer.write_batch(chunk.data)
-                buffer: pa.Buffer = sink.getvalue()
-                await queue.put(buffer.to_pybytes())
+                # Retrieve the bytes from the output buffer.
+                buffer_value: pa.Buffer = sink.getvalue()
+                await queue.put(buffer_value.to_pybytes())
         except Exception as e:
-            logger.error("Error during producing Arrow IPC bytes", e)
+            logger.error("Error during producing Arrow IPC bytes", exc_info=True)
+            await queue.put(e)
         finally:
+            # Signal the consumer that production is complete.
             await queue.put(end_of_stream)
             logger.debug("End producing Arrow IPC bytes from FlightStreamReader %s", id(reader))
 
-    async def consume() -> AsyncGenerator[bytes, None]:
+    async def consume() -> AsyncIterable[bytes]:
+        """
+        Consumer coroutine that yields bytes from the queue.
+
+        Iteration stops when the end-of-stream sentinel is encountered, or an exception is raised.
+        """
         while True:
             data: Optional[bytes] = await queue.get()
             if data is end_of_stream:
                 break
+            elif isinstance(data, Exception):
+                raise data
             yield data
 
+    # Launch the producer task in the background.
     asyncio.create_task(produce())
-
+    # Return the consumer async generator.
     return consume()
 
 
