@@ -20,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 fastapi = ["fastapi"]
-dev = ["pre-commit"]
+dev = ["pre-commit", "mypy"]
 test = ["pytest", "pytest-cov"]
 
 [tool.ruff]
