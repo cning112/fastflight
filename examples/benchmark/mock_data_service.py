@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 class MockDataParams(BaseParams):
-    records_per_batch: int
-    batch_generation_delay: float
+    rows_per_batch: int
+    delay_per_row: float
 
 
 # to generate the same data for the same dimension
@@ -35,7 +35,7 @@ class MockDataService(BaseDataService[MockDataParams]):
     async def aget_batches(
         self, params: MockDataParams, batch_size: int | None = None
     ) -> AsyncIterable[pa.RecordBatch]:
-        for b in TABLE.to_batches(params.records_per_batch):
+        for b in TABLE.to_batches(params.rows_per_batch):
             # simulate an I/O wait time
-            await asyncio.sleep(params.batch_generation_delay)
+            await asyncio.sleep(params.delay_per_row * params.rows_per_batch)
             yield b

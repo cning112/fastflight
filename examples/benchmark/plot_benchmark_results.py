@@ -9,10 +9,10 @@ df = pd.read_csv("results.csv")  # Load the benchmark results
 sns.set(style="whitegrid")
 
 
-# Function to plot and save graphs for different batch_generation_delay values
+# Function to plot and save graphs for different delay_per_row values
 def plot_throughput(df, delay_value, filename):
-    # Filter data for the specific batch_generation_delay
-    df_filtered = df[df["batch_generation_delay"] == delay_value]
+    # Filter data for the specific delay_per_row
+    df_filtered = df[df["delay_per_row"] == delay_value]
 
     plt.figure(figsize=(10, 6))
 
@@ -21,13 +21,13 @@ def plot_throughput(df, delay_value, filename):
         x="concurrent_requests",
         y="throughput_MBps",
         hue="type",
-        style="records_per_batch",
+        style="rows_per_batch",
         data=df_filtered,
         markers=True,
         dashes=False,
     )
 
-    plt.title(f"Throughput Comparison (batch_generation_delay = {delay_value} seconds)")
+    plt.title(f"Throughput Comparison (delay_per_row = {delay_value} seconds)")
     plt.xlabel("Concurrency Requests")
     plt.ylabel("Throughput (MB/s)")
     plt.legend(title="Mode / Records per Batch")
@@ -40,6 +40,5 @@ def plot_throughput(df, delay_value, filename):
 
 if __name__ == "__main__":
     # Generate and save plots for each delay value
-    plot_throughput(df, 0.001, "throughput_1ms.png")
-    plot_throughput(df, 0.01, "throughput_10ms.png")
-    plot_throughput(df, 0.1, "throughput_100ms.png")
+    plot_throughput(df, 1e-6, "throughput_1us.png")
+    plot_throughput(df, 1e-5, "throughput_10us.png")
