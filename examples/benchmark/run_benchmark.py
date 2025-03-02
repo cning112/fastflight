@@ -64,8 +64,8 @@ def run_concurrently(
 
 if __name__ == "__main__":
     # Make sure both servers are running before running the benchmark
-    from server_async import LOC as async_loc
-    from server_sync import LOC as sync_loc
+    from start_flight_server_async import LOC as async_loc
+    from start_flight_server_sync import LOC as sync_loc
 
     async_results, sync_results = [], []
 

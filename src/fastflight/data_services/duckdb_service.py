@@ -1,8 +1,11 @@
+import logging
 from typing import Any, AsyncIterable, Dict, Optional, Sequence
 
 import pyarrow as pa
 
 from fastflight.data_service_base import BaseDataService, BaseParams
+
+logger = logging.getLogger(__name__)
 
 
 class DuckDBParams(BaseParams):
@@ -25,10 +28,6 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
     async def aget_batches(
         self, params: DuckDBParams, batch_size: Optional[int] = None
     ) -> AsyncIterable[pa.RecordBatch]:
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         try:
             import duckdb
         except ImportError:
@@ -48,8 +47,11 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
                 result = conn.execute(params.query, query_parameters)
                 arrow_table = result.arrow()
 
-                for batch in arrow_table.to_batches(max_chunksize=batch_size):
-                    yield batch
+                def gen():
+                    for batch in arrow_table.to_batches(max_chunksize=batch_size):
+                        yield batch
+
+                return gen()
 
             except Exception as e:
                 logger.error(f"DuckDB execution error: {str(e)}", exc_info=True)

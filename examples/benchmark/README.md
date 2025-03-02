@@ -1,186 +1,182 @@
-# **Benchmark Analysis: Synchronous vs. Asynchronous Batch Generation**
+# FastFlight Benchmark Analysis
 
-This document provides an in-depth analysis of the benchmark results comparing the synchronous (`sync`) and
-asynchronous (`async`) versions of the `generate_batches` method. The benchmark aims to evaluate the performance under
-different conditions, such as `records_per_batch`, `concurrent_requests`, and `batch_generation_delay`, to determine the
-optimal method for various scenarios.
+This folder contains benchmark scripts to compare the performance of FastFlight's synchronous (sync) and asynchronous (
+async) batch data transmission implementations. The tests focus on the following two key metrics:
 
----
+- **Average Latency (average_latency):** The response time per request (in seconds).
+- **Throughput (throughput_MBps):** The data transfer efficiency (in MB/s).
 
-### **Key Metrics and Parameters**
+The tests evaluate the impact of the following parameters:
 
-Before diving into the detailed analysis, here’s a breakdown of the key parameters used in the benchmark:
+- **Rows per Batch (rows_per_batch):** 1k, 5k, and 10k , which determine the data volume per transfer.
+- **Concurrent Requests (concurrent_requests):** Varying from low to high concurrency.
+- **Delay per Row (delay_per_row):** Two settings are used:
+    - **Low Delay:** 1µs per row
+    - **High Delay:** 10µs per row
 
-1. **`records_per_batch`**: Represents the number of records in each batch. The benchmark tests were performed with
-   batch sizes of 1000, 5000, and 10,000.
-2. **`concurrent_requests`**: This denotes the number of concurrent requests sent during the test. The benchmark used
-   concurrency levels ranging from 10 to 2000.
-3. **`batch_generation_delay`**: Simulates the time spent generating each record batch. The delay ranges from 0.001
-   seconds (short) to 0.1 seconds (long) to mimic different I/O operation times.
-4. **`average_latency`**: The average response time of each `do_get` request across all concurrent requests. This value
-   represents the mean latency experienced when fetching batches during the test.
-5. **`throughput_MBps`**: The average data throughput in megabytes per second (MB/s) across all concurrent requests,
-   representing the total processing capacity during the benchmark.
+The total delay is calculated as `rows_per_batch * delay_per_row`, ensuring a fixed overall processing delay regardless
+of the batch size.
 
 ---
 
-### **Testing Environment**
+## Testing Environment
 
-The benchmark was conducted on the following hardware:
+- **Device:** MacBook Pro (M2 Max)
+- **Memory:** 32GB
 
-- **Device**: MacBook Pro
-- **Processor**: M2 Max CPU
-- **Memory**: 32GB RAM
-
-This machine provides robust multi-core processing power and ample memory to handle high concurrency and large batch
-sizes, making the results from this setup highly indicative of performance trends in modern computing environments.
+The testing environment effectively simulates a modern high-performance computing scenario for data transmission.
 
 ---
 
-### **1. Short `batch_generation_delay` (0.001 seconds)**
+## 1. Low Delay per Row (1µs)
 
-For the shortest `batch_generation_delay` (0.001 seconds), the asynchronous version significantly outperforms the
-synchronous version, particularly under high concurrency. The asynchronous model can efficiently leverage CPU resources
-by handling multiple concurrent requests while waiting for I/O operations, leading to higher overall throughput:
+### Synchronous vs. Asynchronous Comparison
 
-![Throughput for 0.001 seconds delay](throughput_1ms.png)
+![throughput_1us.png](throughput_1us.png)
 
-- **Advantages of the Asynchronous Model**:
-    - When concurrent requests are high (e.g., 1000 or 2000), the throughput of the asynchronous version is over 50%
-      higher than that of the synchronous version, especially with larger batch sizes (e.g., `records_per_batch = 5000`
-      or `records_per_batch = 10,000`). This is because the asynchronous model can handle other tasks while waiting for
-      I/O, thus maximizing CPU utilization.
-    - **Example Data**: With `records_per_batch = 10,000` and `concurrent_requests = 1000`, the asynchronous version’s
-      average throughput is **3450 MB/s**, while the synchronous version only reaches **1977 MB/s**.
+**Small Batch (rows_per_batch = 1k, concurrent_requests = 1):**
 
-- **Disadvantages of the Synchronous Model**:
-    - In the synchronous model, CPU resources are blocked during I/O operations, leading to lower overall throughput.
-      This is particularly problematic in high-concurrency scenarios (e.g., 1000+ concurrent requests), where
-      performance degrades significantly.
+- **Synchronous Mode:** Average latency ≈ 1.70 s, throughput ≈ 225 MB/s
+- **Asynchronous Mode:** Average latency ≈ 1.25 s, throughput ≈ 304 MB/s
+- **Comparison:** Async mode reduces latency by about 26% and increases throughput by about 35%.
 
-### **2. Medium `batch_generation_delay` (0.01 seconds)**
+**Medium Batch (rows_per_batch = 5k, concurrent_requests = 1):**
 
-As the `batch_generation_delay` increases, the performance advantage of the asynchronous model starts to diminish. While
-the asynchronous version still outperforms the synchronous version, the gap between the two narrows:
+- **Synchronous Mode:** Average latency ≈ 1.45 s, throughput ≈ 262 MB/s
+- **Asynchronous Mode:** Average latency ≈ 1.16 s, throughput ≈ 329 MB/s
+- **Comparison:** Async mode reduces latency by about 20% and increases throughput by about 25%.
 
-![Throughput for 0.01 seconds delay](throughput_10ms.png)
+**Large Batch (rows_per_batch = 10k, concurrent_requests = 1):**
 
-- **Asynchronous Model Still Leads**:
-    - Even with a `batch_generation_delay` of 0.01 seconds, the asynchronous version continues to exhibit about 20-25%
-      higher throughput in high-concurrency scenarios (e.g., `concurrent_requests = 1000` or 2000).
-    - **Example Data**: With `records_per_batch = 5000` and `concurrent_requests = 1000`, the asynchronous version
-      achieves an average throughput of **173.75 MB/s**, while the synchronous version manages **137.25 MB/s**.
+- **Synchronous Mode:** Average latency ≈ 1.32 s, throughput ≈ 289 MB/s
+- **Asynchronous Mode:** Average latency ≈ 1.12 s, throughput ≈ 339 MB/s
+- **Comparison:** Async mode reduces latency by about 15% and increases throughput by about 17%.
 
-- **Narrowing Performance Gap**:
-    - As the delay increases, the time spent waiting on I/O operations grows, reducing the asynchronous model's ability
-      to fully capitalize on non-blocking behavior. Consequently, the throughput advantage of the asynchronous version
-      becomes less pronounced.
-
-### **3. Long `batch_generation_delay` (0.1 seconds)**
-
-When the `batch_generation_delay` is extended to 0.1 seconds, the performance gap between the asynchronous and
-synchronous versions nearly disappears. Both models exhibit similar throughput, particularly in high-concurrency
-scenarios.
-
-![Throughput for 0.1 seconds delay](throughput_100ms.png)
-
-- **Convergence of Asynchronous and Synchronous Performance**:
-    - At longer I/O times, both models become limited by the duration of the I/O operations themselves. As a result, CPU
-      utilization is no longer the bottleneck, and the throughput for both synchronous and asynchronous versions becomes
-      similar.
-    - **Example Data**: With `records_per_batch = 1000` and `concurrent_requests = 1000`, the asynchronous version’s
-      average throughput is **3.77 MB/s**, while the synchronous version reaches **3.66 MB/s**. The difference is
-      negligible.
-
-### **Impact of Batch Size**
-
-- **Smaller Batch Sizes (`records_per_batch = 1000`)**: In scenarios with smaller batch sizes, the asynchronous model
-  performs significantly better when `batch_generation_delay` is short, but the performance gap diminishes quickly as
-  the delay increases.
-- **Larger Batch Sizes (`records_per_batch = 10,000`)**: With larger batch sizes, the asynchronous model shows
-  substantial throughput gains, especially when `batch_generation_delay` is shorter (0.001 seconds) or moderate (0.01
-  seconds). However, as the delay grows longer, the performance difference between asynchronous and synchronous models
-  reduces.
-
-### **Conclusion**
-
-From the benchmark results, we can derive the following conclusions:
-
-1. **The asynchronous version performs best when the I/O operation time is short**, particularly in high-concurrency,
-   large-batch scenarios where it significantly increases throughput and reduces latency.
-2. **As the I/O operation time increases, the asynchronous version’s advantage diminishes**, and both asynchronous and
-   synchronous models exhibit similar performance when `batch_generation_delay` is long (e.g., 0.1 seconds).
-3. **Scenario Selection**: The asynchronous model is optimal for high-concurrency, short-I/O scenarios, while in cases
-   where I/O operations are slow, the performance difference between the two models becomes negligible, making either
-   option viable.
-
-This analysis provides insight into selecting the appropriate model for the `generate_batches` method based on your
-application’s needs. For high-throughput applications with short I/O times, the asynchronous model is a clear winner,
-while in slower I/O scenarios, the performance difference becomes less critical.
+Under high concurrency (e.g., concurrent_requests = 10), both modes benefit from larger batches. However, async mode
+consistently shows a latency advantage of around 7–8% and a throughput increase of 7–8%.
 
 ---
 
-### **How to Run the Benchmark**
+## 2. High Delay per Row (10µs)
 
-To reproduce the benchmark results, follow these steps using the provided scripts: `server_async.py`, `server_sync.py`,
-`run_benchmark.py`, and `plot_benchmark_results.py`.
+Although overall performance drops with higher per-row delay, differences between sync and async modes are still
+evident.
 
-#### **Step 1: Install Dependencies**
+![throughput_10us.png](throughput_10us.png)
 
-Before running the benchmark, ensure that all required dependencies are installed. In the same folder where the
-`pyproject.toml` file is located, run the following command to install the dependencies:
+**Small Batch (rows_per_batch = 1k, concurrent_requests = 1):**
 
-```bash
-pip install -r pyproject.toml
-```
+- **Synchronous Mode:** Latency ≈ 12.72 s, throughput ≈ 30.00 MB/s
+- **Asynchronous Mode:** Latency ≈ 11.22 s, throughput ≈ 34.01 MB/s
+- **Comparison:** Async mode reduces latency by about 11.8% and improves throughput by about 13.4%.
 
-This command installs all the necessary Python packages for running the benchmark.
+**Medium Batch (rows_per_batch = 5k, concurrent_requests = 1):**
 
-#### **Step 2: Start the Flight Servers**
+- **Synchronous Mode:** Latency ≈ 12.02 s, throughput ≈ 31.73 MB/s
+- **Asynchronous Mode:** Latency ≈ 10.30 s, throughput ≈ 37.03 MB/s
+- **Comparison:** Async mode reduces latency by about 14% and increases throughput by about 17%.
 
-You need to start both the synchronous and asynchronous Flight servers in separate terminals.
+**Large Batch (rows_per_batch = 10k, concurrent_requests = 3):**
 
-1. **Start the synchronous server**:
+- **Synchronous Mode:** Latency ≈ 10.93 s, throughput ≈ 104.67 MB/s
+- **Asynchronous Mode:** Latency ≈ 10.22 s, throughput ≈ 111.97 MB/s
+- **Comparison:** Async mode reduces latency by about 6.4% and increases throughput by about 7%.
 
-```bash
-python server_sync.py
-```
+In high delay scenarios, async mode still outperforms sync mode, although the differences are somewhat smaller.
 
-This will launch a synchronous Arrow Flight server that handles `do_get` requests synchronously.
+---
 
-2. **Start the asynchronous server**:
+## 3. Impact of Batch Size
 
-```bash
-python server_async.py
-```
+Batch size has a significant impact on performance. Below are the improvements observed when increasing batch sizes
+using low delay (1µs per row) as an example:
 
-This will launch an asynchronous Arrow Flight server that handles `do_get` requests asynchronously.
+### Synchronous Mode
 
-Make sure both servers are running before proceeding with the benchmark.
+- **For concurrent_requests = 1:**
+    - Increasing from 1k to 10k rows decreases latency from 1.70 s to 1.32 s (a reduction of about 22%) and
+      increases throughput from 225 MB/s to 289 MB/s (an increase of about 28%).
 
-#### **Step 3: Run the Benchmark to Generate `results.csv`**
+- **For concurrent_requests = 10:**
+    - Increasing from 1k to 10k rows decreases latency from 2.54 s to 1.44 s (a reduction of about 43%) and
+      increases throughput from 1502 MB/s to 2648 MB/s (an increase of about 76%).
 
-Once the servers are running, execute the benchmark script to generate the performance data. This script will conduct
-tests on both the synchronous and asynchronous servers, then save the results in a CSV file (`results.csv`).
+### Asynchronous Mode
 
-```bash
-python run_benchmark.py
-```
+- **For concurrent_requests = 1:**
+    - Increasing from 1k to 10k rows decreases latency from 1.25 s to 1.12 s (a reduction of about 10%) and
+      increases throughput from 304 MB/s to 339 MB/s (an increase of about 11%).
 
-This script runs the benchmark under various configurations, such as different `records_per_batch`,
-`concurrent_requests`, and `batch_generation_delay`. The output is saved in `results.csv`, which includes key
-performance metrics like latency and throughput.
+- **For concurrent_requests = 10:**
+    - Increasing from 1k to 10k rows decreases latency from 2.35 s to 1.34 s (a reduction of about 43%) and
+      increases throughput from 1624 MB/s to 2853 MB/s (an increase of about 75%).
 
-#### **Step 4: Generate Benchmark Plots**
+In summary, increasing the batch size significantly reduces latency and boosts throughput in both modes, with the
+effects being even more pronounced under high concurrency.
 
-After running the benchmark and generating the `results.csv` file, use the plotting script to generate visual
-representations of the data. This script will create plots to compare the performance of the synchronous and
-asynchronous servers.
+---
 
-```bash
-python plot_benchmark_results.py
-```
+## Conclusion
 
-This script reads the `results.csv` file, processes the data, and generates plots comparing the throughput and latency
-of both the synchronous and asynchronous implementations under various conditions. The plots are saved as image files (
-`throughput_1ms.png`, `throughput_10ms.png`, and `throughput_100ms.png`).
+- **Low Delay per Row (1µs):**
+    - For small batches, async mode reduces latency by about 26% and increases throughput by about 35% compared to sync
+      mode.
+    - For medium and large batches, async mode consistently provides a 15–20% latency reduction and a 17–25% throughput
+      increase; under high concurrency, the advantage remains at approximately 7–8%.
+
+- **High Delay per Row (10µs):**
+    - Overall performance is lower, but async mode still outperforms sync mode by reducing latency by 11–14% and
+      increasing throughput by 13–17% (with slightly smaller gains in some large batch configurations).
+
+- **Impact of Batch Size:**
+    - Larger batches significantly improve performance. In high-concurrency scenarios, increasing the batch size from
+      1k to 10k rows can reduce latency by up to 43% and boost throughput by as much as 76% in synchronous mode,
+      with similar trends observed in async mode.
+
+For scenarios requiring high concurrency and high throughput, the asynchronous implementation offers clear advantages.
+Additionally, increasing the batch size further enhances performance, making async mode the preferred choice for optimal
+data transmission.
+
+---
+
+## How to Run the Benchmark
+
+1. **Install Dependencies**
+
+   In the project root directory, run:
+   ```
+   pip install -r pyproject.toml
+   ```
+
+2. **Start the Flight Servers**
+
+In separate terminals, start the synchronous and asynchronous servers:
+
+- For the synchronous server:
+  ```
+  python start_flight_server_sync.py
+  ```
+- For the asynchronous server:
+  ```
+  python start_flight_server_async.py
+  ```
+
+3. **Run the Benchmark Script**
+
+Execute the benchmark script to generate the results (saved to `results.csv`):
+
+  ```
+  python run_benchmark.py
+  ```
+
+4. **Generate Comparison Charts**
+
+Run the plotting script to generate charts comparing throughput and latency:
+
+   ```
+   python plot_benchmark_results.py
+   ```
+
+---
+
+Feel free to provide feedback and suggestions to further optimize FastFlight's performance.

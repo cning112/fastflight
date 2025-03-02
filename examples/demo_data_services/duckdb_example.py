@@ -5,6 +5,7 @@ import pandas as pd
 from fastflight.data_services.duckdb_service import DuckDBParams
 from fastflight.flight_client import FlightClientManager
 
+# Assume a FastFlight server is running at "grpc://0.0.0.0:8815"
 LOC = "grpc://0.0.0.0:8815"
 
 if __name__ == "__main__":

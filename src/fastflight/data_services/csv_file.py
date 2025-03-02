@@ -15,6 +15,9 @@ class CsvFileParams(BaseParams):
 @BaseDataService.register(CsvFileParams)
 class CsvFileService(BaseDataService[CsvFileParams]):
     async def aget_batches(self, params: CsvFileParams, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
-        with csv.open_csv(params.path, read_options=csv.ReadOptions(block_size=batch_size)) as reader:
-            while (batch := reader.read_next_batch()).num_rows > 0:
-                yield batch
+        def gen():
+            with csv.open_csv(params.path, read_options=csv.ReadOptions(block_size=batch_size)) as reader:
+                while (batch := reader.read_next_batch()).num_rows > 0:
+                    yield batch
+
+        return gen()

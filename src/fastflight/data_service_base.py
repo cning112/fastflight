@@ -1,7 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import AsyncIterable, ClassVar, Generic, TypeAlias, TypeVar
+from typing import Any, AsyncIterable, ClassVar, Generic, Type, TypeAlias, TypeVar, cast
 
 import pyarrow as pa
 from pydantic import BaseModel
@@ -10,10 +10,6 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound="BaseParams")
 ParamsCls: TypeAlias = type["BaseParams"]
-
-
-def to_name(kind: any) -> str:
-    return str(kind)
 
 
 class BaseParams(BaseModel, ABC):
@@ -74,7 +70,7 @@ class BaseParams(BaseModel, ABC):
         return params_cls
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> T:
+    def from_bytes(cls: Type[T], data: bytes) -> T:
         """
         Deserialize a params from bytes.
 
@@ -88,7 +84,7 @@ class BaseParams(BaseModel, ABC):
             json_data = json.loads(data)
             qual_name = json_data.pop("kind")
             params_cls = cls.lookup(qual_name)
-            return params_cls.model_validate(json_data)
+            return cast(T, params_cls.model_validate(json_data))
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.error(f"Error deserializing params: {e}")
             raise
@@ -101,9 +97,16 @@ class BaseParams(BaseModel, ABC):
             bytes: The serialized byte data of the params.
         """
         try:
+            return json.dumps(self.to_json()).encode("utf-8")
+        except (TypeError, ValueError) as e:
+            logger.error(f"Error serializing params: {e}")
+            raise
+
+    def to_json(self) -> dict[str, Any]:
+        try:
             json_data = self.model_dump()
             json_data["kind"] = self.qual_name()
-            return json.dumps(json_data).encode("utf-8")
+            return json_data
         except (TypeError, ValueError) as e:
             logger.error(f"Error serializing params: {e}")
             raise
@@ -113,7 +116,7 @@ class BaseParams(BaseModel, ABC):
         return f"{cls.__module__}.{cls.__qualname__}"
 
 
-DataServiceCls = type["BaseDataService"]
+DataServiceCls: TypeAlias = Type["BaseDataService[Any]"]
 
 
 class BaseDataService(Generic[T], ABC):
@@ -126,7 +129,7 @@ class BaseDataService(Generic[T], ABC):
     registry: ClassVar[dict[str, DataServiceCls]] = {}
 
     @classmethod
-    def register(cls, params_cls: type[ParamsCls]):
+    def register(cls, params_cls: ParamsCls):
         """
         Decorator for registering a DataService subclass for a given DataParams type.
 
@@ -199,7 +202,7 @@ class BaseDataService(Generic[T], ABC):
             batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
 
         Yields:
-            pa.RecordBatch: An async iterable of RecordBatches.
+            pa.RecordBatch: An async generator of pa.RecordBatches.
 
         """
         raise NotImplementedError

@@ -19,8 +19,8 @@ async def flight_client_lifespan(app: FastAPI):
     Parameters:
         app (FastAPI): The FastAPI application instance.
     """
-    logger.info("Starting flight_client_lifespan")
     location = "grpc://localhost:8815"
+    logger.info("Starting flight_client_lifespan at %s", location)
     client = FlightClientManager(location)
     set_flight_client(app, client)
     try:

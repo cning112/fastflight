@@ -118,7 +118,7 @@ def start_flight_server(location: str, debug: bool = False):
     logger.info("Serving FlightServer in process %s", multiprocessing.current_process().name)
     if debug or sys.gettrace() is not None:
         logger.info("Enabling debug mode")
-        server.do_get = debuggable(server.do_get)
+        server.do_get = debuggable(server.do_get)  # type: ignore[method-assign]
     server.serve()
 
 

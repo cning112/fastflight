@@ -29,14 +29,17 @@ class SQLService(BaseDataService[SQLParams]):
         with engine.connect() as connection:
             result: Result = connection.execute(text(params.query), params.parameters or {})
 
-            while True:
-                rows = result.fetchmany(batch_size)
-                if not rows:
-                    break
+            def gen():
+                while True:
+                    rows = result.fetchmany(batch_size)
+                    if not rows:
+                        break
 
-                # Create a PyArrow Table from rows
-                columns = list(result.keys())
-                arrays = [pa.array([row[i] for row in rows]) for i in range(len(columns))]
-                table = pa.Table.from_arrays(arrays, columns)
-                for batch in table.to_batches():
-                    yield batch
+                    # Create a PyArrow Table from rows
+                    columns = list(result.keys())
+                    arrays = [pa.array([row[i] for row in rows]) for i in range(len(columns))]
+                    table = pa.Table.from_arrays(arrays, columns)
+                    for batch in table.to_batches():
+                        yield batch
+
+            return gen()

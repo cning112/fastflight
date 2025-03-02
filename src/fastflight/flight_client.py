@@ -3,7 +3,7 @@ import contextlib
 import inspect
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, AsyncIterable, Callable, Generator, TypeAlias, TypeVar, Union
+from typing import Any, AsyncGenerator, AsyncIterable, Callable, Generator, Optional, TypeVar, Union
 
 import pandas as pd
 import pyarrow as pa
@@ -39,7 +39,7 @@ class FlightClientPool:
         logger.info(f"Created FlightClientPool with {size} clients at {flight_server_location}")
 
     @asynccontextmanager
-    async def acquire_async(self, timeout: float = None) -> AsyncGenerator[flight.FlightClient, Any]:
+    async def acquire_async(self, timeout: Optional[float] = None) -> AsyncGenerator[flight.FlightClient, Any]:
         try:
             client = await asyncio.wait_for(self.queue.get(), timeout=timeout)
         except asyncio.TimeoutError:
@@ -51,7 +51,7 @@ class FlightClientPool:
             await self.queue.put(client)
 
     @contextlib.contextmanager
-    def acquire(self, timeout: float = None) -> Generator[flight.FlightClient, Any, None]:
+    def acquire(self, timeout: Optional[float] = None) -> Generator[flight.FlightClient, Any, None]:
         try:
             client = asyncio.run(asyncio.wait_for(self.queue.get(), timeout=timeout))
         except asyncio.TimeoutError:
@@ -73,7 +73,7 @@ class FlightClientPool:
 
 TicketType = Union[bytes, BaseParams, flight.Ticket]
 
-R: TypeAlias = TypeVar("R")
+R = TypeVar("R")
 
 
 def to_flight_ticket(ticket: TicketType) -> flight.Ticket:

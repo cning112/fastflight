@@ -20,7 +20,12 @@ dependencies = [
 
 [project.optional-dependencies]
 fastapi = ["fastapi"]
-dev = ["pre-commit", "mypy"]
+dev = [
+    "mypy",
+    "pandas-stubs>=2.2.3.241126",
+    "pre-commit",
+    "pyarrow-stubs>=17.17",
+]
 test = ["pytest", "pytest-cov"]
 
 [tool.ruff]
@@ -33,3 +38,4 @@ skip-magic-trailing-comma = true
 [tool.ruff.lint]
 # On top of the default `select` (`E4`, E7`, `E9`, and `F`), enable isort (`I`)
 extend-select = ["I"]
+isort.split-on-trailing-comma = false
