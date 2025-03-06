@@ -10,27 +10,43 @@ version = "0.2.3"
 readme = "README.md"
 requires-python = ">= 3.10"
 dependencies = [
-    "duckdb",
     "pandas",
     "pyarrow>=14.0.0",
     "pydantic>=2.0",
-    "sqlalchemy[asyncio]",
-    "structlog",
+    "typer>=0.15.2",
 ]
 
 [project.optional-dependencies]
-fastapi = ["fastapi"]
+duckdb = [
+    "duckdb"
+]
+fastapi = [
+    "fastapi"
+]
+sqlalchemy = [
+    "sqlalchemy[asyncio]"
+]
+structlog = [
+    "structlog"
+]
+
+[project.scripts]
+fastflight = "fastflight.cli:cli"
+
+[dependency-group]
 dev = [
     "mypy",
     "pandas-stubs>=2.2.3.241126",
     "pre-commit",
     "pyarrow-stubs>=17.17",
+    "pytest",
+    "pytest-cov",
+    "ruff",
 ]
-test = ["pytest", "pytest-cov"]
 
 [tool.ruff]
 line-length = 120
-src = ["src", "tests", "demo"]
+src = ["src", "tests", "examples"]
 
 [tool.ruff.format]
 skip-magic-trailing-comma = true

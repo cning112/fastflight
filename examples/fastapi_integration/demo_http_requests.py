@@ -5,7 +5,7 @@ from typing import Callable, Iterable, TypeVar
 import httpx
 from mock_data_service import MockDataParams
 
-from fastflight.flight_client import FlightClientManager
+from fastflight.client import FastFlightClient
 from fastflight.utils.stream_utils import read_dataframe_from_arrow_stream
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     # grpc request
     LOC = "grpc://localhost:8815"
-    client = FlightClientManager(LOC)
+    client = FastFlightClient(LOC)
 
     # get data in an async way
     async def main():
@@ -39,5 +39,5 @@ if __name__ == "__main__":
     asyncio.run(main())
 
     # get data in a sync way
-    df = client.read_pd_dataframe(data_params)
+    df = client.get_pd_dataframe(data_params)
     print("read df from grpc", df)

@@ -89,15 +89,13 @@ def to_flight_ticket(ticket: TicketType) -> flight.Ticket:
     raise ValueError(f"Invalid ticket type: {type(ticket)}")
 
 
-class FlightClientManager:
+class FastFlightClient:
     """
     A helper class to get data from flight server using a pool of `FlightClient`s.
     """
 
     def __init__(self, flight_server_location: str, client_pool_size: int = 5):
         """
-        Initializes the FlightClientHelper.
-
         Args:
             flight_server_location (str): The URI of the Flight server.
             client_pool_size (int): The number of FlightClient instances to maintain in the pool.
@@ -131,7 +129,7 @@ class FlightClientManager:
 
     async def aget_stream_reader(self, ticket: TicketType) -> flight.FlightStreamReader:
         """
-        Gets a reader to a stream of Arrow data in bytes format using the provided flight ticket data asynchronously.
+        Returns a `FlightStreamReader` from the Flight server using the provided flight ticket data asynchronously.
 
         Args:
             ticket: The ticket data to request data from the Flight server.
@@ -141,7 +139,7 @@ class FlightClientManager:
         """
         return await self.aget_stream_reader_with_callback(ticket, callback=lambda x: x)
 
-    async def aread_pa_table(self, ticket: TicketType) -> pa.Table:
+    async def aget_pa_table(self, ticket: TicketType) -> pa.Table:
         """
         Returns a pyarrow table from the Flight server using the provided flight ticket data asynchronously.
 
@@ -153,7 +151,7 @@ class FlightClientManager:
         """
         return await self.aget_stream_reader_with_callback(ticket, callback=lambda reader: reader.read_all())
 
-    async def aread_pd_dataframe(self, ticket: TicketType) -> pd.DataFrame:
+    async def aget_pd_dataframe(self, ticket: TicketType) -> pd.DataFrame:
         """
         Returns a pandas dataframe from the Flight server using the provided flight ticket data asynchronously.
 
@@ -183,7 +181,7 @@ class FlightClientManager:
 
     def get_stream_reader(self, ticket: TicketType) -> flight.FlightStreamReader:
         """
-        A synchronous version of :meth:`FlightClientHelper.aget_stream_reader`.
+        Returns a `FlightStreamReader` from the Flight server using the provided flight ticket data synchronously.
 
         Args:
             ticket: The ticket data to request data from the Flight server.
@@ -200,9 +198,9 @@ class FlightClientManager:
             logger.error(f"Error fetching data: {e}")
             raise
 
-    def read_pa_table(self, ticket: TicketType) -> pa.Table:
+    def get_pa_table(self, ticket: TicketType) -> pa.Table:
         """
-        A synchronous version of :meth:`FlightClientHelper.aread_pa_table`.
+        Returns an Arrow Table from the Flight server using the provided flight ticket data synchronously.
 
         Args:
             ticket: The ticket data to request data from the Flight server.
@@ -212,9 +210,9 @@ class FlightClientManager:
         """
         return self.get_stream_reader(ticket).read_all()
 
-    def read_pd_dataframe(self, ticket: TicketType) -> pd.DataFrame:
+    def get_pd_dataframe(self, ticket: TicketType) -> pd.DataFrame:
         """
-        A synchronous version of :meth:`FlightClientHelper.aread_pd_df`.
+        Returns a pandas dataframe from the Flight server using the provided flight ticket data synchronously.
 
         Args:
             ticket: The ticket data to request data from the Flight server.

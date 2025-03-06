@@ -1,7 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterable, ClassVar, Generic, Type, TypeAlias, TypeVar, cast
+from typing import Any, AsyncIterable, ClassVar, Dict, Generic, Type, TypeAlias, TypeVar, cast
 
 import pyarrow as pa
 from pydantic import BaseModel
@@ -19,55 +19,6 @@ class BaseParams(BaseModel, ABC):
     """
 
     kind: ClassVar[str]
-    registry: ClassVar[dict[str, ParamsCls]] = {}
-
-    @classmethod
-    def register(cls):
-        """
-        Decorator for registering a DataParams subclass.
-
-        This decorator registers a DataParams subclass in the global registry using its fully
-        qualified name (i.e., "<module>.<qualname>") as the unique key. It also sets the 'kind'
-        attribute of the subclass to this fully qualified name, ensuring a one-to-one binding
-        between a DataParams subclass and its corresponding DataService.
-
-        Returns:
-            function: A decorator function that takes a DataParams subclass, registers it, and returns the subclass.
-
-        Raises:
-            ValueError: If a DataParams subclass with the same fully qualified name is already registered.
-        """
-
-        def inner(sub_params_cls: ParamsCls) -> ParamsCls:
-            qual_name = sub_params_cls.qual_name()
-            if qual_name in cls.registry:
-                raise ValueError(f"Params type {qual_name=} is already registered by {cls.registry[qual_name]}.")
-            setattr(sub_params_cls, "kind", qual_name)
-            cls.registry[qual_name] = sub_params_cls
-            logger.info(f"Registered params type {qual_name} for class {sub_params_cls}")
-            return sub_params_cls
-
-        return inner
-
-    @classmethod
-    def lookup(cls, qual_name: str) -> ParamsCls:
-        """
-        Get the params class associated with the given params type.
-
-        Args:
-            qual_name: The type of the params to retrieve.
-
-        Returns:
-            type[BaseParams]: The params class associated with the params type.
-
-        Raises:
-            ValueError: If the params type is not registered.
-        """
-        params_cls = cls.registry.get(qual_name)
-        if params_cls is None:
-            logger.error(f"Params type {qual_name} is not registered.")
-            raise ValueError(f"Params type {qual_name} is not registered.")
-        return params_cls
 
     @classmethod
     def from_bytes(cls: Type[T], data: bytes) -> T:
@@ -127,6 +78,7 @@ class BaseDataService(Generic[T], ABC):
     """
 
     registry: ClassVar[dict[str, DataServiceCls]] = {}
+    params_registry: ClassVar[dict[str, ParamsCls]] = {}
 
     @classmethod
     def register(cls, params_cls: ParamsCls):
@@ -151,6 +103,8 @@ class BaseDataService(Generic[T], ABC):
             ValueError: If a DataService for the given DataParams type is already registered either under the
                         DataParams key or the DataService subclass's own fully qualified name.
         """
+
+        # Register the DataParams type
         BaseParams.register()(params_cls)
 
         def inner(subclass: DataServiceCls) -> DataServiceCls:
@@ -210,3 +164,71 @@ class BaseDataService(Generic[T], ABC):
 
 def bind_service(params_cls: type[T], service_cls: type[BaseDataService[T]], *, alias: str | None = None) -> None:
     BaseParams.register()(params_cls)
+
+
+class RegistryManager:
+    """管理 BaseParams 和 BaseDataService 的注册、别名映射，以及动态加载"""
+
+    _params_registry: Dict[str, Type[BaseParams]] = {}
+    _service_registry: Dict[str, Type[BaseDataService]] = {}
+    _alias_registry: Dict[str, str] = {}  # 存储 alias -> qual_name 的映射
+
+    @classmethod
+    def register_params(cls, params_cls: Type[BaseParams], alias: str | None = None):
+        """注册 BaseParams 子类，并可选绑定别名"""
+        qual_name = f"{params_cls.__module__}.{params_cls.__qualname__}"
+        cls._params_registry[qual_name] = params_cls
+        if alias:
+            cls._alias_registry[alias] = qual_name
+        logger.info(f"Registered Params: {qual_name} (Alias: {alias})")
+
+    @classmethod
+    def register_service(
+        cls, params_cls: Type[BaseParams], service_cls: Type[BaseDataService], alias: str | None = None
+    ):
+        """注册 BaseDataService，并可选绑定别名"""
+        params_qual_name = f"{params_cls.__module__}.{params_cls.__qualname__}"
+        service_qual_name = f"{service_cls.__module__}.{service_cls.__qualname__}"
+
+        if params_qual_name in cls._service_registry:
+            raise ValueError(f"Data service for {params_qual_name} is already registered.")
+
+        cls._service_registry[params_qual_name] = service_cls
+        if alias:
+            cls._alias_registry[alias] = params_qual_name  # 绑定别名到参数类
+        logger.info(f"Registered Data Service: {service_qual_name} for Params: {params_qual_name} (Alias: {alias})")
+
+    @classmethod
+    def lookup_params(cls, name: str) -> Type[BaseParams] | None:
+        """查找 BaseParams 类，支持 FQN 和别名"""
+        qual_name = cls._alias_registry.get(name, name)
+        return cls._params_registry.get(qual_name)
+
+    @classmethod
+    def lookup_service(cls, name: str) -> Type[BaseDataService] | None:
+        """查找 BaseDataService 类，支持 FQN 和别名"""
+        qual_name = cls._alias_registry.get(name, name)
+        return cls._service_registry.get(qual_name)
+
+    @classmethod
+    def register_alias(cls, alias: str, qual_name: str):
+        """绑定新的别名"""
+        cls._alias_registry[alias] = qual_name
+        logger.info(f"Registered alias '{alias}' for '{qual_name}'")
+
+    @classmethod
+    def unregister_alias(cls, alias: str):
+        """取消别名绑定"""
+        if alias in cls._alias_registry:
+            del cls._alias_registry[alias]
+            logger.info(f"Unregistered alias '{alias}'")
+        else:
+            logger.warning(f"Tried to unregister alias '{alias}', but it was not registered.")
+
+    @classmethod
+    def unregister(cls, name: str):
+        """同时取消注册 Params、Service 和别名"""
+        # qual_name = cls._alias_registry.get(name, name)
+        # cls.unregister_service(qual_name)
+        # cls.unregister_params(qual_name)
+        cls.unregister_alias(name)

@@ -6,7 +6,7 @@ import pandas as pd
 import pyarrow as pa
 from mock_data_service import MockDataParams
 
-from fastflight.flight_client import FlightClientManager
+from fastflight.client import FastFlightClient
 
 
 def calculate_throughput(start, end, data_size):
@@ -15,9 +15,9 @@ def calculate_throughput(start, end, data_size):
     return (data_size / elapsed_time) / (1024 * 1024)
 
 
-def get_data(client: FlightClientManager, params: MockDataParams) -> tuple[pa.Table, datetime, datetime]:
+def get_data(client: FastFlightClient, params: MockDataParams) -> tuple[pa.Table, datetime, datetime]:
     start_time = datetime.now()
-    table = client.read_pa_table(params)
+    table = client.get_pa_table(params)
     end_time = datetime.now()
     return table, start_time, end_time
 
@@ -31,7 +31,7 @@ class Result:
     throughput_MBps: float
 
 
-def run(client: FlightClientManager, rows_per_batch: int, delay_per_row: float) -> Result:
+def run(client: FastFlightClient, rows_per_batch: int, delay_per_row: float) -> Result:
     table, start_time, end_time = get_data(
         client, MockDataParams(rows_per_batch=rows_per_batch, delay_per_row=delay_per_row)
     )
@@ -42,7 +42,7 @@ def run(client: FlightClientManager, rows_per_batch: int, delay_per_row: float) 
 
 
 def run_concurrently(
-    client: FlightClientManager, concurrent_requests: int, rows_per_batch: int, delay_per_row: float
+    client: FastFlightClient, concurrent_requests: int, rows_per_batch: int, delay_per_row: float
 ) -> Result:
     global_start = datetime.now()
     with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
@@ -75,8 +75,8 @@ if __name__ == "__main__":
             # for concurrent_requests in [10, 100, 500, 1000, 2000]:
             for concurrent_requests in [1, 3, 5, 10]:
                 print(f"running {rows_per_batch=}, {concurrent_requests=}, {delay_per_row=}")
-                async_client = FlightClientManager(async_loc, concurrent_requests)
-                sync_client = FlightClientManager(sync_loc, concurrent_requests)
+                async_client = FastFlightClient(async_loc, concurrent_requests)
+                sync_client = FastFlightClient(sync_loc, concurrent_requests)
 
                 # pre-warm
                 run_concurrently(async_client, concurrent_requests, rows_per_batch, delay_per_row)

@@ -13,21 +13,21 @@ from fastflight.utils.stream_utils import AsyncToSyncConverter
 logger = logging.getLogger(__name__)
 
 
-class FlightServer(flight.FlightServerBase):
+class FastFlightServer(flight.FlightServerBase):
     """
-    FlightServer is a subclass of flight.FlightServerBase designed to run in an asyncio environment.
+    FastFlightServer is a subclass of flight.FlightServerBase designed to run in an asyncio environment.
     It provides an asynchronous interface to start and stop the server using a ThreadPoolExecutor.
 
     Attributes:
-        location (str): The location where the FlightServer will be hosted.
+        location (str): The location where the FastFlightServer will be hosted.
     """
 
     def __init__(self, location: str):
         """
-        Initialize the FlightServer.
+        Initialize the FastFlightServer.
 
         Args:
-            location (str): The location where the FlightServer will be hosted.
+            location (str): The location where the FastFlightServer will be hosted.
         """
         super().__init__(location)
         self.location = location
@@ -35,7 +35,7 @@ class FlightServer(flight.FlightServerBase):
 
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         try:
-            logger.debug("FlightServer received ticket: %s", ticket.ticket)
+            logger.debug("FastFlightServer received ticket: %s", ticket.ticket)
             params, data_service = self.load_params_and_data_service(ticket.ticket)
             reader = self._get_batch_reader(data_service, params)
             return flight.RecordBatchStream(reader)
@@ -48,11 +48,11 @@ class FlightServer(flight.FlightServerBase):
 
     def shutdown(self):
         """
-        Shut down the FlightServer.
+        Shut down the FastFlightServer.
 
         This method stops the server and shuts down the thread pool executor.
         """
-        logger.debug(f"FlightServer shutting down at {self.location}")
+        logger.debug(f"FastFlightServer shutting down at {self.location}")
         self._converter.close()
         super().shutdown()
 
@@ -113,19 +113,23 @@ class FlightServer(flight.FlightServerBase):
         return RecordBatchReader.from_batches(first.schema, itertools.chain((first,), batch_iter))
 
 
-def start_flight_server(location: str, debug: bool = False):
-    server = FlightServer(location)
-    logger.info("Serving FlightServer in process %s", multiprocessing.current_process().name)
+def start_fast_flight_server(location: str, debug: bool = False):
+    server = FastFlightServer(location)
+    logger.info("Serving FastFlightServer in process %s", multiprocessing.current_process().name)
     if debug or sys.gettrace() is not None:
         logger.info("Enabling debug mode")
         server.do_get = debuggable(server.do_get)  # type: ignore[method-assign]
     server.serve()
 
 
-if __name__ == "__main__":
+def main():
     from fastflight.data_services import load_all
     from fastflight.utils.custom_logging import setup_logging
 
     setup_logging()
     load_all()
-    start_flight_server("grpc://0.0.0.0:8815")
+    start_fast_flight_server("grpc://0.0.0.0:8815")
+
+
+if __name__ == "__main__":
+    main()

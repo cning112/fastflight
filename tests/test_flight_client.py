@@ -2,7 +2,7 @@ import unittest
 
 import pyarrow as pa
 
-from fastflight.flight_client import FlightClientManager
+from fastflight.client import FastFlightClient
 from utils import FlightServerTestCase
 
 
@@ -14,8 +14,8 @@ class TestFlightClient(FlightServerTestCase):
         Test the aget_stream method to ensure it returns an AsyncIterable[bytes] that produces
         valid Arrow IPC data, which can be parsed back into an Arrow table matching the server data.
         """
-        # Create a FlightClientManager instance using the server's location.
-        async with FlightClientManager(self.location) as manager:
+        # Create a FastFlightClient instance using the server's location.
+        async with FastFlightClient(self.location) as manager:
             # Use a dummy ticket corresponding to the default data in the server.
             ticket = b"dummy"
             # Call aget_stream and await to get the async generator.

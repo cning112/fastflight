@@ -1,44 +1,28 @@
-# FastFlight
+# **FastFlight** 🚀
 
-**FastFlight** is a high-performance framework designed for scalable data retrieval and transfer. It leverages **Apache
-Arrow's** columnar format, **asynchronous I/O**, and **gRPC** to optimize both data transfer and processing. The
-framework allows users to easily create custom data services and define structured, typed requests using **Pydantic**
-models.
+**FastFlight** is a framework built on **Apache Arrow Flight**, designed to simplify **high-performance data transfers**
+while improving **usability, integration, and developer experience**.
 
----
+It addresses common **challenges** with native Arrow Flight, such as **opaque request formats, debugging difficulties,
+complex async management, and REST API incompatibility**. **FastFlight makes it easier to adopt Arrow Flight in existing
+systems.**
 
-## Features
+## **✨ Key Advantages**
 
-- **Customizable Data Services**: Easily create custom data services for specific sources through a pluggable
-  architecture.
-- **Structured Requests**: Define requests as **Pydantic** models, allowing structured and type-safe request handling.
-- **Efficient Data Transfer**: Uses **Apache Arrow Flight** to enhance data transfer performance compared to JDBC/ODBC.
-- **Asynchronous I/O**: Optimized I/O-bound tasks with asynchronous processing and optional synchronous interfaces.
-- **Optional FastAPI Integration**: Expose Flight functionalities via FastAPI for low-latency HTTP access.
+✅ **Parameterized Ticket System** – Structured, type-safe API for better readability and debugging.  
+✅ **Enhanced Async & Streaming Support** – Simplified stream handling with `async for` capabilities.  
+✅ **Seamless REST API Integration** – Enables **FastAPI** to bridge REST clients with Arrow Flight.  
+✅ **Modular & Extensible** – Custom data sources and easy integration into existing pipelines.  
+✅ **Pandas & PyArrow Compatible** – Optimized data retrieval for analytics and ML workflows.  
+✅ **Built-in CLI** – Start servers and execute queries effortlessly via command line.
 
----
-
-## Benefits of FastFlight
-
-- **Typed Requests**: Use **Pydantic** models for validated and structured requests, tied to specific data services.
-- **High Performance**: Efficient large-scale data handling with Apache Arrow and gRPC streaming.
-- **Modular Architecture**: Scale easily with custom data services for various workflows.
-- **Flexible Processing**: Asynchronous and synchronous options to fit different workloads.
+**FastFlight is ideal for high-throughput data systems, real-time querying, log analysis, and financial applications.**
 
 ---
 
-## Core Components
+## **🚀 Quick Start**
 
-- **Flight Server**: Handles requests and streams data using Apache Arrow.
-- **Flight Client**: Fetches data from the server and deserializes it into **Pandas DataFrames** or **PyArrow Tables**.
-- **Base Data Service**: Foundation for creating custom data services.
-- **Request Models**: Structured requests using **Pydantic**, ensuring validation and flexibility.
-
----
-
-## Installation
-
-You can install FastFlight using `pip`:
+### **1️⃣ Install FastFlight**
 
 ```bash
 pip install fastflight
@@ -46,34 +30,72 @@ pip install fastflight
 
 ---
 
-## Basic Usage
+## **🎯 Using the CLI**
 
-1. Start the Flight server:
-   ```bash
-   python src/fastflight/flight_server.py
-   ```
+FastFlight provides a command-line interface (CLI) for easy management of **Arrow Flight and FastAPI servers**.
 
-2. Fetch data with the Flight client:
-   ```python
-   from fastflight.flight_client import FlightClientManager
-   # Connect to Flight server and fetch data
-   ```
+### **Start the FastFlight Server**
 
----
+```bash
+fastflight start-fast-flight-server --location grpc://0.0.0.0:8815
+```
 
-## FastAPI Integration
+**Options:**
 
-For more details on FastAPI integration, refer to the [FastAPI Integration Guide](./src/fastflight/fastapi/README.md).
+- `--location` (optional): gRPC server address (default: `grpc://0.0.0.0:8815`).
 
 ---
 
-## Technical Details
+### **Start the FastAPI Server**
 
-Refer to the [Technical Documentation](./docs/TECHNICAL_DETAILS.md) for in-depth discussions on architecture, typed
-requests, asynchronous I/O, and key components.
+```bash
+fastflight start-fastapi --host 0.0.0.0 --port 8000 --fast-flight-route-prefix /fastflight --flight-location grpc://0.0.0.0:8815
+```
+
+**Options:**
+
+- `--host` (optional): FastAPI server host (default: `0.0.0.0`).
+- `--port` (optional): FastAPI server port (default: `8000`).
+- `--fast-flight-route-prefix` (optional): API route prefix (default: `/fastflight`).
+- `--flight-location` (optional): Arrow Flight server address (default: `grpc://0.0.0.0:8815`).
 
 ---
 
-## License
+### **Start Both FastFlight and FastAPI Servers**
 
-This project is licensed under the MIT License.
+```bash
+fastflight start-all --api-host 0.0.0.0 --api-port 8000 --fast-flight-route-prefix /fastflight --flight-location grpc://0.0.0.0:8815
+```
+
+This command launches **both FastFlight and FastAPI servers** as separate processes.
+
+---
+
+## **📖 Additional Documentation**
+
+- **[CLI Guide](./docs/CLI_USAGE.md)** – Detailed CLI usage instructions.
+- **[FastAPI Integration Guide](./src/fastflight/fastapi/README.md)** – Learn how to expose Arrow Flight via FastAPI.
+- **[Technical Documentation](./docs/TECHNICAL_DETAILS.md)** – In-depth implementation details.
+
+---
+
+## **🛠 Future Plans**
+
+✅ **Structured Ticket System** (Completed)  
+✅ **Async & Streaming Support** (Completed)  
+✅ **REST API Adapter** (Completed)  
+✅ **CLI Support** (Completed)  
+🔄 **Support for More Data Sources (SQL, NoSQL, Kafka)** (In Progress)  
+🔄 **Enhanced Debugging & Logging Tools** (In Progress)
+
+Contributions are welcome! If you have suggestions or improvements, feel free to submit an Issue or PR. 🚀
+
+---
+
+## **📜 License**
+
+This project is licensed under the **MIT License**.
+
+---
+
+**🚀 Ready to accelerate your data transfers? Get started today!**
