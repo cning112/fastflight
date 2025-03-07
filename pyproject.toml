@@ -33,13 +33,14 @@ structlog = [
 [project.scripts]
 fastflight = "fastflight.cli:cli"
 
-[dependency-group]
+[dependency-groups]
 dev = [
     "mypy",
     "pandas-stubs>=2.2.3.241126",
     "pre-commit",
     "pyarrow-stubs>=17.17",
     "pytest",
+    "pytest-asyncio>=0.25.3",
     "pytest-cov",
     "ruff",
 ]

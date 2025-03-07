@@ -1,234 +1,216 @@
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, AsyncIterable, ClassVar, Dict, Generic, Type, TypeAlias, TypeVar, cast
+from typing import Any, AsyncIterable, ClassVar, Dict, Generic, Literal, Type, TypeVar
 
 import pyarrow as pa
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T", bound="BaseParams")
-ParamsCls: TypeAlias = type["BaseParams"]
-
 
 class BaseParams(BaseModel, ABC):
-    """
-    A base class for query params, implementing common serialization methods
-    and managing the registry for different params types.
+    """A base class for query parameters used in data services.
+
+    This class defines serialization and deserialization methods for handling
+    parameters passed between clients and the FastFlight server.
     """
 
-    kind: ClassVar[str]
+    data_type: ClassVar[str]  # The unique identifier for this parameter type
 
     @classmethod
-    def from_bytes(cls: Type[T], data: bytes) -> T:
-        """
-        Deserialize a params from bytes.
+    def from_bytes(cls, data: bytes) -> "BaseParams":
+        """Deserializes a `BaseParams` instance from a bytes object.
+
+        It looks up the class using `data_type`, which represents the primary identifier.
 
         Args:
-            data (bytes): The byte data to deserialize.
+            data (bytes): The byte representation of a `BaseParams` object.
 
         Returns:
-            BaseParams: The deserialized params object.
+            BaseParams: The deserialized instance.
+
+        Raises:
+            ValueError: If the parameter class is not found using either `data_type` or `alias`.
+            JSONDecodeError, KeyError, TypeError: If deserialization fails.
         """
         try:
             json_data = json.loads(data)
-            qual_name = json_data.pop("kind")
-            params_cls = cls.lookup(qual_name)
-            return cast(T, params_cls.model_validate(json_data))
+            data_type = json_data.pop("data_type", None)
+            params_cls = RegistryManager.lookup_params(data_type)
+            if not params_cls:
+                raise ValueError(f"Parameter class not found: data_type={data_type}")
+            return params_cls.model_validate(json_data)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.error(f"Error deserializing params: {e}")
+            logger.error(f"Error deserializing parameters: {e}")
+            raise
+
+    def to_json(self) -> dict[str, Any]:
+        """Serializes the `BaseParams` instance into a JSON-compatible dictionary.
+
+        Returns:
+            dict[str, Any]: The serialized dictionary representation.
+
+        Raises:
+            ValueError, TypeError: If serialization fails.
+        """
+        try:
+            json_data = self.model_dump()
+            json_data["data_type"] = self.data_type
+            return json_data
+        except (TypeError, ValueError) as e:
+            logger.error(f"Error serializing parameters: {e}")
             raise
 
     def to_bytes(self) -> bytes:
-        """
-        Serialize the params to bytes.
+        """Serializes the `BaseParams` instance into a bytes object.
 
         Returns:
-            bytes: The serialized byte data of the params.
+            bytes: The serialized representation of the object.
+
+        Raises:
+            ValueError, TypeError: If serialization fails.
         """
         try:
             return json.dumps(self.to_json()).encode("utf-8")
         except (TypeError, ValueError) as e:
-            logger.error(f"Error serializing params: {e}")
-            raise
-
-    def to_json(self) -> dict[str, Any]:
-        try:
-            json_data = self.model_dump()
-            json_data["kind"] = self.qual_name()
-            return json_data
-        except (TypeError, ValueError) as e:
-            logger.error(f"Error serializing params: {e}")
+            logger.error(f"Error serializing parameters: {e}")
             raise
 
     @classmethod
-    def qual_name(cls):
+    def qual_name(cls) -> str:
+        """Returns the fully qualified name of the class."""
         return f"{cls.__module__}.{cls.__qualname__}"
 
 
-DataServiceCls: TypeAlias = Type["BaseDataService[Any]"]
+T = TypeVar("T", bound="BaseParams")
 
 
 class BaseDataService(Generic[T], ABC):
-    """
-    A base class for data sources, specifying the ticket type it handles,
-    providing methods to fetch data and batches of data, and managing the
-    registry for different data source types.
-    """
-
-    registry: ClassVar[dict[str, DataServiceCls]] = {}
-    params_registry: ClassVar[dict[str, ParamsCls]] = {}
-
-    @classmethod
-    def register(cls, params_cls: ParamsCls):
-        """
-        Decorator for registering a DataService subclass for a given DataParams type.
-
-        This method first registers the given DataParams type by calling BaseParams.register()(params_cls).
-        It then acts as a decorator for a DataService subclass, registering the subclass in the global registry
-        under two keys:
-          - The fully qualified name of the DataParams type.
-          - The fully qualified name of the DataService subclass.
-        This dual-key registration enforces a one-to-one binding between a DataParams subclass and its
-        corresponding DataService subclass.
-
-        Args:
-            params_cls (type[ParamsCls]): The DataParams subclass that the DataService handles.
-
-        Returns:
-            function: A decorator function that takes a DataService subclass, registers it, and returns the subclass.
-
-        Raises:
-            ValueError: If a DataService for the given DataParams type is already registered either under the
-                        DataParams key or the DataService subclass's own fully qualified name.
-        """
-
-        # Register the DataParams type
-        BaseParams.register()(params_cls)
-
-        def inner(subclass: DataServiceCls) -> DataServiceCls:
-            cls_qual_name = f"{subclass.__module__}.{subclass.__qualname__}"
-            params_qual_name = params_cls.qual_name()
-            if params_qual_name in cls.registry:
-                raise ValueError(
-                    f"Data source type {params_qual_name} is already registered by {cls.registry[params_qual_name]}."
-                )
-            if cls_qual_name in cls.registry:
-                raise ValueError(
-                    f"Data source type {cls_qual_name} is already registered by {cls.registry[cls_qual_name]}."
-                )
-            cls.registry[params_qual_name] = cls.registry[cls_qual_name] = subclass
-            logger.info(
-                f"Registered data source type for class {subclass} with keys {params_qual_name} and {cls_qual_name}"
-            )
-            return subclass
-
-        return inner
-
-    @classmethod
-    def lookup(cls, qual_name: str) -> DataServiceCls:
-        """
-        Get the data service class associated with the given data source type.
-
-        Args:
-            qual_name: The type of the data source to retrieve, it can be either the params type or the data source type.
-
-        Returns:
-            type[BaseDataService]: The data source class associated with the data source type.
-
-        Raises:
-            ValueError: If the data source type is not registered.
-        """
-        data_service_cls = cls.registry.get(qual_name)
-        if data_service_cls is None:
-            logger.error(f"Data source type {qual_name} is not registered.")
-            raise ValueError(f"Data source type {qual_name} is not registered.")
-        return data_service_cls
+    """A base class for data services, managing registration and data retrieval."""
 
     @abstractmethod
     async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
-        """
-        Fetch data in batches based on the given parameters.
+        """Fetches data asynchronously in batches.
 
         Args:
             params (T): The parameters for fetching data.
-            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
+            batch_size (int | None): The maximum size of each batch.
 
         Yields:
-            pa.RecordBatch: An async generator of pa.RecordBatches.
-
+            pa.RecordBatch: A generator of RecordBatch instances.
         """
         raise NotImplementedError
 
 
-def bind_service(params_cls: type[T], service_cls: type[BaseDataService[T]], *, alias: str | None = None) -> None:
-    BaseParams.register()(params_cls)
+LookupType = Literal["data_type", "qual_name", "auto"]
 
 
 class RegistryManager:
-    """管理 BaseParams 和 BaseDataService 的注册、别名映射，以及动态加载"""
+    """Manages the registration, alias mapping, and dynamic loading of BaseParams and BaseDataService."""
 
-    _params_registry: Dict[str, Type[BaseParams]] = {}
-    _service_registry: Dict[str, Type[BaseDataService]] = {}
-    _alias_registry: Dict[str, str] = {}  # 存储 alias -> qual_name 的映射
+    _params_registry: Dict[str, Type[BaseParams]] = {}  # Maps qual_name -> params_cls
+    _service_registry: Dict[str, Type[BaseDataService]] = {}  # Maps qual_name -> service_cls
+    _data_type_registry: Dict[str, str] = {}  # Maps data_type -> qual_name
 
     @classmethod
-    def register_params(cls, params_cls: Type[BaseParams], alias: str | None = None):
-        """注册 BaseParams 子类，并可选绑定别名"""
-        qual_name = f"{params_cls.__module__}.{params_cls.__qualname__}"
+    def register_service(cls, params_cls: Type[BaseParams], service_cls: Type[BaseDataService]):
+        """Registers a BaseDataService subclass and its corresponding BaseParams subclass.
+
+        Args:
+            params_cls (Type[BaseParams]): The parameter class that the service will handle.
+            service_cls (Type[BaseDataService]): The data service class to register.
+
+        Raises:
+            ValueError: If the service is already registered for the given parameter type.
+        """
+        qual_name = params_cls.qual_name()
+
+        # Ensure data_type is stored separately
+        cls._data_type_registry[params_cls.data_type] = qual_name
+
+        # Register the params class
         cls._params_registry[qual_name] = params_cls
-        if alias:
-            cls._alias_registry[alias] = qual_name
-        logger.info(f"Registered Params: {qual_name} (Alias: {alias})")
+
+        # Register the service class
+        if existing_registered := cls._service_registry.get(qual_name):
+            if existing_registered == service_cls:
+                logger.info("Data service already registered for Params: %s", qual_name)
+            else:
+                raise ValueError(f"Data service already registered for {qual_name}")
+        cls._service_registry[qual_name] = service_cls
+        logger.info(
+            f"Registered Data Service: {service_cls.__name__} for Params: {qual_name} (data_type: {params_cls.data_type})"
+        )
 
     @classmethod
-    def register_service(
-        cls, params_cls: Type[BaseParams], service_cls: Type[BaseDataService], alias: str | None = None
-    ):
-        """注册 BaseDataService，并可选绑定别名"""
-        params_qual_name = f"{params_cls.__module__}.{params_cls.__qualname__}"
-        service_qual_name = f"{service_cls.__module__}.{service_cls.__qualname__}"
+    def lookup_service(cls, query: str, lookup_type: LookupType = "auto") -> Type[BaseDataService] | None:
+        """Finds a registered data service class by data_type, or qual_name.
 
-        if params_qual_name in cls._service_registry:
-            raise ValueError(f"Data service for {params_qual_name} is already registered.")
+        Args:
+            query (str): The value to look up (data_type, or qual_name).
+            lookup_type (str): The type of lookup ("data_type", "qual_name", or "auto").
 
-        cls._service_registry[params_qual_name] = service_cls
-        if alias:
-            cls._alias_registry[alias] = params_qual_name  # 绑定别名到参数类
-        logger.info(f"Registered Data Service: {service_qual_name} for Params: {params_qual_name} (Alias: {alias})")
-
-    @classmethod
-    def lookup_params(cls, name: str) -> Type[BaseParams] | None:
-        """查找 BaseParams 类，支持 FQN 和别名"""
-        qual_name = cls._alias_registry.get(name, name)
-        return cls._params_registry.get(qual_name)
-
-    @classmethod
-    def lookup_service(cls, name: str) -> Type[BaseDataService] | None:
-        """查找 BaseDataService 类，支持 FQN 和别名"""
-        qual_name = cls._alias_registry.get(name, name)
-        return cls._service_registry.get(qual_name)
-
-    @classmethod
-    def register_alias(cls, alias: str, qual_name: str):
-        """绑定新的别名"""
-        cls._alias_registry[alias] = qual_name
-        logger.info(f"Registered alias '{alias}' for '{qual_name}'")
-
-    @classmethod
-    def unregister_alias(cls, alias: str):
-        """取消别名绑定"""
-        if alias in cls._alias_registry:
-            del cls._alias_registry[alias]
-            logger.info(f"Unregistered alias '{alias}'")
+        Returns:
+            Type[BaseDataService] | None: The registered data service class, or None if not found.
+        """
+        if lookup_type == "data_type":
+            if qual_name := cls._data_type_registry.get(query):
+                return cls._service_registry.get(qual_name)
+            else:
+                return None
+        elif lookup_type == "qual_name":
+            return cls._service_registry.get(query)
+        elif lookup_type == "auto":
+            return cls.lookup_service(query, "data_type") or cls.lookup_service(query, "qual_name")
         else:
-            logger.warning(f"Tried to unregister alias '{alias}', but it was not registered.")
+            raise ValueError(f"Invalid lookup_type: {lookup_type}")
 
     @classmethod
-    def unregister(cls, name: str):
-        """同时取消注册 Params、Service 和别名"""
-        # qual_name = cls._alias_registry.get(name, name)
-        # cls.unregister_service(qual_name)
-        # cls.unregister_params(qual_name)
-        cls.unregister_alias(name)
+    def lookup_params(cls, query: str, lookup_type: LookupType = "auto") -> Type[BaseParams] | None:
+        """Finds a registered BaseParams class by data_type, or qual_name.
+
+        Args:
+            query (str): The value to look up (data_type, or qual_name).
+            lookup_type (str): The type of lookup ("data_type", "qual_name", or "auto").
+
+        Returns:
+            Type[BaseParams] | None: The registered BaseParams class, or None if not found.
+        """
+        if lookup_type == "data_type":
+            if qual_name := cls._data_type_registry.get(query):
+                return cls._params_registry.get(qual_name)
+            else:
+                return None
+        elif lookup_type == "qual_name":
+            return cls._params_registry.get(query)
+        elif lookup_type == "auto":
+            return cls.lookup_params(query, "data_type") or cls.lookup_params(query, "qual_name")
+        else:
+            raise ValueError(f"Invalid lookup_type: {lookup_type}")
+
+    @classmethod
+    def unregister_service(cls, name: str, lookup_type: LookupType = "auto"):
+        """Unregisters a BaseDataService class and cleans up associated mappings."""
+        params_cls = cls.lookup_params(name, lookup_type=lookup_type)
+        if not params_cls:
+            logger.warning(f"Attempted to unregister non-existent Data Service: {name}")
+            return
+
+        qual_name = params_cls.qual_name()
+
+        # Remove any data_type mappings associated with this qual_name
+        cls._data_type_registry = {k: v for k, v in cls._data_type_registry.items() if v != qual_name}
+
+        if qual_name in cls._service_registry:
+            del cls._service_registry[qual_name]
+            logger.info(f"Unregistered Data Service: {qual_name}")
+
+        if qual_name in cls._params_registry:
+            cls._params_registry.pop(qual_name, None)
+            logger.info(f"Unregistered Params: {qual_name}")
+
+    @classmethod
+    def unregister(cls, name: str, lookup_type: LookupType = "auto"):
+        """Unregisters both BaseParams and BaseDataService."""
+        cls.unregister_service(name, lookup_type)

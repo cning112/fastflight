@@ -6,7 +6,7 @@ import sys
 import pyarrow as pa
 from pyarrow import RecordBatchReader, flight
 
-from fastflight.data_service_base import BaseDataService, BaseParams
+from fastflight.data_service_base import BaseDataService, BaseParams, RegistryManager
 from fastflight.utils.debug import debuggable
 from fastflight.utils.stream_utils import AsyncToSyncConverter
 
@@ -86,7 +86,9 @@ class FastFlightServer(flight.FlightServerBase):
 
         params_qual_name = params.qual_name()
         try:
-            data_service_cls = BaseDataService.lookup(params_qual_name)
+            data_service_cls = RegistryManager.lookup_service(params_qual_name)
+            if data_service_cls is None:
+                raise ValueError(f"Data service not found for ticket type {params_qual_name}")
             data_service = data_service_cls()
             return params, data_service
         except ValueError as e:
