@@ -1,12 +1,15 @@
+import importlib
 import itertools
+import json
 import logging
 import multiprocessing
 import sys
+from typing import cast
 
 import pyarrow as pa
 from pyarrow import RecordBatchReader, flight
 
-from fastflight.data_service_base import BaseDataService, BaseParams, RegistryManager
+from fastflight.data_services import BaseDataService, BaseParams
 from fastflight.utils.debug import debuggable
 from fastflight.utils.stream_utils import AsyncToSyncConverter
 
@@ -15,88 +18,49 @@ logger = logging.getLogger(__name__)
 
 class FastFlightServer(flight.FlightServerBase):
     """
-    FastFlightServer is a subclass of flight.FlightServerBase designed to run in an asyncio environment.
-    It provides an asynchronous interface to start and stop the server using a ThreadPoolExecutor.
+    FastFlightServer is an Apache Arrow Flight server that:
+    - Handles pre-flight requests to dynamically register data services.
+    - Manages the retrieval of tabular data via registered data services.
+    - Ensures efficient conversion between asynchronous and synchronous data streams.
 
     Attributes:
-        location (str): The location where the FastFlightServer will be hosted.
+        location (str): The URI where the server is hosted.
     """
 
     def __init__(self, location: str):
-        """
-        Initialize the FastFlightServer.
-
-        Args:
-            location (str): The location where the FastFlightServer will be hosted.
-        """
         super().__init__(location)
         self.location = location
         self._converter = AsyncToSyncConverter()
 
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
-        try:
-            logger.debug("FastFlightServer received ticket: %s", ticket.ticket)
-            params, data_service = self.load_params_and_data_service(ticket.ticket)
-            reader = self._get_batch_reader(data_service, params)
-            return flight.RecordBatchStream(reader)
-        except flight.FlightUnavailableError:
-            logger.error("Data service unavailable")
-            raise
-        except Exception as e:
-            logger.error(f"Internal server error: {e}")
-            raise flight.FlightInternalError(f"Internal server error: {e}")
-
-    def shutdown(self):
         """
-        Shut down the FastFlightServer.
+        Handles a data retrieval request from a client.
 
-        This method stops the server and shuts down the thread pool executor.
-        """
-        logger.debug(f"FastFlightServer shutting down at {self.location}")
-        self._converter.close()
-        super().shutdown()
-
-    @staticmethod
-    def load_params_and_data_service(flight_ticket_bytes: bytes) -> tuple[BaseParams, BaseDataService]:
-        """
-        Parses the flight ticket bytes into a BaseParams instance and retrieves the associated data service.
-
-        This method first converts the raw flight ticket bytes into a BaseParams object by calling
-        `BaseParams.from_bytes`. It then obtains the fully qualified name of the BaseParams instance using
-        the `qual_name()` method. This fully qualified name is used as a unique key to look up the corresponding
-        BaseDataService subclass from the registry. This design enforces a one-to-one binding between each
-        DataParams subclass and its corresponding DataService subclass.
+        This method:
+        - Parses the `ticket` to extract the request parameters.
+        - Loads the corresponding data service.
+        - Retrieves tabular data in Apache Arrow format.
 
         Args:
-            flight_ticket_bytes (bytes): The raw flight ticket bytes representing the data parameters.
+            context: Flight request context.
+            ticket (flight.Ticket): The request ticket containing serialized query parameters.
 
         Returns:
-            tuple[BaseParams, BaseDataService]: A tuple containing the parsed BaseParams instance and an instance
-                                                 of the corresponding BaseDataService.
+            flight.RecordBatchStream: A stream of record batches containing the requested data.
 
         Raises:
-            flight.FlightUnavailableError: If no matching data service is found for the given parameters.
-            Exception: Propagates exceptions raised during parameter parsing or service lookup.
+            flight.FlightUnavailableError: If the requested data service is not registered.
+            flight.FlightInternalError: If an unexpected error occurs during retrieval.
         """
         try:
-            params = BaseParams.from_bytes(flight_ticket_bytes)
+            logger.debug("Received ticket: %s", ticket.ticket)
+            params, data_service = self._resolve_ticket(ticket)
+            reader = self._get_batch_reader(data_service, params)
+            return flight.RecordBatchStream(reader)
         except Exception as e:
-            logger.error(f"Error parsing params: {e}")
-            raise
-
-        params_qual_name = params.qual_name()
-        try:
-            data_service_cls = RegistryManager.lookup_service(params_qual_name)
-            if data_service_cls is None:
-                raise ValueError(f"Data service not found for ticket type {params_qual_name}")
-            data_service = data_service_cls()
-            return params, data_service
-        except ValueError as e:
-            logger.error(f"Data service unavailable for ticket type {params_qual_name}: {e}")
-            raise flight.FlightUnavailableError(f"Data service unavailable: {e}")
-        except Exception as e:
-            logger.error(f"Error getting data source for ticket type {params_qual_name}: {e}")
-            raise
+            logger.error(f"Error processing request: {e}", exc_info=True)
+            error_msg = f"Internal server error: {type(e).__name__}: {str(e)}"
+            raise flight.FlightInternalError(error_msg)
 
     def _get_batch_reader(
         self, data_service: BaseDataService, params: BaseParams, batch_size: int | None = None
@@ -110,27 +74,68 @@ class FastFlightServer(flight.FlightServerBase):
         Returns:
             RecordBatchReader: A RecordBatchReader instance to read the data in batches.
         """
-        batch_iter = self._converter.syncify_async_iter(data_service.aget_batches(params, batch_size))
-        first = next(batch_iter)
-        return RecordBatchReader.from_batches(first.schema, itertools.chain((first,), batch_iter))
+        try:
+            try:
+                batch_iter = iter(data_service.get_batches(params, batch_size))
+            except NotImplementedError:
+                batch_iter = self._converter.syncify_async_iter(data_service.aget_batches(params, batch_size))
 
+            first = next(batch_iter)
+            return RecordBatchReader.from_batches(first.schema, itertools.chain((first,), batch_iter))
+        except StopIteration:
+            raise flight.FlightInternalError("Data service returned no batches.")
+        except AttributeError as e:
+            raise flight.FlightInternalError(f"Service method issue: {e}")
+        except Exception as e:
+            logger.error(f"Error retrieving data from {data_service.__class__.__name__}: {e}", exc_info=True)
+            raise flight.FlightInternalError(f"Error in data retrieval: {type(e).__name__}: {str(e)}")
 
-def start_fast_flight_server(location: str, debug: bool = False):
-    server = FastFlightServer(location)
-    logger.info("Serving FastFlightServer in process %s", multiprocessing.current_process().name)
-    if debug or sys.gettrace() is not None:
-        logger.info("Enabling debug mode")
-        server.do_get = debuggable(server.do_get)  # type: ignore[method-assign]
-    server.serve()
+    def _resolve_ticket(self, ticket: flight.Ticket) -> tuple[BaseParams, BaseDataService]:
+        try:
+            data = json.loads(ticket.ticket)
+            params_cls = cast(BaseParams, self._import_cls(data.pop("_params_cls")))
+            params = params_cls.model_validate(data)
+
+            service_cls = self._import_cls(data.pop("_service_cls"))
+            return params, cast(BaseDataService, service_cls())
+        except KeyError as e:
+            raise flight.FlightInternalError(f"Missing required field in ticket: {e}")
+        except ValueError as e:
+            raise flight.FlightInternalError(f"Invalid ticket format: {e}")
+        except Exception as e:
+            logger.error(f"Error processing ticket: {e}", exc_info=True)
+            raise flight.FlightInternalError(f"Ticket processing error: {type(e).__name__}: {str(e)}")
+
+    @staticmethod
+    def _import_cls(cls_name: str):
+        mod, name = cls_name.rsplit(".", 1)
+        return getattr(importlib.import_module(mod), name)
+
+    def shutdown(self):
+        """
+        Shut down the FastFlightServer.
+
+        This method stops the server and shuts down the thread pool executor.
+        """
+        logger.debug(f"FastFlightServer shutting down at {self.location}")
+        self._converter.close()
+        super().shutdown()
+
+    @classmethod
+    def start_instance(cls, location: str, debug: bool = False):
+        server = cls(location)
+        logger.info("Serving FastFlightServer in process %s", multiprocessing.current_process().name)
+        if debug or sys.gettrace() is not None:
+            logger.info("Enabling debug mode")
+            server.do_get = debuggable(server.do_get)  # type: ignore[method-assign]
+        server.serve()
 
 
 def main():
-    from fastflight.data_services import load_all
     from fastflight.utils.custom_logging import setup_logging
 
     setup_logging()
-    load_all()
-    start_fast_flight_server("grpc://0.0.0.0:8815")
+    FastFlightServer.start_instance("grpc://0.0.0.0:8815", True)
 
 
 if __name__ == "__main__":

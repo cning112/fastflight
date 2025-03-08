@@ -11,6 +11,20 @@ logger = logging.getLogger(__name__)
 fast_flight_router = APIRouter()
 
 
+@fast_flight_router.get("/data_types")
+def get_data_types(ff_client: FastFlightClient = Depends(fast_flight_client)):
+    result = []
+    for k, v in ff_client.get_data_types().items():
+        service_cls = v.default_service_class()
+        result.append(
+            {
+                "params_cls": f"{v.__module__}.{v.__name__}",
+                "service_cls": f"{service_cls.__module__}.{service_cls.__name__}",
+            }
+        )
+    return result
+
+
 @fast_flight_router.post("/stream")
 async def read_data(body: bytes = Depends(body_bytes), ff_client: FastFlightClient = Depends(fast_flight_client)):
     """

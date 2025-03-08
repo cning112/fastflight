@@ -18,10 +18,10 @@ def start_fast_flight_server(
     Args:
         location (str): The gRPC location of the Flight server (default: "grpc://0.0.0.0:8815").
     """
-    from fastflight.server import start_fast_flight_server
+    from fastflight.server import FastFlightServer
 
     typer.echo(f"Starting FastFlightServer at {location}")
-    start_fast_flight_server(location)
+    FastFlightServer.start_instance(location)
 
 
 @cli.command()
@@ -34,6 +34,10 @@ def start_fastapi(
     flight_location: Annotated[
         str, typer.Option(help="Flight server location that FastAPI will connect to")
     ] = "grpc://0.0.0.0:8815",
+    module_paths: Annotated[
+        tuple[str, ...],
+        typer.Option(help="Module paths to scan for parameter classes", multiple=True, show_default=True),
+    ] = (),
 ):
     """
     Start the FastAPI server.
@@ -43,13 +47,15 @@ def start_fastapi(
         port (int): Port for the FastAPI server (default: 8000).
         fast_flight_route_prefix (str): API route prefix for FastFlight integration (default: "/fastflight").
         flight_location (str): The gRPC location of the Flight server that FastAPI will connect to (default: "grpc://0.0.0.0:8815").
+        module_paths (tuple[str, ...]): Tuple of module paths to scan for parameter classes (default: ("fastflight.data_services",)).
+
     """
     import uvicorn
 
     from fastflight.fastapi import create_app
 
     typer.echo(f"Starting FastAPI Server at {host}:{port}")
-    app = create_app(route_prefix=fast_flight_route_prefix, flight_location=flight_location)
+    app = create_app(list(module_paths), route_prefix=fast_flight_route_prefix, flight_location=flight_location)
     uvicorn.run(app, host=host, port=port)
 
 

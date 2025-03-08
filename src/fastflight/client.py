@@ -1,15 +1,16 @@
 import asyncio
 import contextlib
 import inspect
+import json
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, AsyncIterable, Callable, Generator, Optional, TypeVar, Union
+from typing import Any, AsyncGenerator, AsyncIterable, Callable, Dict, Generator, Optional, Type, TypeVar, Union
 
 import pandas as pd
 import pyarrow as pa
 import pyarrow.flight as flight
 
-from fastflight.data_service_base import BaseParams
+from fastflight.data_services import BaseParams
 from fastflight.utils.stream_utils import AsyncToSyncConverter, write_arrow_data_to_stream
 
 logger = logging.getLogger(__name__)
@@ -71,63 +72,87 @@ class FlightClientPool:
                 logger.error("Error closing client: %s", e, exc_info=True)
 
 
-TicketType = Union[bytes, BaseParams, flight.Ticket]
-
 R = TypeVar("R")
 
+TicketData = Union[bytes, BaseParams]
 
-def to_flight_ticket(ticket: TicketType) -> flight.Ticket:
-    if isinstance(ticket, BaseParams):
-        return flight.Ticket(ticket.to_bytes())
 
-    if isinstance(ticket, bytes):
-        return flight.Ticket(ticket)
+def to_flight_ticket(ticket_data: TicketData) -> flight.Ticket:
+    if isinstance(ticket_data, bytes):
+        return flight.Ticket(ticket_data)
 
-    if isinstance(ticket, flight.Ticket):
-        return ticket
-
-    raise ValueError(f"Invalid ticket type: {type(ticket)}")
+    params_cls = ticket_data.__class__
+    service_cls = ticket_data.default_service_class()
+    ticket = {
+        **ticket_data.to_json(),
+        "_service_cls": f"{service_cls.__module__}.{service_cls.__name__}",
+        "_params_cls": f"{params_cls.__module__}.{params_cls.__name__}",
+    }
+    return flight.Ticket(json.dumps(ticket).encode("utf-8"))
 
 
 class FastFlightClient:
     """
-    A helper class to get data from flight server using a pool of `FlightClient`s.
+    A helper class to get data from the Flight server using a pool of `FlightClient`s.
     """
 
-    def __init__(self, flight_server_location: str, client_pool_size: int = 5):
+    def __init__(
+        self,
+        flight_server_location: str,
+        registered_data_types: Dict[str, Type[BaseParams]] | None = None,
+        client_pool_size: int = 5,
+    ):
         """
+        Initializes the FlightClient.
+
         Args:
             flight_server_location (str): The URI of the Flight server.
+            registered_data_types (Dict[str, Type[BaseParams]] | None): A dictionary of registered data types.
             client_pool_size (int): The number of FlightClient instances to maintain in the pool.
         """
         self._client_pool = FlightClientPool(flight_server_location, client_pool_size)
         self._converter = AsyncToSyncConverter()
+        self._registered_data_types = dict(registered_data_types or {})
+
+    def get_data_types(self) -> Dict[str, Type[BaseParams]]:
+        return dict(self._registered_data_types)
 
     async def aget_stream_reader_with_callback(
-        self, ticket: TicketType, callback: Callable[[flight.FlightStreamReader], R]
+        self, ticket: TicketData, callback: Callable[[flight.FlightStreamReader], R]
     ) -> R:
+        """
+        Retrieves a `FlightStreamReader` from the Flight server asynchronously and processes it with a callback.
+
+        This method ensures that:
+        - The data service for the given `data_type` is registered before making a request.
+        - If the data type is not registered, it triggers a preflight request.
+        - If a callback is provided, it processes the `FlightStreamReader` accordingly.
+
+        Args:
+            ticket (BaseParams): The params used to request data.
+            callback (Callable[[flight.FlightStreamReader], R]): A function to process the stream.
+
+        Returns:
+            R: The result of the callback function applied to the FlightStreamReader.
+
+        Raises:
+            RuntimeError: If the preflight request fails.
+        """
+
         try:
             flight_ticket = to_flight_ticket(ticket)
             async with self._client_pool.acquire_async() as client:
-                # client.do_get is a synchronous call, so we call it directly.
                 reader = client.do_get(flight_ticket)
                 if inspect.iscoroutinefunction(callback):
-                    # If the callback is an async function, call it directly.
-                    result = await callback(reader)
+                    return await callback(reader)
                 else:
-                    # Otherwise, run the callback in a background thread.
-                    result = await asyncio.to_thread(lambda: callback(reader))
+                    return await asyncio.to_thread(lambda: callback(reader))
 
-                # If the result is awaitable (e.g. a coroutine), await it.
-                if asyncio.iscoroutine(result):
-                    return await result
-                else:
-                    return result
         except Exception as e:
             logger.error(f"Error fetching data: {e}", exc_info=True)
             raise
 
-    async def aget_stream_reader(self, ticket: TicketType) -> flight.FlightStreamReader:
+    async def aget_stream_reader(self, ticket: TicketData) -> flight.FlightStreamReader:
         """
         Returns a `FlightStreamReader` from the Flight server using the provided flight ticket data asynchronously.
 
@@ -139,7 +164,7 @@ class FastFlightClient:
         """
         return await self.aget_stream_reader_with_callback(ticket, callback=lambda x: x)
 
-    async def aget_pa_table(self, ticket: TicketType) -> pa.Table:
+    async def aget_pa_table(self, ticket: TicketData) -> pa.Table:
         """
         Returns a pyarrow table from the Flight server using the provided flight ticket data asynchronously.
 
@@ -151,7 +176,7 @@ class FastFlightClient:
         """
         return await self.aget_stream_reader_with_callback(ticket, callback=lambda reader: reader.read_all())
 
-    async def aget_pd_dataframe(self, ticket: TicketType) -> pd.DataFrame:
+    async def aget_pd_dataframe(self, ticket: TicketData) -> pd.DataFrame:
         """
         Returns a pandas dataframe from the Flight server using the provided flight ticket data asynchronously.
 
@@ -165,7 +190,7 @@ class FastFlightClient:
             ticket, callback=lambda reader: reader.read_all().to_pandas()
         )
 
-    async def aget_stream(self, ticket: TicketType) -> AsyncIterable[bytes]:
+    async def aget_stream(self, ticket: TicketData) -> AsyncIterable[bytes]:
         """
         Generates a stream of bytes of arrow data from a Flight server ticket data asynchronously.
 
@@ -179,9 +204,10 @@ class FastFlightClient:
         async for chunk in await write_arrow_data_to_stream(reader):
             yield chunk
 
-    def get_stream_reader(self, ticket: TicketType) -> flight.FlightStreamReader:
+    def get_stream_reader(self, ticket: TicketData) -> flight.FlightStreamReader:
         """
         Returns a `FlightStreamReader` from the Flight server using the provided flight ticket data synchronously.
+        This method ensures that the data service is registered via a preflight request before proceeding.
 
         Args:
             ticket: The ticket data to request data from the Flight server.
@@ -198,7 +224,7 @@ class FastFlightClient:
             logger.error(f"Error fetching data: {e}")
             raise
 
-    def get_pa_table(self, ticket: TicketType) -> pa.Table:
+    def get_pa_table(self, ticket: TicketData) -> pa.Table:
         """
         Returns an Arrow Table from the Flight server using the provided flight ticket data synchronously.
 
@@ -210,7 +236,7 @@ class FastFlightClient:
         """
         return self.get_stream_reader(ticket).read_all()
 
-    def get_pd_dataframe(self, ticket: TicketType) -> pd.DataFrame:
+    def get_pd_dataframe(self, ticket: TicketData) -> pd.DataFrame:
         """
         Returns a pandas dataframe from the Flight server using the provided flight ticket data synchronously.
 

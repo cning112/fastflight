@@ -5,11 +5,13 @@ while improving **usability, integration, and developer experience**.
 
 It addresses common **challenges** with native Arrow Flight, such as **opaque request formats, debugging difficulties,
 complex async management, and REST API incompatibility**. **FastFlight makes it easier to adopt Arrow Flight in existing
-systems.**
+systems.
 
 ## **✨ Key Advantages**
 
 ✅ **Parameterized Ticket System** – Structured, type-safe API for better readability and debugging.  
+✅ **Dynamic Data Service Registration** – Automatically discover and register custom parameter classes and their
+associated data services using a built-in discovery mechanism.  
 ✅ **Enhanced Async & Streaming Support** – Simplified stream handling with `async for` capabilities.  
 ✅ **Seamless REST API Integration** – Enables **FastAPI** to bridge REST clients with Arrow Flight.  
 ✅ **Modular & Extensible** – Custom data sources and easy integration into existing pipelines.  
@@ -58,7 +60,13 @@ fastflight start-fastapi --host 0.0.0.0 --port 8000 --fast-flight-route-prefix /
 - `--port` (optional): FastAPI server port (default: `8000`).
 - `--fast-flight-route-prefix` (optional): API route prefix (default: `/fastflight`).
 - `--flight-location` (optional): Arrow Flight server address (default: `grpc://0.0.0.0:8815`).
+- `--module_paths` (optional): Comma-separated list of module paths to scan for custom parameter classes (default:
+  None).
 
+**Note**: With the latest design update, FastFlight automatically discovers custom parameter classes (extending
+BaseParams)
+and registers the corresponding data services. Simply pass the module paths using the --module_paths option when
+starting the FastAPI server.
 ---
 
 ### **Start Both FastFlight and FastAPI Servers**
