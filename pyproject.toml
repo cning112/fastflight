@@ -10,22 +10,44 @@ version = "0.2.3"
 readme = "README.md"
 requires-python = ">= 3.10"
 dependencies = [
-    "duckdb",
     "pandas",
     "pyarrow>=14.0.0",
     "pydantic>=2.0",
-    "sqlalchemy[asyncio]",
-    "structlog",
+    "typer>=0.15.2",
 ]
 
 [project.optional-dependencies]
-fastapi = ["fastapi"]
-dev = ["pre-commit"]
-test = ["pytest", "pytest-cov"]
+duckdb = [
+    "duckdb"
+]
+fastapi = [
+    "fastapi"
+]
+sqlalchemy = [
+    "sqlalchemy[asyncio]"
+]
+structlog = [
+    "structlog"
+]
+
+[project.scripts]
+fastflight = "fastflight.cli:cli"
+
+[dependency-groups]
+dev = [
+    "mypy",
+    "pandas-stubs>=2.2.3.241126",
+    "pre-commit",
+    "pyarrow-stubs>=17.17",
+    "pytest",
+    "pytest-asyncio>=0.25.3",
+    "pytest-cov",
+    "ruff",
+]
 
 [tool.ruff]
 line-length = 120
-src = ["src", "tests", "demo"]
+src = ["src", "tests", "examples"]
 
 [tool.ruff.format]
 skip-magic-trailing-comma = true
@@ -33,3 +55,4 @@ skip-magic-trailing-comma = true
 [tool.ruff.lint]
 # On top of the default `select` (`E4`, E7`, `E9`, and `F`), enable isort (`I`)
 extend-select = ["I"]
+isort.split-on-trailing-comma = false

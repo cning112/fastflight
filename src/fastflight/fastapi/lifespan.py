@@ -1,16 +1,19 @@
 import logging
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import AsyncContextManager, Callable
+from typing import AsyncContextManager, Callable, Type
 
 from fastapi import FastAPI
 
-from fastflight.flight_client import FlightClientManager
+from fastflight.client import FastFlightClient
+from fastflight.data_services import BaseParams
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def flight_client_lifespan(app: FastAPI):
+async def fast_flight_client_lifespan(
+    app: FastAPI, registry: dict[str, Type[BaseParams]], flight_location: str = "grpc://0.0.0.0:8815"
+):
     """
     An asynchronous context manager that handles the lifespan of a flight client.
 
@@ -18,10 +21,11 @@ async def flight_client_lifespan(app: FastAPI):
 
     Parameters:
         app (FastAPI): The FastAPI application instance.
+        registry (dict[str, Type[BaseParams]]): A dictionary of registered parameter classes.
+        flight_location (str, optional): The location of the flight client. Defaults to "grpc://0.0.0.0:8815".
     """
-    logger.info("Starting flight_client_lifespan")
-    location = "grpc://localhost:8815"
-    client = FlightClientManager(location)
+    logger.info("Starting flight_client_lifespan at %s", flight_location)
+    client = FastFlightClient(flight_location, registry)
     set_flight_client(app, client)
     try:
         yield
@@ -32,16 +36,23 @@ async def flight_client_lifespan(app: FastAPI):
 
 
 @asynccontextmanager
-async def combined_lifespan(app: FastAPI, *other: Callable[[FastAPI], AsyncContextManager]):
+async def combine_lifespans(
+    app: FastAPI,
+    registry: dict[str, Type[BaseParams]],
+    flight_location: str = "grpc://0.0.0.0:8815",
+    *other: Callable[[FastAPI], AsyncContextManager],
+):
     """
-    An asynchronous context manager that handles the combined lifespan of a flight client helper
+    An asynchronous context manager that handles the combined lifespan of a `FastFlightClient`
     and any other given context managers.
 
     Parameters:
         app (FastAPI): The FastAPI application instance.
+        registry (dict[str, Type[BaseParams]]): A dictionary of registered parameter classes.
+        flight_location (str, optional): The location of the flight client. Defaults to "grpc://0.0.0.0:8815".
     """
     async with AsyncExitStack() as stack:
-        await stack.enter_async_context(flight_client_lifespan(app))
+        await stack.enter_async_context(fast_flight_client_lifespan(app, registry, flight_location))
         for c in other:
             await stack.enter_async_context(c(app))
         logger.info("Entering combined lifespan")
@@ -49,13 +60,13 @@ async def combined_lifespan(app: FastAPI, *other: Callable[[FastAPI], AsyncConte
         logger.info("Exiting combined lifespan")
 
 
-def set_flight_client(app: FastAPI, client: FlightClientManager) -> None:
+def set_flight_client(app: FastAPI, client: FastFlightClient) -> None:
     """
     Sets the client helper for the given FastAPI application.
 
     Args:
         app (FastAPI): The FastAPI application instance.
-        client (FlightClientManager): The client helper to be set.
+        client (FastFlightClient): The client helper to be set.
 
     Returns:
         None
@@ -63,7 +74,7 @@ def set_flight_client(app: FastAPI, client: FlightClientManager) -> None:
     app.state._flight_client = client
 
 
-def get_flight_client(app: FastAPI) -> FlightClientManager:
+def get_fast_flight_client(app: FastAPI) -> FastFlightClient:
     """
     Retrieves the client helper for the given FastAPI application.
 
@@ -71,7 +82,7 @@ def get_flight_client(app: FastAPI) -> FlightClientManager:
         app (FastAPI): The FastAPI application instance.
 
     Returns:
-        FlightClientManager: The client helper associated with the given FastAPI application.
+        FastFlightClient: The client helper associated with the given FastAPI application.
     """
     helper = getattr(app.state, "_flight_client", None)
     if helper is None:

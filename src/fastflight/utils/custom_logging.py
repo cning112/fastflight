@@ -4,6 +4,7 @@
 import logging
 import logging.config
 from pathlib import Path
+from typing import Literal
 
 import structlog
 
@@ -37,7 +38,10 @@ shared_processors = [
 
 
 def setup_logging(
-    console_log_level: str | int = "DEBUG", log_file: None | Path | str = "app.log", file_log_level: str | int = "INFO"
+    console_log_level: str | int = "DEBUG",
+    log_file: None | Path | str = "app.log",
+    file_log_level: str | int = "INFO",
+    file_format: Literal["plain", "json"] = "plain",
 ):
     """
     Set up the logging configuration for the application.
@@ -46,6 +50,7 @@ def setup_logging(
         console_log_level (str | int): The log level for the console handler.
         log_file (Path | str | None): The path to the log file. If None, no file handler will be created.
         file_log_level (str | int): The log level for the file handler if log_file is not None.
+        file_format (str): The format to use for file logging. Options: "plain", "json".
 
     Returns:
         None
@@ -74,7 +79,7 @@ def setup_logging(
         it is not None and doesn't exist.
     """
     structlog.configure(
-        processors=shared_processors
+        processors=shared_processors  # type: ignore[arg-type]
         + [
             # This is needed to convert the event dict to data that can be processed by the `ProcessorFormatter`
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter
@@ -110,7 +115,7 @@ def setup_logging(
                 "level": file_log_level,
                 "class": "logging.handlers.TimedRotatingFileHandler",
                 "filename": str(log_file),
-                "formatter": "plain",
+                "formatter": file_format,
                 "when": "midnight",
                 "interval": 1,
                 "backupCount": 7,
@@ -157,8 +162,18 @@ def setup_logging(
                     "foreign_pre_chain": foreign_pre_chain,
                     "logger": root_logger,
                 },
+                "json": {
+                    "()": structlog.stdlib.ProcessorFormatter,
+                    "processors": [
+                        structlog.processors.format_exc_info,
+                        structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                        structlog.processors.JSONRenderer(sort_keys=True),
+                    ],
+                    "foreign_pre_chain": foreign_pre_chain,
+                    "logger": root_logger,
+                },
             },
             "handlers": handlers,
-            "root": {"handlers": list(handlers.keys()), "level": "DEBUG", "propagate": True},
+            "root": {"handlers": list(handlers.keys()), "level": "DEBUG"},
         }
     )

@@ -6,7 +6,9 @@
       <sourceFolder url="file://$MODULE_DIR$/my-nextjs/app" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
+      <excludeFolder url="file://$MODULE_DIR$/docker" />
       <excludeFolder url="file://$MODULE_DIR$/logs" />
+      <excludePattern pattern=".venv" />
     </content>
     <orderEntry type="jdk" jdkName="fastflight" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
