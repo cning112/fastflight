@@ -1,6 +1,7 @@
 import multiprocessing
 import signal
 import time
+from functools import wraps
 from typing import Annotated
 
 import typer
@@ -8,7 +9,30 @@ import typer
 cli = typer.Typer(help="FastFlight CLI - Manage FastFlight and FastAPI Servers")
 
 
+def apply_paths(func):
+    import os
+    import sys
+
+    # Add current working directory to sys.path
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    # Add paths from PYTHONPATH environment variable
+    pythonpath = os.environ.get("PYTHONPATH")
+    if pythonpath:
+        for path in pythonpath.split(os.pathsep):
+            if path and path not in sys.path:
+                sys.path.insert(0, path)
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 @cli.command()
+@apply_paths
 def start_fast_flight_server(
     location: Annotated[str, typer.Argument(help="Flight server location")] = "grpc://0.0.0.0:8815",
 ):
@@ -18,6 +42,7 @@ def start_fast_flight_server(
     Args:
         location (str): The gRPC location of the Flight server (default: "grpc://0.0.0.0:8815").
     """
+
     from fastflight.server import FastFlightServer
 
     typer.echo(f"Starting FastFlightServer at {location}")
@@ -25,6 +50,7 @@ def start_fast_flight_server(
 
 
 @cli.command()
+@apply_paths
 def start_fastapi(
     host: Annotated[str, typer.Option(help="Host for FastAPI server")] = "0.0.0.0",
     port: Annotated[int, typer.Option(help="Port for FastAPI server")] = 8000,
@@ -35,9 +61,8 @@ def start_fastapi(
         str, typer.Option(help="Flight server location that FastAPI will connect to")
     ] = "grpc://0.0.0.0:8815",
     module_paths: Annotated[
-        tuple[str, ...],
-        typer.Option(help="Module paths to scan for parameter classes", multiple=True, show_default=True),
-    ] = (),
+        list[str], typer.Option(help="Module paths to scan for parameter classes", show_default=True)
+    ] = ["fastflight.data_services"],
 ):
     """
     Start the FastAPI server.
@@ -47,7 +72,7 @@ def start_fastapi(
         port (int): Port for the FastAPI server (default: 8000).
         fast_flight_route_prefix (str): API route prefix for FastFlight integration (default: "/fastflight").
         flight_location (str): The gRPC location of the Flight server that FastAPI will connect to (default: "grpc://0.0.0.0:8815").
-        module_paths (tuple[str, ...]): Tuple of module paths to scan for parameter classes (default: ("fastflight.data_services",)).
+        module_paths (list[str, ...]): Module paths to scan for parameter classes (default: ("fastflight.data_services",)).
 
     """
     import uvicorn
@@ -60,6 +85,7 @@ def start_fastapi(
 
 
 @cli.command()
+@apply_paths
 def start_all(
     api_host: Annotated[str, typer.Option(help="Host for FastAPI server")] = "0.0.0.0",
     api_port: Annotated[int, typer.Option(help="Port for FastAPI server")] = 8000,
@@ -69,6 +95,9 @@ def start_all(
     flight_location: Annotated[
         str, typer.Option(help="Flight server location that FastAPI will connect to")
     ] = "grpc://0.0.0.0:8815",
+    module_paths: Annotated[
+        list[str], typer.Option(help="Module paths to scan for parameter classes", show_default=True)
+    ] = ["fastflight.data_services"],
 ):
     """
     Start both FastFlight and FastAPI servers.
@@ -78,14 +107,12 @@ def start_all(
         api_port (int): Port for the FastAPI server (default: 8000).
         fast_flight_route_prefix (str): API route prefix for FastFlight integration (default: "/fastflight").
         flight_location (str): The gRPC location of the Flight server (default: "grpc://0.0.0.0:8815").
+        module_paths (list[str]): Module paths to scan for parameter classes (default: ("fastflight.data_services",)).
     """
-    typer.echo(f"Starting FastFlightServer at {flight_location}")
-    typer.echo(f"Starting FastAPI Server at {api_host}:{api_port}")
-
     # Create processes
     flight_process = multiprocessing.Process(target=start_fast_flight_server, args=(flight_location,))
     api_process = multiprocessing.Process(
-        target=start_fastapi, args=(api_host, api_port, fast_flight_route_prefix, flight_location)
+        target=start_fastapi, args=(api_host, api_port, fast_flight_route_prefix, flight_location, module_paths)
     )
 
     flight_process.start()
@@ -95,9 +122,14 @@ def start_all(
         typer.echo("Received termination signal. Shutting down servers...")
         flight_process.terminate()
         api_process.terminate()
-        flight_process.join()
-        api_process.join()
+        flight_process.join(timeout=5)
+        if flight_process.is_alive():
+            flight_process.kill()
+        api_process.join(timeout=5)
+        if api_process.is_alive():
+            api_process.kill()
         typer.echo("Servers shut down cleanly.")
+        exit(0)
 
     # Handle SIGINT (Ctrl+C) and SIGTERM
     signal.signal(signal.SIGINT, shutdown_handler)
