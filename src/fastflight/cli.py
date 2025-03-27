@@ -1,6 +1,7 @@
 import multiprocessing
 import signal
 import time
+from functools import wraps
 from typing import Annotated
 
 import typer
@@ -8,7 +9,30 @@ import typer
 cli = typer.Typer(help="FastFlight CLI - Manage FastFlight and FastAPI Servers")
 
 
+def apply_paths(func):
+    import os
+    import sys
+
+    # Add current working directory to sys.path
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
+    # Add paths from PYTHONPATH environment variable
+    pythonpath = os.environ.get("PYTHONPATH")
+    if pythonpath:
+        for path in pythonpath.split(os.pathsep):
+            if path and path not in sys.path:
+                sys.path.insert(0, path)
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 @cli.command()
+@apply_paths
 def start_fast_flight_server(
     location: Annotated[str, typer.Argument(help="Flight server location")] = "grpc://0.0.0.0:8815",
 ):
@@ -18,7 +42,6 @@ def start_fast_flight_server(
     Args:
         location (str): The gRPC location of the Flight server (default: "grpc://0.0.0.0:8815").
     """
-    apply_paths()
 
     from fastflight.server import FastFlightServer
 
@@ -27,6 +50,7 @@ def start_fast_flight_server(
 
 
 @cli.command()
+@apply_paths
 def start_fastapi(
     host: Annotated[str, typer.Option(help="Host for FastAPI server")] = "0.0.0.0",
     port: Annotated[int, typer.Option(help="Port for FastAPI server")] = 8000,
@@ -51,8 +75,6 @@ def start_fastapi(
         module_paths (list[str, ...]): Module paths to scan for parameter classes (default: ("fastflight.data_services",)).
 
     """
-    apply_paths()
-
     import uvicorn
 
     from fastflight.fastapi import create_app
@@ -63,6 +85,7 @@ def start_fastapi(
 
 
 @cli.command()
+@apply_paths
 def start_all(
     api_host: Annotated[str, typer.Option(help="Host for FastAPI server")] = "0.0.0.0",
     api_port: Annotated[int, typer.Option(help="Port for FastAPI server")] = 8000,
@@ -86,8 +109,6 @@ def start_all(
         flight_location (str): The gRPC location of the Flight server (default: "grpc://0.0.0.0:8815").
         module_paths (list[str]): Module paths to scan for parameter classes (default: ("fastflight.data_services",)).
     """
-    apply_paths()
-
     # Create processes
     flight_process = multiprocessing.Process(target=start_fast_flight_server, args=(flight_location,))
     api_process = multiprocessing.Process(
@@ -119,22 +140,6 @@ def start_all(
             time.sleep(1)  # Keep main process running
     except KeyboardInterrupt:
         shutdown_handler(signal.SIGINT, None)
-
-
-def apply_paths():
-    import os
-    import sys
-
-    # Add current working directory to sys.path
-    cwd = os.getcwd()
-    if cwd not in sys.path:
-        sys.path.insert(0, cwd)
-    # Add paths from PYTHONPATH environment variable
-    pythonpath = os.environ.get("PYTHONPATH")
-    if pythonpath:
-        for path in pythonpath.split(os.pathsep):
-            if path and path not in sys.path:
-                sys.path.insert(0, path)
 
 
 if __name__ == "__main__":
