@@ -19,8 +19,10 @@ class AsyncToSyncConverter:
     A utility class to convert asynchronous iterables into synchronous ones.
     It manages an asyncio event loop and allows synchronous code to consume async iterables.
 
-    This class can either use a provided event loop or create its own in a separate thread.
-    It provides methods to submit coroutines and convert async iterators to sync iterators.
+    ⚠️ This class is not a task scheduler or async runtime:
+        - It is designed to bridge async and sync code.
+        - Do NOT use it to run heavy, long-running, or blocking async tasks.
+        - All coroutines submitted via this class will run on a single-threaded event loop and may block each other.
 
     Example usage:
         async def async_gen():
@@ -82,7 +84,16 @@ class AsyncToSyncConverter:
 
     def run_coroutine(self, coro: Awaitable[T]) -> T:
         """
-        Submits a coroutine to the event loop and waits for the result synchronously.
+        Submits a coroutine to the internal event loop and blocks until the result is available.
+
+        ⚠️ Warning:
+            This method blocks the calling thread until the coroutine completes.
+            If the coroutine is I/O or CPU intensive, it may block the main thread and impact performance.
+
+        Best Practice:
+            - Only use this for lightweight, non-blocking coroutines.
+            - Prefer async code paths where possible.
+            - Use `run_coroutine_background()` if you need a non-blocking future.
 
         Args:
             coro (Awaitable[T]): The coroutine to run.

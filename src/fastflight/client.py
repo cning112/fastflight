@@ -15,6 +15,8 @@ from fastflight.utils.stream_utils import AsyncToSyncConverter, write_arrow_data
 
 logger = logging.getLogger(__name__)
 
+GLOBAL_CONVERTER = AsyncToSyncConverter()
+
 
 class FlightClientPool:
     """
@@ -23,20 +25,25 @@ class FlightClientPool:
     Attributes:
         flight_server_location (str): The URI of the Flight server.
         queue (asyncio.Queue): A queue to manage the FlightClient instances.
+        _converter (AsyncToSyncConverter): An optional converter to convert async to synchronous
     """
 
-    def __init__(self, flight_server_location: str, size: int = 5) -> None:
+    def __init__(
+        self, flight_server_location: str, size: int = 5, converter: Optional[AsyncToSyncConverter] = None
+    ) -> None:
         """
         Initializes the FlightClientPool with a specified number of FlightClient instances.
 
         Args:
             flight_server_location (str): The URI of the Flight server.
             size (int): The number of FlightClient instances to maintain in the pool.
+            converter (Optional[AsyncToSyncConverter]): An optional converter to convert async to synchronous
         """
         self.flight_server_location = flight_server_location
         self.queue: asyncio.Queue[flight.FlightClient] = asyncio.Queue(maxsize=size)
         for _ in range(size):
             self.queue.put_nowait(flight.FlightClient(flight_server_location))
+        self._converter = converter or GLOBAL_CONVERTER
         logger.info(f"Created FlightClientPool with {size} clients at {flight_server_location}")
 
     @asynccontextmanager
@@ -54,7 +61,7 @@ class FlightClientPool:
     @contextlib.contextmanager
     def acquire(self, timeout: Optional[float] = None) -> Generator[flight.FlightClient, Any, None]:
         try:
-            client = asyncio.run(asyncio.wait_for(self.queue.get(), timeout=timeout))
+            client = self._converter.run_coroutine(asyncio.wait_for(self.queue.get(), timeout=timeout))
         except asyncio.TimeoutError:
             raise RuntimeError("Timeout waiting for FlightClient from pool")
 
@@ -101,6 +108,7 @@ class FastFlightClient:
         flight_server_location: str,
         registered_data_types: Dict[str, Type[BaseParams]] | None = None,
         client_pool_size: int = 5,
+        converter: Optional[AsyncToSyncConverter] = None,
     ):
         """
         Initializes the FlightClient.
@@ -109,16 +117,17 @@ class FastFlightClient:
             flight_server_location (str): The URI of the Flight server.
             registered_data_types (Dict[str, Type[BaseParams]] | None): A dictionary of registered data types.
             client_pool_size (int): The number of FlightClient instances to maintain in the pool.
+            converter (Optional[AsyncToSyncConverter]): An optional converter to convert async to synchronous
         """
-        self._client_pool = FlightClientPool(flight_server_location, client_pool_size)
-        self._converter = AsyncToSyncConverter()
+        self._converter = converter or GLOBAL_CONVERTER
+        self._client_pool = FlightClientPool(flight_server_location, client_pool_size, converter=self._converter)
         self._registered_data_types = dict(registered_data_types or {})
 
     def get_data_types(self) -> Dict[str, Type[BaseParams]]:
         return dict(self._registered_data_types)
 
     async def aget_stream_reader_with_callback(
-        self, ticket: TicketData, callback: Callable[[flight.FlightStreamReader], R]
+        self, ticket: TicketData, callback: Callable[[flight.FlightStreamReader], R], *, run_in_thread: bool = True
     ) -> R:
         """
         Retrieves a `FlightStreamReader` from the Flight server asynchronously and processes it with a callback.
@@ -131,6 +140,7 @@ class FastFlightClient:
         Args:
             ticket (BaseParams): The params used to request data.
             callback (Callable[[flight.FlightStreamReader], R]): A function to process the stream.
+            run_in_thread (bool): Whether to run the synchronous callback in a separate thread. Default is True, can be set to False for faster execution especially the callback is lightweight and non-blocking.
 
         Returns:
             R: The result of the callback function applied to the FlightStreamReader.
@@ -145,8 +155,10 @@ class FastFlightClient:
                 reader = client.do_get(flight_ticket)
                 if inspect.iscoroutinefunction(callback):
                     return await callback(reader)
-                else:
+                elif run_in_thread:
                     return await asyncio.to_thread(lambda: callback(reader))
+                else:
+                    return callback(reader)
 
         except Exception as e:
             logger.error(f"Error fetching data: {e}", exc_info=True)
@@ -162,7 +174,7 @@ class FastFlightClient:
         Returns:
             flight.FlightStreamReader: A reader to stream data from the Flight server.
         """
-        return await self.aget_stream_reader_with_callback(ticket, callback=lambda x: x)
+        return await self.aget_stream_reader_with_callback(ticket, callback=lambda x: x, run_in_thread=False)
 
     async def aget_pa_table(self, ticket: TicketData) -> pa.Table:
         """
@@ -258,7 +270,7 @@ class FastFlightClient:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        asyncio.run(self.close_async())
+        self._converter.run_coroutine(self.close_async())
 
     async def __aenter__(self):
         return self
