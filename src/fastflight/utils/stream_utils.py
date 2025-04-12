@@ -308,7 +308,7 @@ class IterableBytesIO(io.RawIOBase):
 
     def read(self, size=-1) -> bytes:
         if size == -1:
-            return b"".join(self.iterable)
+            return self.buffer + b"".join(self.iterable)
 
         while len(self.buffer) < size:
             try:
