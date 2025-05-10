@@ -1,83 +1,190 @@
 import json
 import logging
-from abc import ABC, abstractmethod
-from typing import Any, AsyncIterable, Generic, Iterable, Type, TypeVar
+from abc import ABC
+from functools import partial
+from typing import AsyncIterable, ClassVar, Generic, Iterable, Self, TypeVar
 
 import pyarrow as pa
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T", bound="BaseParams")
+ParamsCls = type["BaseParams"]
+
 
 class BaseParams(BaseModel, ABC):
-    """A base class for query parameters used in data services.
-
-    This class defines serialization and deserialization methods for handling
-    parameters passed between clients and the FastFlight server.
+    """
+    A base class for query params, implementing common serialization methods
+    and managing the registry for different params types.
     """
 
-    @staticmethod
-    @abstractmethod
-    def default_service_class() -> Type["BaseDataService"]:
-        """Return the default BaseDataService class associated with this parameter type."""
-        pass
+    registry: ClassVar[dict[str, ParamsCls]] = {}
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "BaseParams":
-        """Deserializes a `BaseParams` instance from a bytes object.
+    def fqn(cls) -> str:
+        return f"{cls.__module__}.{cls.__qualname__}"
 
-        It looks up the class using `data_type`, which represents the primary identifier.
+    @classmethod
+    def register(cls, klass: ParamsCls) -> ParamsCls:
+        """
+        This registers a DataParams subclass using its fully qualified name ("<module>.<qualname>").
+        It also sets the 'fqn' attribute of the subclass to the same fully qualified name.
 
         Args:
-            data (bytes): The byte representation of a `BaseParams` object.
+            klass (ParamsCls): The DataParams subclass to register.
 
         Returns:
-            BaseParams: The deserialized instance.
+            ParamsCls: The registered DataParams subclass.
 
         Raises:
-            ValueError: If the parameter class is not found using either `data_type` or `alias`.
-            JSONDecodeError, KeyError, TypeError: If deserialization fails.
+            ValueError: If a DataParams subclass with the same fully qualified name is already registered.
+        """
+        if (fqn := klass.fqn()) in cls.registry:
+            raise ValueError(f"Params type {fqn} is already registered by {cls.registry[fqn]}.")
+        cls.registry[fqn] = klass
+        logger.info(f"Registered params type {fqn} for class {klass}")
+        return klass
+
+    @classmethod
+    def lookup(cls, fqn: str) -> ParamsCls:
+        """
+        Get the params class associated with the given params type.
+
+        Args:
+            fqn: The type of the params to retrieve.
+
+        Returns:
+            type[BaseParams]: The params class associated with the params type.
+
+        Raises:
+            ValueError: If the params type is not registered.
+        """
+        params_cls = cls.registry.get(fqn)
+        if params_cls is None:
+            logger.error(f"Params type {fqn} is not registered.")
+            raise ValueError(f"Params type {fqn} is not registered.")
+        return params_cls
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> Self:
+        """
+        Deserialize a params from bytes which includes the fully qualified name.
+
+        Args:
+            data (bytes): The byte data to deserialize.
+
+        Returns:
+            BaseParams: The deserialized params object.
         """
         try:
             json_data = json.loads(data)
-
-            # Extract the class name to determine the correct subclass
-            params_class_name = json_data.pop("_params_class", None)
-            if not params_class_name:
-                raise ValueError("Missing `_params_class` in ticket, cannot determine correct parameter class.")
-
-            # If called on BaseParams, dynamically resolve the subclass
-            if cls is BaseParams:
-                for subclass in cls.__subclasses__():
-                    sub_fqn = f"{subclass.__module__}.{subclass.__name__}"
-                    if sub_fqn == params_class_name:
-                        return subclass.model_validate(json_data)
-                raise ValueError(f"Unknown parameter class: {params_class_name}")
-            else:
-                return cls.model_validate(json_data)
-        except (json.JSONDecodeError, ValueError, TypeError) as e:
-            logger.error(f"Error deserializing parameters: {e}")
+            fqn = json_data.pop("fqn")
+            params_cls = cls.lookup(fqn)
+            return params_cls.model_validate(json_data)
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.error(f"Error deserializing params: {e}")
             raise
 
-    def to_json(self) -> dict[str, Any]:
-        return self.model_dump(mode="json")
+    def to_json(self) -> dict:
+        """
+        Serialize the params to json, including the fully qualified name.
+
+        Returns:
+            dict: The json representation of the params.
+        """
+        try:
+            json_data = self.model_dump()
+            json_data["fqn"] = self.__class__.fqn()
+            return json_data
+        except (TypeError, ValueError) as e:
+            logger.error(f"Error serializing params: {e}")
+            raise
+
+    def to_bytes(self) -> bytes:
+        return json.dumps(self.to_json()).encode()
 
 
-T = TypeVar("T", bound="BaseParams")
+DataServiceCls = type["BaseDataService"]
 
 
 class BaseDataService(Generic[T], ABC):
-    """A base class for data services, managing registration and data retrieval."""
+    """
+    A base class for data sources, specifying the ticket type it handles,
+    providing methods to fetch data and batches of data, and managing the
+    registry for different data source types.
+    """
+
+    registry: ClassVar[dict[str, DataServiceCls]] = {}
+
+    @classmethod
+    def register(cls, params_cls: ParamsCls, klass: DataServiceCls | None = None):
+        """
+        Register the given data params class and the data service class. Can be used as a decorator.
+
+        This first registers the given DataParams type.
+        It then a DataService subclass, registering the subclass in the global registry
+        under two keys:
+          - The fully qualified name of the DataParams type.
+          - The fully qualified name of the DataService subclass.
+        This dual-key registration enforces a one-to-one binding between a DataParams subclass and its
+        corresponding DataService subclass.
+
+        Args:
+            params_cls (type[ParamsCls]): The DataParams subclass that the DataService handles.
+            klass (type[DataService], optional): The DataService subclass to register.
+
+        Raises:
+            ValueError: If a DataService for the given DataParams type is already registered either under the
+                        DataParams key or the DataService subclass's own fully qualified name.
+        """
+        if klass is None:
+            return partial(cls.register, params_cls)
+
+        # Register the DataParams class and add the `fqn` attribute to it
+        BaseParams.register(params_cls)
+
+        # Register the DataService subclass
+        param_cls_fqn = params_cls.fqn()
+        if ex := cls.registry.get(param_cls_fqn):
+            raise ValueError(f"{param_cls_fqn} is already registered with {ex.__module__}.{ex.__qualname__}.")
+        cls.registry[param_cls_fqn] = klass
+        logger.info(
+            f"Registered data service class {klass.__module__}.{klass.__qualname__} for params type {param_cls_fqn}"
+        )
+        return klass
+
+    @classmethod
+    def lookup(cls, params_cls_fqn: str) -> DataServiceCls:
+        """
+        Get the data service class associated with the given data source type.
+
+        Args:
+            params_cls_fqn: The fqn of the data params class
+
+        Returns:
+            type[BaseDataService]: The data source class associated with the data source type.
+
+        Raises:
+            ValueError: If the data source type is not registered.
+        """
+        data_service_cls = cls.registry.get(params_cls_fqn)
+        if data_service_cls is None:
+            logger.error(f"Data source type {params_cls_fqn} is not registered.")
+            raise ValueError(f"Data source type {params_cls_fqn} is not registered.")
+        return data_service_cls
 
     async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
-        """Fetches data asynchronously in batches.
+        """
+        Fetch data in batches based on the given parameters.
 
         Args:
             params (T): The parameters for fetching data.
-            batch_size (int | None): The maximum size of each batch.
+            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
 
         Yields:
-            pa.RecordBatch: A generator of RecordBatch instances.
+            pa.RecordBatch: An async iterable of RecordBatches.
+
         """
         raise NotImplementedError
 
@@ -86,7 +193,7 @@ class BaseDataService(Generic[T], ABC):
 
         Args:
             params (T): The parameters for fetching data.
-            batch_size (int | None): The maximum size of each batch.
+            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
 
         Yields:
             pa.RecordBatch: A generator of RecordBatch instances.
