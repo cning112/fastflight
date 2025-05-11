@@ -1,8 +1,9 @@
 import asyncio
+import collections
 import io
 import logging
 import threading
-from typing import Any, AsyncIterable, Awaitable, Iterable, Iterator, Optional, TypeVar, Union
+from typing import Any, AsyncIterable, Awaitable, Iterable, Iterator, TypeVar
 
 import pandas as pd
 import pyarrow as pa
@@ -19,8 +20,10 @@ class AsyncToSyncConverter:
     A utility class to convert asynchronous iterables into synchronous ones.
     It manages an asyncio event loop and allows synchronous code to consume async iterables.
 
-    This class can either use a provided event loop or create its own in a separate thread.
-    It provides methods to submit coroutines and convert async iterators to sync iterators.
+    ⚠️ This class is not a task scheduler or async runtime:
+        - It is designed to bridge async and sync code.
+        - Do NOT use it to run heavy, long-running, or blocking async tasks.
+        - All coroutines submitted via this class will run on a single-threaded event loop and may block each other.
 
     Example usage:
         async def async_gen():
@@ -40,25 +43,15 @@ class AsyncToSyncConverter:
             - The `asyncio.Queue`, `async for`, and `await` used in this code are well supported and stable from Python 3.7 onwards.
     """
 
-    def __init__(self, loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
+    def __init__(self) -> None:
         """
         Initializes the AsyncToSyncConverter.
-
-        Args:
-            loop (Optional[asyncio.AbstractEventLoop]): An existing event loop.
-                If not provided, a new loop will be created and run in a separate thread.
         """
-        if loop:
-            self.loop: asyncio.AbstractEventLoop = loop
-            # If an existing event loop is passed, we do not need a separate thread.
-            self.loop_thread: Optional[threading.Thread] = None
-            logger.info("Using the provided event loop.")
-        else:
-            # Create a new event loop and run it in a separate thread.
-            self.loop = asyncio.new_event_loop()
-            self.loop_thread = threading.Thread(target=self._start_loop, daemon=True)
-            self.loop_thread.start()
-            logger.info("Created a new event loop and started a new thread.")
+        # Create a new event loop and run it in a separate thread.
+        self.loop = asyncio.new_event_loop()
+        self.loop_thread = threading.Thread(target=self._start_loop, daemon=True)
+        self.loop_thread.start()
+        logger.info("Created a new event loop and started a new thread.")
 
     def _start_loop(self) -> None:
         """
@@ -82,7 +75,16 @@ class AsyncToSyncConverter:
 
     def run_coroutine(self, coro: Awaitable[T]) -> T:
         """
-        Submits a coroutine to the event loop and waits for the result synchronously.
+        Submits a coroutine to the internal event loop and blocks until the result is available.
+
+        ⚠️ Warning:
+            This method blocks the calling thread until the coroutine completes.
+            If the coroutine is I/O or CPU intensive, it may block the main thread and impact performance.
+
+        Best Practice:
+            - Only use this for lightweight, non-blocking coroutines.
+            - Prefer async code paths where possible.
+            - Use `run_coroutine_background()` if you need a non-blocking future.
 
         Args:
             coro (Awaitable[T]): The coroutine to run.
@@ -95,7 +97,7 @@ class AsyncToSyncConverter:
         return result
 
     async def _iterate(
-        self, queue: asyncio.Queue, ait: Union[AsyncIterable[T], Awaitable[AsyncIterable[T]]], sentinel: Any
+        self, queue: asyncio.Queue, ait: AsyncIterable[T] | Awaitable[AsyncIterable[T]], sentinel: Any
     ) -> None:
         """
         Internal function to iterate over the async iterable and place results into the queue.
@@ -114,13 +116,13 @@ class AsyncToSyncConverter:
             logger.debug("Queueing sentinel to indicate end of iteration.")
             await queue.put(sentinel)  # Put sentinel to signal the end of the iteration.
 
-    def syncify_async_iter(self, ait: Union[AsyncIterable[T], Awaitable[AsyncIterable[T]]]) -> Iterator[T]:
+    def syncify_async_iter(self, ait: AsyncIterable[T] | Awaitable[AsyncIterable[T]]) -> Iterator[T]:
         """
         Converts an asynchronous iterable into a synchronous iterator.
         Note that this method doesn't load the entire async iterable into memory and then iterates over it.
 
         Args:
-            ait (Union[AsyncIterable[T], Awaitable[AsyncIterable[T]]]): The async iterable or awaitable returning an async iterable.
+            ait (AsyncIterable[T] | Awaitable[AsyncIterable[T]]): The async iterable or awaitable returning an async iterable.
 
         Returns:
             Iterator[T]: A synchronous iterator that can be used in a for loop.
@@ -156,9 +158,7 @@ class AsyncToSyncConverter:
         logger.info("Entering context manager for AsyncToSyncConverter.")
         return self
 
-    def __exit__(
-        self, exc_type: Optional[type], exc_value: Optional[BaseException], traceback: Optional[object]
-    ) -> None:
+    def __exit__(self, exc_type: type | None, exc_value: BaseException | None, traceback: object | None) -> None:
         """
         Context manager exit point. Closes the event loop if necessary and joins the thread.
         """
@@ -214,7 +214,7 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
     :return: An AsyncGenerator that yields bytes in Arrow IPC format.
     """
     # Create an async queue to hold produced byte chunks.
-    queue: asyncio.Queue[Optional[bytes]] = asyncio.Queue(maxsize=buffer_size)
+    queue: asyncio.Queue[bytes | Exception | None] = asyncio.Queue(maxsize=buffer_size)
     # Sentinel object to signal the end of the stream.
     end_of_stream = object()
 
@@ -248,7 +248,7 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
                     break
 
                 if chunk.data is None:
-                    # TODO: when can this happen?
+                    logger.warning("Chunk data is None. Ignored and continue")
                     continue
 
                 # Convert the chunk's data into Arrow IPC format.
@@ -274,9 +274,9 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
         Iteration stops when the end-of-stream sentinel is encountered, or an exception is raised.
         """
         while True:
-            data: Optional[bytes] = await queue.get()
+            data: bytes | Exception | None = await queue.get()
             if data is None:
-                # TODO: can this happen?
+                logger.warning("Received None from queue. Ignored and continue")
                 continue
             if data is end_of_stream:
                 break
@@ -291,25 +291,93 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
 
 
 class IterableBytesIO(io.RawIOBase):
+    """
+    File-like object wrapping a synchronous iterable of bytes.
+
+    This version uses collections.deque for internal buffering, which can be
+    more efficient than bytes concatenation when dealing with many small chunks,
+    especially during reads that don't consume the entire buffer.
+    """
+
     def __init__(self, iterable: Iterable[bytes]):
+        """
+        Initializes IterableBytesIO.
+
+        Args:
+            iterable: A synchronous iterable yielding bytes chunks.
+        """
         self.iterable = iter(iterable)
-        self.buffer = b""
-
-    def read(self, size=-1) -> bytes:
-        if size == -1:
-            return b"".join(self.iterable)
-
-        while len(self.buffer) < size:
-            try:
-                self.buffer += next(self.iterable)
-            except StopIteration:
-                break
-
-        result, self.buffer = self.buffer[:size], self.buffer[size:]
-        return result
+        # Use a deque to store byte chunks efficiently
+        self.buffer: collections.deque[bytes] = collections.deque()
+        # Keep track of the total bytes currently stored in the deque
+        self.buffer_size = 0
 
     def readable(self) -> bool:
+        """Returns True, indicating the stream is readable."""
         return True
+
+    def read(self, size: int = -1) -> bytes:
+        """
+        Read up to size bytes from the stream.
+
+        If size is negative or omitted, read all data until EOF.
+
+        Args:
+            size: The maximum number of bytes to read. -1 reads all remaining.
+
+        Returns:
+            Bytes read from the stream. Returns b'' if EOF is reached.
+        """
+        # If size is -1, read everything remaining
+        if size == -1:
+            # Combine remaining buffer with the rest of the iterable
+            all_chunks = list(self.buffer)
+            all_chunks.extend(list(self.iterable))  # Consume the rest of the iterator
+            self.buffer.clear()
+            self.buffer_size = 0
+            return b"".join(all_chunks)
+
+        # Read specific size
+        if size == 0:
+            return b""
+
+        # Fill the buffer deque until we have enough bytes or the iterable is exhausted
+        while self.buffer_size < size:
+            try:
+                chunk = next(self.iterable)
+                if not chunk:  # Skip empty chunks
+                    continue
+                self.buffer.append(chunk)
+                self.buffer_size += len(chunk)
+            except StopIteration:
+                # Iterable is exhausted
+                break
+
+        # Prepare the result list
+        result_chunks = []
+        bytes_collected = 0
+
+        # Collect bytes from the buffer deque
+        while self.buffer and bytes_collected < size:
+            # Calculate how many bytes to take from the front chunk
+            chunk = self.buffer[0]  # Peek at the first chunk
+            take = min(len(chunk), size - bytes_collected)
+
+            # If taking the whole chunk or less
+            if take == len(chunk):
+                result_chunks.append(self.buffer.popleft())  # Take the whole chunk
+            else:
+                # Take only a part of the chunk
+                result_chunks.append(chunk[:take])
+                # Update the chunk in the buffer with the remaining part
+                self.buffer[0] = chunk[take:]
+
+            # Update counts
+            bytes_collected += take
+            self.buffer_size -= take  # Decrease buffer size tracker
+
+        # Join the collected chunks into a single bytes object
+        return b"".join(result_chunks)
 
 
 def read_table_from_arrow_stream(stream: Iterable[bytes]) -> pa.Table:
