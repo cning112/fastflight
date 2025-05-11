@@ -1,4 +1,4 @@
-# **FastFlight 技术文档**
+<file name=1 path=TECHNICAL_DETAILS_chn.md># **FastFlight 技术文档**
 
 ## **📌 概述**
 
@@ -54,14 +54,14 @@ FastFlight 采用 **结构化 Ticket 机制**，避免原生 Arrow Flight 仅支
 
 ```json
 {
-  "kind": "custom.module.data_source",
-  "dataset": "financial_dataset",
-  "start_time": "2024-01-01T00:00:00Z",
-  "end_time": "2024-01-31T00:00:00Z"
+  "param_type": "duckdb.query",
+  "query": "SELECT * FROM flights WHERE year = 2023",
+  "limit": 1000,
+  "timeout": 30
 }
 ```
 
-2️⃣ **Flight Server 解析 `kind`，匹配合适的 `DataService` 处理请求**
+2️⃣ **Flight Server 解析 `param_type`，匹配合适的 `DataService` 处理请求**
 
 3️⃣ **Flight Server 通过 JDBC/ODBC 查询数据库，并转换数据为 Apache Arrow 格式**
 
@@ -70,7 +70,7 @@ FastFlight 采用 **结构化 Ticket 机制**，避免原生 Arrow Flight 仅支
 5️⃣ **客户端使用 `async for` 方式消费数据**
 
 ```python
-async for batch in fast_flight_client.aget_stream_reader(ticket=DataParams(...)):
+async for batch in fast_flight_client.aget_stream_reader(ticket=DuckDBParams(...)):
     print(batch.to_pandas())
 ```
 
@@ -139,3 +139,4 @@ server.register_service(CustomService(), "custom_dataset")
 - **适用于金融、数据分析、日志处理等高并发数据场景**。
 
 🚀 **立即开始使用 FastFlight，优化你的数据传输效率！**
+</file>

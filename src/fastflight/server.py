@@ -1,6 +1,4 @@
-import importlib
 import itertools
-import json
 import logging
 import multiprocessing
 import sys
@@ -9,7 +7,7 @@ from typing import cast
 import pyarrow as pa
 from pyarrow import RecordBatchReader, flight
 
-from fastflight.data_services import BaseDataService, BaseParams
+from fastflight.core.base import BaseDataService, BaseParams
 from fastflight.utils.debug import debuggable
 from fastflight.utils.stream_utils import AsyncToSyncConverter
 
@@ -54,8 +52,8 @@ class FastFlightServer(flight.FlightServerBase):
         """
         try:
             logger.debug("Received ticket: %s", ticket.ticket)
-            params, data_service = self._resolve_ticket(ticket)
-            reader = self._get_batch_reader(data_service, params)
+            data_params, data_service = self._resolve_ticket(ticket)
+            reader = self._get_batch_reader(data_service, data_params)
             return flight.RecordBatchStream(reader)
         except Exception as e:
             logger.error(f"Error processing request: {e}", exc_info=True)
@@ -87,17 +85,15 @@ class FastFlightServer(flight.FlightServerBase):
         except AttributeError as e:
             raise flight.FlightInternalError(f"Service method issue: {e}")
         except Exception as e:
-            logger.error(f"Error retrieving data from {data_service.__class__.__name__}: {e}", exc_info=True)
+            logger.error(f"Error retrieving data from {data_service.fqn()}: {e}", exc_info=True)
             raise flight.FlightInternalError(f"Error in data retrieval: {type(e).__name__}: {str(e)}")
 
-    def _resolve_ticket(self, ticket: flight.Ticket) -> tuple[BaseParams, BaseDataService]:
+    @staticmethod
+    def _resolve_ticket(ticket: flight.Ticket) -> tuple[BaseParams, BaseDataService]:
         try:
-            data = json.loads(ticket.ticket)
-            params_cls = cast(BaseParams, self._import_cls(data.pop("_params_cls")))
-            params = params_cls.model_validate(data)
-
-            service_cls = self._import_cls(data.pop("_service_cls"))
-            return params, cast(BaseDataService, service_cls())
+            req_params = BaseParams.from_bytes(ticket.ticket)
+            service_cls = BaseDataService.lookup(req_params.fqn())
+            return req_params, cast(BaseDataService, service_cls())
         except KeyError as e:
             raise flight.FlightInternalError(f"Missing required field in ticket: {e}")
         except ValueError as e:
@@ -105,11 +101,6 @@ class FastFlightServer(flight.FlightServerBase):
         except Exception as e:
             logger.error(f"Error processing ticket: {e}", exc_info=True)
             raise flight.FlightInternalError(f"Ticket processing error: {type(e).__name__}: {str(e)}")
-
-    @staticmethod
-    def _import_cls(cls_name: str):
-        mod, name = cls_name.rsplit(".", 1)
-        return getattr(importlib.import_module(mod), name)
 
     def shutdown(self):
         """

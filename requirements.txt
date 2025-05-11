@@ -2,42 +2,28 @@
 #    uv pip compile pyproject.toml -o requirements.txt
 annotated-types==0.7.0
     # via pydantic
-click==8.1.8
-    # via typer
-markdown-it-py==3.0.0
-    # via rich
-mdurl==0.1.2
-    # via markdown-it-py
-numpy==2.1.1
-    # via
-    #   pandas
-    #   pyarrow
+numpy==2.2.5
+    # via pandas
 pandas==2.2.3
     # via fastflight (pyproject.toml)
-pyarrow==17.0.0
+pyarrow==20.0.0
     # via fastflight (pyproject.toml)
-pydantic==2.9.2
+pydantic==2.11.4
     # via fastflight (pyproject.toml)
-pydantic-core==2.23.4
+pydantic-core==2.33.2
     # via pydantic
-pygments==2.19.1
-    # via rich
 python-dateutil==2.9.0.post0
     # via pandas
-pytz==2024.2
+pytz==2025.2
     # via pandas
-rich==13.9.4
-    # via typer
-shellingham==1.5.4
-    # via typer
-six==1.16.0
+six==1.17.0
     # via python-dateutil
-typer==0.15.2
-    # via fastflight (pyproject.toml)
-typing-extensions==4.12.2
+typing-extensions==4.13.2
     # via
     #   pydantic
     #   pydantic-core
-    #   typer
-tzdata==2024.2
+    #   typing-inspection
+typing-inspection==0.4.0
+    # via pydantic
+tzdata==2025.2
     # via pandas

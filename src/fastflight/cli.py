@@ -18,9 +18,9 @@ def apply_paths(func):
     if cwd not in sys.path:
         sys.path.insert(0, cwd)
     # Add paths from PYTHONPATH environment variable
-    pythonpath = os.environ.get("PYTHONPATH")
-    if pythonpath:
-        for path in pythonpath.split(os.pathsep):
+    py_path = os.environ.get("PYTHONPATH")
+    if py_path:
+        for path in py_path.split(os.pathsep):
             if path and path not in sys.path:
                 sys.path.insert(0, path)
 
@@ -62,7 +62,7 @@ def start_fastapi(
     ] = "grpc://0.0.0.0:8815",
     module_paths: Annotated[
         list[str], typer.Option(help="Module paths to scan for parameter classes", show_default=True)
-    ] = ["fastflight.data_services"],
+    ] = ("fastflight.demo_services",),  # type: ignore
 ):
     """
     Start the FastAPI server.
@@ -72,7 +72,7 @@ def start_fastapi(
         port (int): Port for the FastAPI server (default: 8000).
         fast_flight_route_prefix (str): API route prefix for FastFlight integration (default: "/fastflight").
         flight_location (str): The gRPC location of the Flight server that FastAPI will connect to (default: "grpc://0.0.0.0:8815").
-        module_paths (list[str, ...]): Module paths to scan for parameter classes (default: ("fastflight.data_services",)).
+        module_paths (list[str, ...]): Module paths to scan for parameter classes (default: ("fastflight.demo_services",)).
 
     """
     import uvicorn
@@ -97,7 +97,7 @@ def start_all(
     ] = "grpc://0.0.0.0:8815",
     module_paths: Annotated[
         list[str], typer.Option(help="Module paths to scan for parameter classes", show_default=True)
-    ] = ["fastflight.data_services"],
+    ] = ("fastflight.demo_services",),  # type: ignore
 ):
     """
     Start both FastFlight and FastAPI servers.
@@ -107,7 +107,7 @@ def start_all(
         api_port (int): Port for the FastAPI server (default: 8000).
         fast_flight_route_prefix (str): API route prefix for FastFlight integration (default: "/fastflight").
         flight_location (str): The gRPC location of the Flight server (default: "grpc://0.0.0.0:8815").
-        module_paths (list[str]): Module paths to scan for parameter classes (default: ("fastflight.data_services",)).
+        module_paths (list[str]): Module paths to scan for parameter classes (default: ("fastflight.demo_services",)).
     """
     # Create processes
     flight_process = multiprocessing.Process(target=start_fast_flight_server, args=(flight_location,))

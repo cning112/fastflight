@@ -18,7 +18,8 @@ design principles.
 FastFlight consists of the following core components:
 
 1. **Flight Server**: Built on Apache Arrow Flight, providing high-throughput, low-latency data transfer services.
-2. **Ticket Mechanism**: Uses parameterized Ticket (`kind` mechanism) to support structured data requests and improve
+2. **Ticket Mechanism**: Uses parameterized Ticket (`param_type` mechanism) to support structured data requests and
+   improve
    readability.
 3. **Asynchronous Streaming**: Based on Python `asyncio`, enabling efficient `async for` data stream consumption.
 4. **FastAPI Adapter Layer**: Provides REST API compatibility, supporting HTTP client access.
@@ -56,28 +57,29 @@ FastFlight consists of the following core components:
 FastFlight adopts a **structured Ticket mechanism**, avoiding the opacity of native Arrow Flight, which only supports
 byte (`bytes`) transmission. The data flow is as follows:
 
+> **Note:** To enable the parameter-to-service bindings, you must import the modules that register these bindings. This
+> import is required for registration purposes, not for discovering parameter classes.
+
 1️⃣ **Client sends a parameterized Ticket request**
 
 ```python
-ticket = SQLParams(
-    conn_str="sqlite:///example.db",
+ticket = DuckDBParams(
+    database_path="example.duckdb",
     query="select * from financial_data where date >= ? and date <= ?",
     parameters=["2024-01-01T00:00:00Z", "2024-01-31T00:00:00Z"]
 )
 
 ticket.to_json()
 {
-    "conn_str": "sqlite:///example.db",
+    "database_path": "example.duckdb",
     "query": "select * from financial_data where date >= ? and date <= ?",
-    "parameters": [
-        "2024-01-01T00:00:00Z",
-        "2024-01-31T00:00:00Z"
-    ],
-    "kind": "fastflight.data_services.sql_service.SQLParams"
+    "parameters": ["2024-01-01T00:00:00Z", "2024-01-31T00:00:00Z"],
+    "param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams"
 }
 ```
 
-2️⃣ **Flight Server uses the `kind` field to identify the ticket type and match the appropriate data service to process
+2️⃣ **Flight Server uses the `param_type` field to identify the ticket type and match the appropriate data service to
+process
 the request**
 
 3️⃣ **Flight Server use the data service to get data from the data source (e.g., SQL DB) and converts the data into
@@ -126,7 +128,6 @@ class CsvFileParams(BaseParams):
     path: Path = Field(...)
 
 
-@BaseDataService.register(CsvFileParams)
 class CsvFileService(BaseDataService[CsvFileParams]):
     async def aget_batches(self, params: CsvFileParams, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
         def gen():
@@ -152,7 +153,7 @@ class CsvFileService(BaseDataService[CsvFileParams]):
 
 - **FastFlight provides a more efficient data transfer solution compared to REST API / JDBC**, making it suitable for
   large-scale data queries.
-- **The `kind` mechanism optimizes Ticket processing, making requests structured, readable, and extensible**.
+- **The `param_type` mechanism optimizes Ticket processing, making requests structured, readable, and extensible**.
 - **Supports asynchronous streaming data consumption, improving throughput and reducing memory usage**.
 - **Ideal for financial analytics, log processing, and high-concurrency data scenarios**.
 

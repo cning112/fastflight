@@ -4,19 +4,25 @@
 while improving **usability, integration, and developer experience**.
 
 It addresses common **challenges** with native Arrow Flight, such as **opaque request formats, debugging difficulties,
-complex async management, and REST API incompatibility**. **FastFlight makes it easier to adopt Arrow Flight in existing
+complex async management, and REST API incompatibility**. **FastFlight** makes it easier to adopt Arrow Flight in
+existing
 systems.
 
 ## **✨ Key Advantages**
 
-✅ **Parameterized Ticket System** – Structured, type-safe API for better readability and debugging.  
-✅ **Dynamic Data Service Registration** – Automatically discover and register custom parameter classes and their
-associated data services using a built-in discovery mechanism.  
-✅ **Enhanced Async & Streaming Support** – Simplified stream handling with `async for` capabilities.  
-✅ **Seamless REST API Integration** – Enables **FastAPI** to bridge REST clients with Arrow Flight.  
-✅ **Modular & Extensible** – Custom data sources and easy integration into existing pipelines.  
-✅ **Pandas & PyArrow Compatible** – Optimized data retrieval for analytics and ML workflows.  
-✅ **Built-in CLI** – Start servers and execute queries effortlessly via command line.
+✅ **Typed Param Classes** – All data requests are defined via structured, type-safe parameter classes. Easy to debug and
+validate.  
+✅ **Service Binding via `param_type`** – Clean and explicit mapping from param class → data service. Enables dynamic
+routing and REST support.  
+✅ **Async & Streaming Ready** – `async for` support with non-blocking batch readers. Ideal for high-throughput
+systems.  
+✅ **REST + Arrow Flight** – Use FastAPI to expose Arrow Flight services as standard REST endpoints (e.g., `/stream`).  
+✅ **Plug-and-Play Data Sources** – Includes a DuckDB demo example to help you get started quickly—extending to other
+sources (SQL, CSV, etc.) is straightforward.  
+✅ **Built-in Registry & Validation** – Automatic binding discovery and safety checks. Fail early if service is
+missing.  
+✅ **Pandas / PyArrow Friendly** – Streamlined APIs for transforming results into pandas DataFrame or Arrow Table.  
+✅ **CLI-First** – Unified command line to launch, test, and inspect services.
 
 **FastFlight is ideal for high-throughput data systems, real-time querying, log analysis, and financial applications.**
 
@@ -27,7 +33,13 @@ associated data services using a built-in discovery mechanism.
 ### **1️⃣ Install FastFlight**
 
 ```bash
-pip install fastflight
+pip install "fastflight[all]"
+```
+
+or use `uv`
+
+```bash
+uv add "fastflight[all]"
 ```
 
 ---
@@ -60,22 +72,22 @@ fastflight start-fastapi --host 0.0.0.0 --port 8000 --fast-flight-route-prefix /
 - `--port` (optional): FastAPI server port (default: `8000`).
 - `--fast-flight-route-prefix` (optional): API route prefix (default: `/fastflight`).
 - `--flight-location` (optional): Arrow Flight server address (default: `grpc://0.0.0.0:8815`).
-- `--module_paths` (optional): Comma-separated list of module paths to scan for custom parameter classes (default:
-  None).
+- `--module_paths` (optional): Comma-separated list of module paths to scan for custom data parameter and service
+- classes (default: `fastflight.demo_services`).
 
-**Note**: With the latest design update, FastFlight automatically discovers custom parameter classes (extending
-BaseParams)
-and registers the corresponding data services. Simply pass the module paths using the --module_paths option when
-starting the FastAPI server.
+**Note**: When using the `/stream` REST endpoint to stream data, make sure the `param_type` field is embedded in the
+request body. It's critical for the server to route the request to the correct data service. For example, for the
+default demo services, the `param_type` should be `fastflight.demo_services.duckdb_demo.DuckDBParams`.
+
 ---
 
 ### **Start Both FastFlight and FastAPI Servers**
 
 ```bash
-fastflight start-all --api-host 0.0.0.0 --api-port 8000 --fast-flight-route-prefix /fastflight --flight-location grpc://0.0.0.0:8815
+fastflight start-all --api-host 0.0.0.0 --api-port 8000 --fast-flight-route-prefix /fastflight --flight-location grpc://0.0.0.0:8815 --module-paths fastflight.demo_services.duckdb_demo
 ```
 
-This command launches **both FastFlight and FastAPI servers** as separate processes.
+This launches both gRPC and REST servers, allowing you to use REST APIs while streaming data via Arrow Flight.
 
 ---
 

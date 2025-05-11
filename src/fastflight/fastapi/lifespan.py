@@ -1,18 +1,17 @@
 import logging
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import AsyncContextManager, Callable, Type
+from typing import AsyncContextManager, Callable
 
 from fastapi import FastAPI
 
 from fastflight.client import FastFlightClient
-from fastflight.data_services import BaseParams
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def fast_flight_client_lifespan(
-    app: FastAPI, registry: dict[str, Type[BaseParams]], flight_location: str = "grpc://0.0.0.0:8815"
+    app: FastAPI, registered_data_types: dict[str, str], flight_location: str = "grpc://0.0.0.0:8815"
 ):
     """
     An asynchronous context manager that handles the lifespan of a flight client.
@@ -21,11 +20,11 @@ async def fast_flight_client_lifespan(
 
     Parameters:
         app (FastAPI): The FastAPI application instance.
-        registry (dict[str, Type[BaseParams]]): A dictionary of registered parameter classes.
+        registered_data_types (dict[str, str]): A dictionary of registered parameter classes.
         flight_location (str, optional): The location of the flight client. Defaults to "grpc://0.0.0.0:8815".
     """
     logger.info("Starting flight_client_lifespan at %s", flight_location)
-    client = FastFlightClient(flight_location, registry)
+    client = FastFlightClient(flight_location, registered_data_types)
     set_flight_client(app, client)
     try:
         yield
@@ -38,7 +37,7 @@ async def fast_flight_client_lifespan(
 @asynccontextmanager
 async def combine_lifespans(
     app: FastAPI,
-    registry: dict[str, Type[BaseParams]],
+    registered_data_types: dict[str, str],
     flight_location: str = "grpc://0.0.0.0:8815",
     *other: Callable[[FastAPI], AsyncContextManager],
 ):
@@ -48,11 +47,11 @@ async def combine_lifespans(
 
     Parameters:
         app (FastAPI): The FastAPI application instance.
-        registry (dict[str, Type[BaseParams]]): A dictionary of registered parameter classes.
+        registered_data_types (dict[str, Type[BaseParams]]): A dictionary of registered parameter classes.
         flight_location (str, optional): The location of the flight client. Defaults to "grpc://0.0.0.0:8815".
     """
     async with AsyncExitStack() as stack:
-        await stack.enter_async_context(fast_flight_client_lifespan(app, registry, flight_location))
+        await stack.enter_async_context(fast_flight_client_lifespan(app, registered_data_types, flight_location))
         for c in other:
             await stack.enter_async_context(c(app))
         logger.info("Entering combined lifespan")
