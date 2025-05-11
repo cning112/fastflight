@@ -5,7 +5,7 @@ import pyarrow as pa
 import pytest
 from pyarrow import RecordBatch
 
-from fastflight.data_services import BaseDataService, BaseParams
+from fastflight.core.base import BaseDataService, BaseParams
 
 
 # Sample Params class
@@ -14,7 +14,6 @@ class SampleParams(BaseParams):
 
 
 # Sample Data Service
-@BaseDataService.register(SampleParams)
 class SampleDataService(BaseDataService[SampleParams]):
     def get_batches(self, params: SampleParams, batch_size: int | None = None) -> Iterable[RecordBatch | Any]:
         yield pa.RecordBatch.from_arrays([pa.array([1, 2, 3])], ["sample_column"])
@@ -38,7 +37,7 @@ class SampleParamsAsync(BaseParams):
 
 
 # Sample Data Service
-class SampleDataServiceAsync(BaseDataService[SampleParams]):
+class SampleDataServiceAsync(BaseDataService[SampleParamsAsync]):
     async def aget_batches(
         self, params: SampleParamsAsync, batch_size: int | None = None
     ) -> AsyncIterable[RecordBatch | Any]:
@@ -46,10 +45,6 @@ class SampleDataServiceAsync(BaseDataService[SampleParams]):
             yield pa.RecordBatch.from_arrays([pa.array([1, 2, 3])], ["sample_column"])
 
         return gen()
-
-
-# use a different way to register
-BaseDataService.register(SampleParamsAsync, SampleDataServiceAsync)
 
 
 @pytest.mark.asyncio
@@ -78,10 +73,9 @@ def test_duplicate_param_registration_raises():
         def get_batches(self, params, batch_size=None):
             yield pa.RecordBatch.from_arrays([pa.array([1])], ["col"])
 
-    BaseDataService.register(MyParams, MyService)
     # Register again (should raise ValueError)
     with pytest.raises(ValueError):
-        BaseDataService.register(MyParams, MyService)
+        BaseDataService._register(MyParams, MyService)
 
 
 # Test duplicate service registration raises
@@ -93,16 +87,15 @@ def test_duplicate_service_registration_raises():
         def get_batches(self, params, batch_size=None):
             yield pa.RecordBatch.from_arrays([pa.array([1])], ["col"])
 
-    BaseDataService.register(MyParams2, MyService2)
     # Try to register again for the same param class
     with pytest.raises(ValueError):
-        BaseDataService.register(MyParams2, MyService2)
+        BaseDataService._register(MyParams2, MyService2)
 
 
 # Test from_bytes unknown param class raises
 def test_from_bytes_unknown_param_class_raises():
     # Create a JSON bytes blob with an unknown _params_class
-    bad_json = {"fqn": "nonexistent_module.NonexistentParams", "foo": "bar"}
+    bad_json = {"param_type": "nonexistent_module.NonexistentParams", "foo": "bar"}
     blob = json.dumps(bad_json).encode("utf-8")
     with pytest.raises(ValueError):
         BaseParams.from_bytes(blob)

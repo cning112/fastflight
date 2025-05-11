@@ -2,7 +2,7 @@ import json
 import logging
 from abc import ABC
 from functools import partial
-from typing import AsyncIterable, ClassVar, Generic, Iterable, Self, TypeVar
+from typing import AsyncIterable, ClassVar, Generic, Iterable, Self, TypeVar, get_args, get_origin
 
 import pyarrow as pa
 from pydantic import BaseModel
@@ -26,7 +26,7 @@ class BaseParams(BaseModel, ABC):
         return f"{cls.__module__}.{cls.__qualname__}"
 
     @classmethod
-    def register(cls, klass: ParamsCls) -> ParamsCls:
+    def _register(cls, klass: ParamsCls) -> ParamsCls:
         """
         This registers a DataParams subclass using its fully qualified name ("<module>.<qualname>").
         It also sets the 'fqn' attribute of the subclass to the same fully qualified name.
@@ -79,7 +79,7 @@ class BaseParams(BaseModel, ABC):
         """
         try:
             json_data = json.loads(data)
-            fqn = json_data.pop("fqn")
+            fqn = json_data.pop("param_type")
             params_cls = cls.lookup(fqn)
             return params_cls.model_validate(json_data)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -95,7 +95,7 @@ class BaseParams(BaseModel, ABC):
         """
         try:
             json_data = self.model_dump()
-            json_data["fqn"] = self.__class__.fqn()
+            json_data["param_type"] = self.__class__.fqn()
             return json_data
         except (TypeError, ValueError) as e:
             logger.error(f"Error serializing params: {e}")
@@ -115,10 +115,29 @@ class BaseDataService(Generic[T], ABC):
     registry for different data source types.
     """
 
-    registry: ClassVar[dict[str, DataServiceCls]] = {}
+    _registry: ClassVar[dict[str, DataServiceCls]] = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Attempt to automatically register the parameter class and the service class
+        # by inspecting the generic parameter to BaseDataService[ParamsCls]
+        orig_bases = getattr(cls, "__orig_bases__", ())
+        for base in orig_bases:
+            origin = get_origin(base)
+            if origin is BaseDataService:
+                args = get_args(base)
+                if args:
+                    param_cls = args[0]
+                    # Only auto-register if param_cls is a subclass of BaseParams
+                    if isinstance(param_cls, type) and issubclass(param_cls, BaseParams):
+                        try:
+                            cls._register(param_cls, cls)
+                        except ValueError as e:
+                            logger.error(f"Automatic registration failed for {cls.fqn()}: {e}")
+                break
 
     @classmethod
-    def register(cls, params_cls: ParamsCls, klass: DataServiceCls | None = None):
+    def _register(cls, params_cls: ParamsCls, klass: DataServiceCls | None = None):
         """
         Register the given data params class and the data service class. Can be used as a decorator.
 
@@ -139,19 +158,17 @@ class BaseDataService(Generic[T], ABC):
                         DataParams key or the DataService subclass's own fully qualified name.
         """
         if klass is None:
-            return partial(cls.register, params_cls)
+            return partial(cls._register, params_cls)
 
         # Register the DataParams class and add the `fqn` attribute to it
-        BaseParams.register(params_cls)
+        BaseParams._register(params_cls)
 
         # Register the DataService subclass
         param_cls_fqn = params_cls.fqn()
-        if ex := cls.registry.get(param_cls_fqn):
-            raise ValueError(f"{param_cls_fqn} is already registered with {ex.__module__}.{ex.__qualname__}.")
-        cls.registry[param_cls_fqn] = klass
-        logger.info(
-            f"Registered data service class {klass.__module__}.{klass.__qualname__} for params type {param_cls_fqn}"
-        )
+        if ex := cls._registry.get(param_cls_fqn):
+            raise ValueError(f"{param_cls_fqn} is already registered with {ex.fqn()}.")
+        cls._registry[param_cls_fqn] = klass
+        logger.info(f"Registered data service class {klass.fqn()} for params type {param_cls_fqn}")
         return klass
 
     @classmethod
@@ -168,22 +185,28 @@ class BaseDataService(Generic[T], ABC):
         Raises:
             ValueError: If the data source type is not registered.
         """
-        data_service_cls = cls.registry.get(params_cls_fqn)
+        data_service_cls = cls._registry.get(params_cls_fqn)
         if data_service_cls is None:
             logger.error(f"Data source type {params_cls_fqn} is not registered.")
             raise ValueError(f"Data source type {params_cls_fqn} is not registered.")
         return data_service_cls
 
+    @classmethod
+    def fqn(cls):
+        return f"{cls.__module__}.{cls.__qualname__}"
+
     async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
         """
-        Fetch data in batches based on the given parameters.
+        Fetch data in batches asynchronously based on the given parameters.
+
+        This method wraps the blocking get_batches method in a thread executor to allow asynchronous usage.
 
         Args:
             params (T): The parameters for fetching data.
             batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
 
         Yields:
-            pa.RecordBatch: An async iterable of RecordBatches.
+            AsyncIterable[pa.RecordBatch]: An async iterable of RecordBatches.
 
         """
         raise NotImplementedError
