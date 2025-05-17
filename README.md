@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/cning112/fastflight)
+
 # **FastFlight** 🚀
 
 **FastFlight** is a framework built on **Apache Arrow Flight**, designed to simplify **high-performance data transfers**
