@@ -1,67 +1,80 @@
 #!/bin/bash
 set -e
 
-# Variables to configure
+# Configuration
 AWS_REGION="us-east-1"
 REPOSITORY_NAME="fastflight"
-IMAGE_NAME="flight-server"
+IMAGE_NAME="fastflight"
 TAG="latest"
 
-# Function to display usage information
 usage() {
-    echo "Usage: $0 [--push]"
-    echo "  --push    Push the Docker image to AWS ECR after building"
+    echo "Usage: $0 [--push] [--tag TAG]"
+    echo "  --push       Push to AWS ECR after building"
+    echo "  --tag TAG    Docker tag (default: latest)"
     exit 1
 }
 
-# Parse command-line arguments
+# Parse arguments
 PUSH_TO_ECR=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --push) PUSH_TO_ECR=true ;;
+        --tag) TAG="$2"; shift ;;
         *) usage ;;
     esac
     shift
 done
 
-
-# Get the directory where the script is located without changing to it
+# Change to project root
 cd "$(dirname "$0")/.."
 
-# Step 3: Generate the requirements.txt (assuming you are using uv for dependency management)
-echo "Generating requirements.txt..."
-uv pip compile pyproject.toml -o requirements.txt
-
-# Build the Docker image using the Dockerfile in the scripts folder
-echo "Building Docker image..."
-docker buildx create --use || echo "Buildx already enabled"
+echo "Building FastFlight Docker image..."
 docker build -t ${IMAGE_NAME}:${TAG} -f docker/Dockerfile --platform linux/amd64 .
 
-echo "Docker image built successfully"
+echo "✅ Docker image built: ${IMAGE_NAME}:${TAG}"
 
-rm requirements.txt
-
-
-# Optionally push the Docker image to AWS ECR
+# Push to ECR if requested
 if [ "$PUSH_TO_ECR" = true ]; then
-  echo "Pushing Docker image to AWS ECR..."
+    echo "Pushing to AWS ECR..."
+    
+    # Get ECR repository URI
+    REPO_URI=$(aws ecr describe-repositories \
+        --repository-names "$REPOSITORY_NAME" \
+        --query 'repositories[0].repositoryUri' \
+        --output text \
+        --region "$AWS_REGION" 2>/dev/null)
 
-  # Get ECR repository URI
-  REPO_URI=$(aws ecr describe-repositories --repository-names "$REPOSITORY_NAME" --query 'repositories[0].repositoryUri' --output text --region "$AWS_REGION")
+    if [ -z "$REPO_URI" ] || [ "$REPO_URI" = "None" ]; then
+        echo "❌ ECR repository '$REPOSITORY_NAME' not found in region $AWS_REGION"
+        echo "Create it with: aws ecr create-repository --repository-name $REPOSITORY_NAME --region $AWS_REGION"
+        exit 1
+    fi
 
-  if [ -z "$REPO_URI" ]; then
-    echo "ECR repository not found!"
-    exit 1
-  else
-    echo "ECR Repository URI: $REPO_URI"
-  fi
+    echo "ECR Repository: $REPO_URI"
 
-  # Log in to AWS ECR
-  aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID".dkr.ecr."$AWS_REGION".amazonaws.com
+    # Login to ECR
+    aws ecr get-login-password --region "$AWS_REGION" | \
+        docker login --username AWS --password-stdin "${REPO_URI%/*}"
 
-  # Tag and push the image to ECR
-  docker tag "$IMAGE_NAME":"$TAG" "$REPO_URI":"$TAG"
-  docker push "$REPO_URI":"$TAG"
+    # Tag and push
+    docker tag "$IMAGE_NAME:$TAG" "$REPO_URI:$TAG"
+    docker push "$REPO_URI:$TAG"
+    
+    echo "✅ Pushed to ECR: $REPO_URI:$TAG"
 else
-  echo "Skipping push to AWS ECR."
+    echo "Skipping ECR push. Use --push to enable."
 fi
+
+echo "
+🚀 Docker build complete!
+
+Usage examples:
+  # Run FastFlight server
+  docker run -p 8815:8815 ${IMAGE_NAME}:${TAG}
+  
+  # Run FastAPI server  
+  docker run -p 8000:8000 ${IMAGE_NAME}:${TAG} start-fastapi
+  
+  # Run both servers
+  docker run -p 8000:8000 -p 8815:8815 ${IMAGE_NAME}:${TAG} start-all
+"

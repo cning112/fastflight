@@ -1,0 +1,45 @@
+services:
+  fastflight-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8815:8815"
+    command: ["start-fast-flight-server", "--location", "grpc://0.0.0.0:8815"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import fastflight; print('OK')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+  fastapi-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    command: [
+      "start-fastapi", 
+      "--host", "0.0.0.0", 
+      "--port", "8000",
+      "--flight-location", "grpc://fastflight-server:8815"
+    ]
+    depends_on:
+      fastflight-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/fastflight/registered_data_types"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Development setup with both servers in one container
+  fastflight-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+      - "8815:8815"
+    command: ["start-all"]
+    profiles: ["dev"]

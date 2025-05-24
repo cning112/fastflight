@@ -1,0 +1,46 @@
+# Development files
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Cache
+.mypy_cache/
+.ruff_cache/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Config files
+.pre-commit-config.yaml
+pytest.ini
+.bumpversion.cfg
+
+# Examples and tests
+examples/
+tests/
