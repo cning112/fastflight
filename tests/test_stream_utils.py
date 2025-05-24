@@ -6,7 +6,7 @@ import pyarrow.flight as flight
 
 from fastflight.utils.stream_utils import write_arrow_data_to_stream
 
-from .utils import FlightServerTestCase
+from .base_cases import FlightServerTestCase
 
 
 # Test case class that inherits from the shared FlightServerTestCase.

@@ -46,6 +46,8 @@ class FlightServerTestCase(unittest.IsolatedAsyncioTestCase):
     Child classes can override or modify the server configuration (data map or error simulation) per test.
     """
 
+    client: flight.FlightClient
+
     @classmethod
     def setUpClass(cls):
         cls.initial_data = cls.get_server_data()
