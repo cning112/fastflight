@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from fastflight.client import FastFlightClient
+from fastflight.client import FastFlightBouncer
 from fastflight.fastapi.dependencies import body_bytes, fast_flight_client
 from fastflight.utils.stream_utils import write_arrow_data_to_stream
 
@@ -12,7 +12,7 @@ fast_flight_router = APIRouter()
 
 
 @fast_flight_router.get("/registered_data_types")
-def get_registered_data_types(ff_client: FastFlightClient = Depends(fast_flight_client)):
+def get_registered_data_types(ff_client: FastFlightBouncer = Depends(fast_flight_client)):
     """
     Retrieve all registered data types from the Flight client.
 
@@ -30,14 +30,14 @@ def get_registered_data_types(ff_client: FastFlightClient = Depends(fast_flight_
 
 
 @fast_flight_router.post("/stream")
-async def read_data(body: bytes = Depends(body_bytes), ff_client: FastFlightClient = Depends(fast_flight_client)):
+async def read_data(body: bytes = Depends(body_bytes), ff_client: FastFlightBouncer = Depends(fast_flight_client)):
     """
     Endpoint to read data from the Flight server and stream it back in Arrow format.
 
     Args:
         body (bytes): The raw request body bytes. The body should be a JSON-serialized `BaseParams` instance.
             Crucially, it must include the `param_type` field specifying the fully qualified name (FQN) of the data params class.
-        ff_client (FastFlightClient): The FlightClientHelper instance used to fetch data from the Flight server.
+        ff_client (FastFlightBouncer): The FlightClientHelper instance used to fetch data from the Flight server.
 
     Returns:
         StreamingResponse: A streamed response containing data in Apache Arrow format.

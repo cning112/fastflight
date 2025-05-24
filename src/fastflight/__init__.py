@@ -6,7 +6,7 @@ with comprehensive error handling, retry mechanisms, and circuit breaker pattern
 production-ready resilience.
 """
 
-from fastflight.client import FastFlightClient
+from fastflight.client import FastFlightBouncer
 from fastflight.core.base import BaseDataService, BaseParams
 from fastflight.exceptions import (
     FastFlightAuthenticationError,
@@ -26,7 +26,7 @@ from fastflight.server import FastFlightServer
 
 __all__ = [
     # Core classes
-    "FastFlightClient",
+    "FastFlightBouncer",
     "FastFlightServer",
     "BaseDataService",
     "BaseParams",

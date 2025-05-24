@@ -68,26 +68,29 @@ def _handle_flight_error(error: Exception, operation_context: str) -> Exception:
         )
 
 
-class FlightClientPool:
+class _FlightClientPool:
     """
-    Manages a pool of clients to connect to an Arrow Flight server.
+    Internal connection pool that manages raw Arrow Flight client connections.
+
+    This pool provides connection reuse and resource management for the FastFlightBouncer.
+    Users should not interact with this class directly - use FastFlightBouncer instead.
 
     Attributes:
         flight_server_location (str): The URI of the Flight server.
-        queue (asyncio.Queue): A queue to manage the FlightClient instances.
-        _converter (AsyncToSyncConverter): An optional converter to convert async to synchronous
+        queue (asyncio.Queue): Connection pool queue managing FlightClient instances.
+        pool_size (int): Maximum number of concurrent connections in the pool.
     """
 
     def __init__(
         self, flight_server_location: str, size: int = 5, converter: Optional[AsyncToSyncConverter] = None
     ) -> None:
         """
-        Initializes the FlightClientPool with a specified number of FlightClient instances.
+        Initialize the internal connection pool.
 
         Args:
             flight_server_location (str): The URI of the Flight server.
-            size (int): The number of FlightClient instances to maintain in the pool.
-            converter (Optional[AsyncToSyncConverter]): An optional converter to convert async to synchronous
+            size (int): The number of connections to maintain in the pool.
+            converter (Optional[AsyncToSyncConverter]): Async-to-sync converter for compatibility.
         """
         self.flight_server_location = flight_server_location
         self.queue: asyncio.Queue[flight.FlightClient] = asyncio.Queue(maxsize=size)
@@ -95,16 +98,28 @@ class FlightClientPool:
         for _ in range(size):
             self.queue.put_nowait(flight.FlightClient(flight_server_location))
         self._converter = converter or GLOBAL_CONVERTER
-        logger.info(f"Created FlightClientPool with {size} clients at {flight_server_location}")
+        logger.info(f"Created internal connection pool with {size} clients for {flight_server_location}")
 
     @asynccontextmanager
     async def acquire_async(self, timeout: Optional[float] = None) -> AsyncGenerator[flight.FlightClient, Any]:
+        """
+        Acquire a connection from the pool asynchronously.
+
+        Args:
+            timeout: Maximum time to wait for an available connection.
+
+        Yields:
+            flight.FlightClient: A raw Flight client connection.
+
+        Raises:
+            FastFlightResourceExhaustionError: If no connection becomes available within timeout.
+        """
         try:
             client = await asyncio.wait_for(self.queue.get(), timeout=timeout)
         except asyncio.TimeoutError:
             raise FastFlightResourceExhaustionError(
-                f"Timeout waiting for FlightClient from pool (pool size: {self.pool_size})",
-                resource_type="connection_pool",
+                f"Connection pool exhausted - no connections available within {timeout}s (pool size: {self.pool_size})",
+                resource_type="flight_connection_pool",
                 details={"pool_size": self.pool_size, "timeout": timeout},
             )
 
@@ -118,12 +133,24 @@ class FlightClientPool:
 
     @contextlib.contextmanager
     def acquire(self, timeout: Optional[float] = None) -> Generator[flight.FlightClient, Any, None]:
+        """
+        Acquire a connection from the pool synchronously.
+
+        Args:
+            timeout: Maximum time to wait for an available connection.
+
+        Yields:
+            flight.FlightClient: A raw Flight client connection.
+
+        Raises:
+            FastFlightResourceExhaustionError: If no connection becomes available within timeout.
+        """
         try:
             client = self._converter.run_coroutine(asyncio.wait_for(self.queue.get(), timeout=timeout))
         except asyncio.TimeoutError:
             raise FastFlightResourceExhaustionError(
-                f"Timeout waiting for FlightClient from pool (pool size: {self.pool_size})",
-                resource_type="connection_pool",
+                f"Connection pool exhausted - no connections available within {timeout}s (pool size: {self.pool_size})",
+                resource_type="flight_connection_pool",
                 details={"pool_size": self.pool_size, "timeout": timeout},
             )
 
@@ -136,6 +163,7 @@ class FlightClientPool:
             self.queue.put_nowait(client)
 
     async def close_async(self):
+        """Close all connections in the pool."""
         while not self.queue.empty():
             client = await self.queue.get()
             try:
@@ -155,12 +183,29 @@ def to_flight_ticket(params: ParamsData) -> flight.Ticket:
     return flight.Ticket(params.to_bytes())
 
 
-class FastFlightClient:
+class FastFlightBouncer:
     """
-    A resilient helper class to get data from the Flight server using a pool of `FlightClient`s.
+    Intelligent Flight connection bouncer that manages pooled connections and request routing.
 
-    This client includes comprehensive error handling with unified resilience configuration
-    to ensure robust operation in production environments.
+    FastFlightBouncer acts as a smart proxy between your application and Arrow Flight servers,
+    providing connection pooling, load balancing, error handling, and resilience patterns.
+
+    Like pgbouncer for PostgreSQL, it optimizes connection usage and provides transparent
+    failover capabilities for production workloads.
+
+    Key Features:
+    - Connection pooling and reuse
+    - Intelligent request routing
+    - Circuit breaker protection
+    - Automatic retry with backoff
+    - Comprehensive error handling
+    - Both sync and async interfaces
+
+    Example:
+        >>> bouncer = FastFlightBouncer("grpc://localhost:8815", client_pool_size=10)
+        >>> df = await bouncer.aget_pd_dataframe(my_params)
+        >>> # Or synchronously:
+        >>> df = bouncer.get_pd_dataframe(my_params)
     """
 
     def __init__(
@@ -172,35 +217,51 @@ class FastFlightClient:
         resilience_config: Optional[ResilienceConfig] = None,
     ):
         """
-        Initializes the FastFlightClient with unified resilience configuration.
+        Initialize the Flight connection bouncer.
 
         Args:
-            flight_server_location (str): The URI of the Flight server.
-            registered_data_types (Dict[str, str] | None): A dictionary of registered data types.
-            client_pool_size (int): The number of FlightClient instances to maintain in the pool.
-            converter (Optional[AsyncToSyncConverter]): An optional converter to convert async to synchronous.
-            resilience_config (Optional[ResilienceConfig]): Unified resilience configuration.
+            flight_server_location (str): Target Flight server URI (e.g., 'grpc://localhost:8815').
+            registered_data_types (Dict[str, str] | None): Registry of available data service types.
+            client_pool_size (int): Number of pooled connections to maintain. Defaults to 5.
+            converter (Optional[AsyncToSyncConverter]): Async-to-sync converter for compatibility.
+            resilience_config (Optional[ResilienceConfig]): Resilience patterns configuration
+                (retry, circuit breaker, timeouts).
         """
         self._converter = converter or GLOBAL_CONVERTER
-        self._client_pool = FlightClientPool(flight_server_location, client_pool_size, converter=self._converter)
+        self._connection_pool = _FlightClientPool(flight_server_location, client_pool_size, converter=self._converter)
         self._registered_data_types = dict(registered_data_types or {})
         self._flight_server_location = flight_server_location
 
-        # Create default config with circuit breaker name set to server location
+        # Configure circuit breaker with server-specific name
         default_config = resilience_config or ResilienceConfig.create_default()
         if default_config.circuit_breaker_name is None:
-            default_config = default_config.with_circuit_breaker_name(f"flight_client_{flight_server_location}")
+            default_config = default_config.with_circuit_breaker_name(f"flight_bouncer_{flight_server_location}")
 
         self._resilience_manager = ResilienceManager(default_config)
 
-        logger.info(f"Initialized FastFlightClient with unified resilience configuration for {flight_server_location}")
+        logger.info(f"Initialized FastFlightBouncer for {flight_server_location} with {client_pool_size} connections")
 
     def get_registered_data_types(self) -> Dict[str, str]:
+        """Get the registry of available data service types."""
         return self._registered_data_types
+
+    def get_connection_pool_status(self) -> Dict[str, Any]:
+        """
+        Get current status of the connection pool and bouncer.
+
+        Returns:
+            Dict containing pool size, available connections, and server location.
+        """
+        return {
+            "server_location": self._flight_server_location,
+            "pool_size": self._connection_pool.pool_size,
+            "available_connections": self._connection_pool.queue.qsize(),
+            "registered_services": len(self._registered_data_types),
+        }
 
     def update_resilience_config(self, config: ResilienceConfig) -> None:
         """
-        Update the resilience configuration for this client.
+        Update the resilience configuration for this bouncer.
 
         Args:
             config: The new resilience configuration to use.
@@ -209,7 +270,7 @@ class FastFlightClient:
 
     def get_circuit_breaker_status(self) -> Dict[str, Any]:
         """
-        Get the current status of the circuit breaker for this client.
+        Get the current status of the circuit breaker for this bouncer.
 
         Returns:
             A dictionary containing circuit breaker status information.
@@ -241,28 +302,29 @@ class FastFlightClient:
         resilience_config: Optional[ResilienceConfig] = None,
     ) -> R:
         """
-        Retrieves a `FlightStreamReader` from the Flight server asynchronously and processes it with a callback.
+        Route a request through the connection bouncer and apply a callback to the stream.
 
-        This method includes comprehensive error handling, retry logic, and circuit breaker protection
-        using unified resilience configuration.
+        The bouncer acquires a connection from the pool, routes the request, and processes
+        the response through the provided callback function.
 
         Args:
-            params (BaseParams): The params used to request data.
-            callback (Callable[[flight.FlightStreamReader], R]): A function to process the stream.
-            run_in_thread (bool): Whether to run the synchronous callback in a separate thread.
-            resilience_config (Optional[ResilienceConfig]): Override resilience configuration for this operation.
+            params (ParamsData): Flight request parameters or raw bytes.
+            callback (Callable[[flight.FlightStreamReader], R]): Function to process the stream reader.
+            run_in_thread (bool): Whether to execute synchronous callbacks in a thread pool.
+            resilience_config (Optional[ResilienceConfig]): Override default resilience settings.
 
         Returns:
-            R: The result of the callback function applied to the FlightStreamReader.
+            R: Result of applying the callback to the stream reader.
 
         Raises:
-            FastFlightError: Various subclasses based on the type of error encountered.
+            FastFlightError: Connection, timeout, or server errors with detailed context.
         """
 
-        async def _execute_operation():
+        async def _bounce_request():
+            """Internal request bouncing logic."""
             try:
                 flight_ticket = to_flight_ticket(params)
-                async with self._client_pool.acquire_async() as client:
+                async with self._connection_pool.acquire_async() as client:
                     reader = client.do_get(flight_ticket)
                     if inspect.iscoroutinefunction(callback):
                         return await callback(reader)
@@ -271,31 +333,28 @@ class FastFlightClient:
                     else:
                         return callback(reader)
             except Exception as e:
-                logger.error(f"Error fetching data from {self._flight_server_location}: {e}", exc_info=True)
-                raise _handle_flight_error(e, "data retrieval")
+                logger.error(f"Request bouncing failed for {self._flight_server_location}: {e}", exc_info=True)
+                raise _handle_flight_error(e, "request bouncing")
 
         try:
-            return await self._resilience_manager.execute_with_resilience(_execute_operation, config=resilience_config)
+            return await self._resilience_manager.execute_with_resilience(_bounce_request, config=resilience_config)
         except Exception as e:
             if isinstance(e, FastFlightError):
                 raise
-            raise _handle_flight_error(e, "stream reader retrieval with callback")
+            raise _handle_flight_error(e, "bouncer request processing")
 
     async def aget_stream_reader(
         self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
     ) -> flight.FlightStreamReader:
         """
-        Returns a `FlightStreamReader` from the Flight server using the provided flight ticket data asynchronously.
+        Bounce a request to get a Flight stream reader.
 
         Args:
-            params: The params to request data from the Flight server.
-            resilience_config (Optional[ResilienceConfig]): Override resilience configuration for this operation.
+            params: Flight request parameters or raw ticket bytes.
+            resilience_config: Override default resilience settings for this request.
 
         Returns:
-            flight.FlightStreamReader: A reader to stream data from the Flight server.
-
-        Raises:
-            FastFlightError: Various subclasses based on the type of error encountered.
+            flight.FlightStreamReader: Stream reader from the Flight server.
         """
         return await self.aget_stream_reader_with_callback(
             params, callback=lambda x: x, run_in_thread=False, resilience_config=resilience_config
@@ -303,17 +362,14 @@ class FastFlightClient:
 
     async def aget_pa_table(self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None) -> pa.Table:
         """
-        Returns a pyarrow table from the Flight server using the provided flight ticket data asynchronously.
+        Bounce a request to get a PyArrow table asynchronously.
 
         Args:
-            params: The params to request data from the Flight server.
-            resilience_config (Optional[ResilienceConfig]): Override resilience configuration for this operation.
+            params: Flight request parameters or raw ticket bytes.
+            resilience_config: Override default resilience settings for this request.
 
         Returns:
             pa.Table: The data from the Flight server as an Arrow Table.
-
-        Raises:
-            FastFlightError: Various subclasses based on the type of error encountered.
         """
         return await self.aget_stream_reader_with_callback(
             params, callback=lambda reader: reader.read_all(), resilience_config=resilience_config
@@ -323,17 +379,14 @@ class FastFlightClient:
         self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
     ) -> pd.DataFrame:
         """
-        Returns a pandas dataframe from the Flight server using the provided flight ticket data asynchronously.
+        Bounce a request to get a pandas DataFrame asynchronously.
 
         Args:
-            params: The params to request data from the Flight server.
-            resilience_config (Optional[ResilienceConfig]): Override resilience configuration for this operation.
+            params: Flight request parameters or raw ticket bytes.
+            resilience_config: Override default resilience settings for this request.
 
         Returns:
             pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
-
-        Raises:
-            FastFlightError: Various subclasses based on the type of error encountered.
         """
         return await self.aget_stream_reader_with_callback(
             params, callback=lambda reader: reader.read_all().to_pandas(), resilience_config=resilience_config
@@ -343,17 +396,14 @@ class FastFlightClient:
         self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
     ) -> AsyncIterable[bytes]:
         """
-        Generates a stream of bytes of arrow data from a Flight server ticket data asynchronously.
+        Bounce a request to generate a stream of Arrow data bytes asynchronously.
 
         Args:
-            params: The params to request data from the Flight server.
-            resilience_config (Optional[ResilienceConfig]): Override resilience configuration for this operation.
+            params: Flight request parameters or raw ticket bytes.
+            resilience_config: Override default resilience settings for this request.
 
         Yields:
             bytes: A stream of bytes from the Flight server.
-
-        Raises:
-            FastFlightError: Various subclasses based on the type of error encountered.
         """
         reader = await self.aget_stream_reader(params, resilience_config=resilience_config)
         async for chunk in await write_arrow_data_to_stream(reader):
@@ -363,51 +413,45 @@ class FastFlightClient:
         self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
     ) -> flight.FlightStreamReader:
         """
-        Returns a `FlightStreamReader` from the Flight server using the provided flight ticket data synchronously.
+        Synchronously bounce a request to get a Flight stream reader.
 
         Args:
-            params: The params to request data from the Flight server.
-            resilience_config (Optional[ResilienceConfig]): Override resilience configuration for this operation.
+            params: Flight request parameters or raw ticket bytes.
+            resilience_config: Override default resilience settings for this request.
 
         Returns:
-            flight.FlightStreamReader: A reader to stream data from the Flight server.
-
-        Raises:
-            FastFlightError: Various subclasses based on the type of error encountered.
+            flight.FlightStreamReader: Stream reader from the Flight server.
         """
 
-        def _execute_operation():
+        def _bounce_request_sync():
+            """Internal synchronous request bouncing."""
             try:
                 flight_ticket = to_flight_ticket(params)
-                with self._client_pool.acquire() as client:
+                with self._connection_pool.acquire() as client:
                     return client.do_get(flight_ticket)
             except Exception as e:
-                logger.error(f"Error fetching data from {self._flight_server_location}: {e}", exc_info=True)
-                raise _handle_flight_error(e, "synchronous data retrieval")
+                logger.error(f"Sync request bouncing failed for {self._flight_server_location}: {e}", exc_info=True)
+                raise _handle_flight_error(e, "synchronous request bouncing")
 
         try:
-            # For synchronous operations, we use the converter to run async resilience patterns
             return self._converter.run_coroutine(
-                self._resilience_manager.execute_with_resilience(_execute_operation, config=resilience_config)
+                self._resilience_manager.execute_with_resilience(_bounce_request_sync, config=resilience_config)
             )
         except Exception as e:
             if isinstance(e, FastFlightError):
                 raise
-            raise _handle_flight_error(e, "synchronous stream reader retrieval")
+            raise _handle_flight_error(e, "synchronous bouncer request")
 
     def get_pa_table(self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None) -> pa.Table:
         """
-        Returns an Arrow Table from the Flight server using the provided flight ticket data synchronously.
+        Synchronously bounce a request to get an Arrow Table.
 
         Args:
-            params: The params to request data from the Flight server.
-            resilience_config (Optional[ResilienceConfig]): Override resilience configuration for this operation.
+            params: Flight request parameters or raw ticket bytes.
+            resilience_config: Override default resilience settings for this request.
 
         Returns:
             pa.Table: The data from the Flight server as an Arrow Table.
-
-        Raises:
-            FastFlightError: Various subclasses based on the type of error encountered.
         """
         return self.get_stream_reader(params, resilience_config=resilience_config).read_all()
 
@@ -415,25 +459,23 @@ class FastFlightClient:
         self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
     ) -> pd.DataFrame:
         """
-        Returns a pandas dataframe from the Flight server using the provided flight ticket data synchronously.
+        Synchronously bounce a request to get a pandas DataFrame.
 
         Args:
-            params: The params to request data from the Flight server.
-            resilience_config (Optional[ResilienceConfig]): Override resilience configuration for this operation.
+            params: Flight request parameters or raw ticket bytes.
+            resilience_config: Override default resilience settings for this request.
 
         Returns:
             pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
-
-        Raises:
-            FastFlightError: Various subclasses based on the type of error encountered.
         """
         return self.get_stream_reader(params, resilience_config=resilience_config).read_all().to_pandas()
 
     async def close_async(self) -> None:
         """
-        Closes the client asynchronously.
+        Shutdown the bouncer and close all pooled connections.
         """
-        await self._client_pool.close_async()
+        await self._connection_pool.close_async()
+        logger.info(f"FastFlightBouncer closed for {self._flight_server_location}")
 
     def __enter__(self):
         return self
