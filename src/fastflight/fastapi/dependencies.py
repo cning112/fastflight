@@ -1,7 +1,7 @@
 from starlette.requests import Request
 
 from fastflight.client import FastFlightBouncer
-from fastflight.fastapi.lifespan import get_fast_flight_client
+from fastflight.fastapi.lifespan import get_fast_flight_bouncer
 
 
 async def body_bytes(request: Request) -> bytes:
@@ -17,14 +17,14 @@ async def body_bytes(request: Request) -> bytes:
     return await request.body()
 
 
-async def fast_flight_client(request: Request) -> FastFlightBouncer:
+async def fast_flight_bouncer(request: Request) -> FastFlightBouncer:
     """
-    Asynchronously retrieves the `FlightClientHelper` instance associated with the current FastAPI application.
+    Retrieve the FastFlightBouncer instance from the FastAPI application.
 
     Args:
-        request (Request): The incoming request object.
+        request: The incoming FastAPI request object.
 
     Returns:
-        FastFlightBouncer: The `FlightClientHelper` instance associated with the current FastAPI application.
+        FastFlightBouncer: The bouncer instance for Flight server communication.
     """
-    return get_fast_flight_client(request.app)
+    return get_fast_flight_bouncer(request.app)

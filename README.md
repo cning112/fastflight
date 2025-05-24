@@ -7,8 +7,7 @@ while improving **usability, integration, and developer experience**.
 
 It addresses common **challenges** with native Arrow Flight, such as **opaque request formats, debugging difficulties,
 complex async management, and REST API incompatibility**. **FastFlight** makes it easier to adopt Arrow Flight in
-existing
-systems.
+existing systems.
 
 ## **✨ Key Advantages**
 
