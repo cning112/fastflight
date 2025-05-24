@@ -39,18 +39,21 @@ class TestRetryConfig:
         assert config.calculate_delay(2) == 2.0  # 1.0 * 2^1
         assert config.calculate_delay(3) == 4.0  # 1.0 * 2^2
 
-    def test_should_retry_logic(self):
-        config = RetryConfig(max_attempts=3, retryable_exceptions=(FastFlightConnectionError, FastFlightTimeoutError))
+    def test_has_attempts_remaining(self):
+        config = RetryConfig(max_attempts=3)
+        assert config.has_attempts_remaining(1) is True
+        assert config.has_attempts_remaining(2) is True
+        assert config.has_attempts_remaining(3) is False
 
-        # Should retry for retryable exceptions within attempt limit
-        assert config.should_retry(FastFlightConnectionError("test"), 1)
-        assert config.should_retry(FastFlightTimeoutError("test"), 2)
+    def test_should_retry_logic(self):
+        config = RetryConfig(retryable_exceptions=(FastFlightConnectionError, FastFlightTimeoutError))
+
+        # Should retry for retryable exceptions
+        assert config.should_retry(FastFlightConnectionError("test"))
+        assert config.should_retry(FastFlightTimeoutError("test"))
 
         # Should not retry for non-retryable exceptions
-        assert not config.should_retry(ValueError("test"), 1)
-
-        # Should not retry if max attempts exceeded
-        assert not config.should_retry(FastFlightConnectionError("test"), 3)
+        assert not config.should_retry(ValueError("test"))
 
 
 class TestCircuitBreaker:

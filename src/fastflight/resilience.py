@@ -83,21 +83,29 @@ class RetryConfig:
             delay = self.base_delay
         return min(delay, self.max_delay)
 
-    def should_retry(self, exception: Exception, attempt: int) -> bool:
+    def should_retry(self, exception: Exception) -> bool:
         """
-        Determine if an operation should be retried based on the exception and attempt count.
+        Determine if an operation should be retried based on the exception.
 
         Args:
             exception: The exception that occurred.
-            attempt: The current attempt number.
 
         Returns:
             True if the operation should be retried, False otherwise.
         """
-        if attempt >= self.max_attempts:
-            logger.debug(f"Retry attempt {attempt} exceeds max {self.max_attempts}")
-            return False
         return isinstance(exception, self.retryable_exceptions)
+
+    def has_attempts_remaining(self, current_attempt: int) -> bool:
+        """
+        Check if there are remaining retry attempts.
+
+        Args:
+            current_attempt: The current attempt number (1-based).
+
+        Returns:
+            True if more attempts are available, False otherwise.
+        """
+        return current_attempt < self.max_attempts
 
 
 class CircuitState(Enum):
@@ -358,15 +366,22 @@ class ResilienceManager:
         effective_config = config or self.default_config
 
         # Apply circuit breaker if enabled and named
+        wrapped_func = func
         if effective_config.enable_circuit_breaker and effective_config.circuit_breaker_name:
             circuit_breaker = self.get_circuit_breaker(
                 effective_config.circuit_breaker_name, effective_config.circuit_breaker_config
             )
+            # Create a wrapped function that applies circuit breaker
+            if asyncio.iscoroutinefunction(func):
 
-            async def wrapped_func(*a, **kw):
-                return await circuit_breaker.call(func, *a, **kw)
-        else:
-            wrapped_func = func
+                async def circuit_wrapped_func(*a, **kw):
+                    return await circuit_breaker.call(func, *a, **kw)
+            else:
+
+                async def circuit_wrapped_func(*a, **kw):
+                    return await circuit_breaker.call(func, *a, **kw)
+
+            wrapped_func = circuit_wrapped_func
 
         # Apply retry logic if configured
         if effective_config.retry_config:
@@ -401,19 +416,19 @@ class ResilienceManager:
             except Exception as e:
                 last_exception = e
 
-                if not retry_config.should_retry(e, attempt):
+                if not retry_config.should_retry(e):
                     raise
 
-                if attempt < retry_config.max_attempts:
-                    delay = retry_config.calculate_delay(attempt)
-                    logger.warning(
-                        f"Operation failed (attempt {attempt}/{retry_config.max_attempts}), retrying in {delay:.2f}s: {e}"
-                    )
-                    await asyncio.sleep(delay)
-                else:
-                    logger.error(f"All retry attempts exhausted after {attempt} attempts")
+                if not retry_config.has_attempts_remaining(attempt):
+                    break
 
-        # This should not be reached, but included for completeness
+                delay = retry_config.calculate_delay(attempt)
+                logger.warning(
+                    f"Operation failed (attempt {attempt}/{retry_config.max_attempts}), retrying in {delay:.2f}s: {e}"
+                )
+                await asyncio.sleep(delay)
+
+        # If we reach here, all retries have been exhausted
         raise FastFlightRetryExhaustedError(
             f"Operation failed after {retry_config.max_attempts} attempts",
             attempt_count=retry_config.max_attempts,
