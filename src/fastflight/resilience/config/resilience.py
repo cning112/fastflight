@@ -1,5 +1,7 @@
 """
-Resilience configuration that combines retry and circuit breaker settings.
+ResilienceConfig: Unified configuration for retry and circuit breaker behavior.
+
+Includes factory methods for common usage patterns like high availability or batch processing.
 """
 
 from typing import Any, Dict, Optional
@@ -13,10 +15,35 @@ from .retry import RetryConfig
 
 class ResilienceConfig(BaseModel):
     """
-    Comprehensive configuration for resilience patterns with validation.
+    Configuration combining retry and circuit breaker settings.
 
-    This Pydantic model encapsulates all resilience-related configuration parameters
-    with comprehensive validation and business rules.
+    Examples:
+        >>> # Production default configuration
+        >>> config = ResilienceConfig.create_default()
+
+        >>> # High availability with aggressive retries and fast circuit breaker
+        >>> config = ResilienceConfig.create_for_high_availability()
+
+        >>> # Batch processing with conservative retries and tolerant circuit breaker
+        >>> config = ResilienceConfig.create_for_batch_processing()
+
+        >>> # Custom configuration combining retry and circuit breaker
+        >>> config = ResilienceConfig(
+        ...     retry_config=RetryConfig(max_attempts=5, base_delay=2.0),
+        ...     circuit_breaker_name="my_service",
+        ...     enable_circuit_breaker=True
+        ... )
+
+        >>> # Method chaining to customize configuration
+        >>> config = (ResilienceConfig.create_default()
+        ...           .with_retry_config(RetryConfig(max_attempts=10))
+        ...           .with_circuit_breaker_name("custom_circuit"))
+
+    Validation rules:
+        - If circuit breaker is enabled, circuit_breaker_name must be provided.
+        - retry_config and circuit_breaker_config are optional; None disables the respective feature.
+        - operation_timeout must be positive and less than or equal to 3600 seconds if set.
+        - circuit_breaker_name must be alphanumeric with underscores or dashes, length 1-100.
     """
 
     model_config = ConfigDict(
@@ -62,10 +89,13 @@ class ResilienceConfig(BaseModel):
     @computed_field
     def estimated_max_operation_time(self) -> float:
         """
-        Estimate maximum operation time including all retries and circuit breaker recovery.
+        Estimate maximum operation time including retries and circuit breaker recovery.
 
         Returns:
-            Estimated maximum time in seconds
+            float: Estimated maximum time in seconds, sum of:
+                - Total delay from retries (if configured)
+                - Circuit breaker max recovery time (if enabled)
+                - Operation timeout (if set)
         """
         max_time = 0.0
 
@@ -82,7 +112,7 @@ class ResilienceConfig(BaseModel):
 
     @classmethod
     def create_default(cls) -> "ResilienceConfig":
-        """Create a ResilienceConfig with sensible default values for production use."""
+        """Create a ResilienceConfig with default settings for general production use."""
         return cls(
             retry_config=RetryConfig(
                 max_attempts=3, strategy=RetryStrategy.EXPONENTIAL_BACKOFF, base_delay=1.0, max_delay=16.0
@@ -125,17 +155,17 @@ class ResilienceConfig(BaseModel):
         )
 
     def with_retry_config(self, retry_config: RetryConfig) -> "ResilienceConfig":
-        """Create a new ResilienceConfig with updated retry configuration."""
+        """Return a new ResilienceConfig with updated retry configuration."""
         return self.model_copy(update={"retry_config": retry_config})
 
     def with_circuit_breaker_config(self, circuit_config: CircuitBreakerConfig) -> "ResilienceConfig":
-        """Create a new ResilienceConfig with updated circuit breaker configuration."""
+        """Return a new ResilienceConfig with updated circuit breaker configuration."""
         return self.model_copy(update={"circuit_breaker_config": circuit_config})
 
     def with_circuit_breaker_name(self, name: str) -> "ResilienceConfig":
-        """Create a new ResilienceConfig with updated circuit breaker name."""
+        """Return a new ResilienceConfig with updated circuit breaker name."""
         return self.model_copy(update={"circuit_breaker_name": name})
 
     def disable_circuit_breaker(self) -> "ResilienceConfig":
-        """Create a new ResilienceConfig with circuit breaker disabled."""
+        """Return a new ResilienceConfig with circuit breaker functionality disabled."""
         return self.model_copy(update={"enable_circuit_breaker": False})

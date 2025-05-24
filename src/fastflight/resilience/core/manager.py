@@ -1,5 +1,13 @@
 """
-Resilience manager that coordinates retry and circuit breaker patterns.
+ResilienceManager: Unified retry and circuit breaker executor.
+
+This class allows you to wrap any callable (sync or async) with built-in fault-tolerance strategies:
+- Retry with configurable backoff strategies
+- Circuit breaker protection to prevent cascading failures
+
+Usage:
+    manager = ResilienceManager()
+    result = await manager.execute_with_resilience(your_async_func, *args, retry_config=..., circuit_breaker_name="api")
 """
 
 import asyncio
@@ -17,10 +25,26 @@ logger = logging.getLogger(__name__)
 
 class ResilienceManager:
     """
-    Manages retry and circuit breaker policies using unified configuration.
+    Dead-simple resilience for any function - just wrap and go.
 
-    This class provides a simplified interface for applying resilience patterns
-    to operations using a single configuration object.
+    Automatically retries failed operations and protects against cascading failures
+    using circuit breaker patterns. Works with any sync or async function.
+
+    Examples:
+        Basic usage (3 retries + circuit breaker):
+        >>> manager = ResilienceManager()
+        >>> result = await manager.execute_with_resilience(risky_function)
+
+        Custom configuration:
+        >>> config = ResilienceConfig.create_for_high_availability()
+        >>> result = await manager.execute_with_resilience(api_call, config=config)
+
+        Retry only (no circuit breaker):
+        >>> config = ResilienceConfig(
+        ...     retry_config=RetryConfig(max_attempts=5),
+        ...     enable_circuit_breaker=False
+        ... )
+        >>> result = await manager.execute_with_resilience(flaky_operation, config=config)
     """
 
     def __init__(self, default_config: Optional[ResilienceConfig] = None):
@@ -48,19 +72,27 @@ class ResilienceManager:
         self, func: Callable[..., T], *args, config: Optional[ResilienceConfig] = None, **kwargs
     ) -> T:
         """
-        Execute a function with resilience patterns using unified configuration.
+        Execute a function (sync or async) with automatic retry and circuit breaker support.
+
+        This is the main entry point for fault-tolerant execution. You can pass in any function,
+        and it will be executed with the resilience strategy configured via `ResilienceConfig`.
+
+        This method itself is async, so it must be awaited, even if the function you provide is synchronous.
+        Synchronous functions are automatically wrapped to be compatible with async execution.
 
         Args:
-            func: The function to execute with resilience protection.
-            config: Optional configuration override. If None, uses default configuration.
+            func: A sync or async callable to protect
+            *args: Positional arguments for the callable
+            config: Optional ResilienceConfig to override the manager's default config
+            **kwargs: Keyword arguments for the callable
 
         Returns:
-            The result of the function execution.
+            The result of the function execution (same return type as `func`)
 
         Raises:
-            FastFlightRetryExhaustedError: When all retry attempts are exhausted.
-            FastFlightCircuitOpenError: When the circuit breaker is open.
-            Various exceptions: As raised by the wrapped function.
+            FastFlightRetryExhaustedError: If all retry attempts fail
+            FastFlightCircuitOpenError: If the circuit breaker is open
+            Exception: Any other uncaught exception from the function
         """
         effective_config = config or self.default_config
 

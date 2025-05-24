@@ -1,5 +1,7 @@
 """
-Retry configuration models.
+Retry configuration model for defining retry strategies and limits.
+
+Provides validation and delay calculation for various retry backoff strategies.
 """
 
 import random
@@ -14,10 +16,23 @@ from ..types import RetryStrategy
 
 class RetryConfig(BaseModel):
     """
-    Configuration for retry behavior with comprehensive validation.
+    Configuration for retrying operations with validation and delay calculation.
 
-    This Pydantic model defines the parameters that control how retry operations are performed,
-    including validation for all numeric parameters and business rules.
+    Example:
+        >>> config = RetryConfig(
+        ...     max_attempts=5,
+        ...     strategy=RetryStrategy.JITTERED_EXPONENTIAL,
+        ...     base_delay=0.5,
+        ...     max_delay=10.0,
+        ...     jitter_factor=0.2
+        ... )
+
+    Validation rules:
+        - max_attempts: integer between 1 and 100
+        - base_delay: float > 0 and <= 300 seconds
+        - max_delay: float > 0, <= 3600 seconds, and >= base_delay
+        - exponential_base: float > 1 and <= 10
+        - jitter_factor: float between 0.0 and 1.0
     """
 
     model_config = ConfigDict(validate_assignment=True, use_enum_values=True, extra="forbid", frozen=True)
@@ -74,7 +89,7 @@ class RetryConfig(BaseModel):
         Compute the theoretical maximum total delay across all attempts.
 
         Returns:
-            Maximum possible total delay in seconds
+            - Maximum possible total delay in seconds
         """
         if self.strategy == RetryStrategy.FIXED_DELAY:
             return self.base_delay * (self.max_attempts - 1)
@@ -99,7 +114,7 @@ class RetryConfig(BaseModel):
             attempt: The current attempt number (starting from 1).
 
         Returns:
-            The delay in seconds before the next attempt.
+            - The delay in seconds before the next attempt.
 
         Raises:
             ValueError: If attempt is not positive.
@@ -130,7 +145,8 @@ class RetryConfig(BaseModel):
             exception: The exception that occurred.
 
         Returns:
-            True if the operation should be retried, False otherwise.
+            - True if the operation should be retried
+            - False otherwise
         """
         return isinstance(exception, self.retryable_exceptions)
 
@@ -142,6 +158,7 @@ class RetryConfig(BaseModel):
             current_attempt: The current attempt number (1-based).
 
         Returns:
-            True if more attempts are available, False otherwise.
+            - True if more attempts are available
+            - False otherwise
         """
         return current_attempt < self.max_attempts
