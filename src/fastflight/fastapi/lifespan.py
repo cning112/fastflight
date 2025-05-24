@@ -4,7 +4,7 @@ from typing import AsyncContextManager, Callable
 
 from fastapi import FastAPI
 
-from fastflight.client import FastFlightClient
+from fastflight.client import FastFlightBouncer
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ async def fast_flight_client_lifespan(
         flight_location (str, optional): The location of the flight client. Defaults to "grpc://0.0.0.0:8815".
     """
     logger.info("Starting flight_client_lifespan at %s", flight_location)
-    client = FastFlightClient(flight_location, registered_data_types)
+    client = FastFlightBouncer(flight_location, registered_data_types)
     set_flight_client(app, client)
     try:
         yield
@@ -42,7 +42,7 @@ async def combine_lifespans(
     *other: Callable[[FastAPI], AsyncContextManager],
 ):
     """
-    An asynchronous context manager that handles the combined lifespan of a `FastFlightClient`
+    An asynchronous context manager that handles the combined lifespan of a `FastFlightBouncer`
     and any other given context managers.
 
     Parameters:
@@ -59,13 +59,13 @@ async def combine_lifespans(
         logger.info("Exiting combined lifespan")
 
 
-def set_flight_client(app: FastAPI, client: FastFlightClient) -> None:
+def set_flight_client(app: FastAPI, client: FastFlightBouncer) -> None:
     """
     Sets the client helper for the given FastAPI application.
 
     Args:
         app (FastAPI): The FastAPI application instance.
-        client (FastFlightClient): The client helper to be set.
+        client (FastFlightBouncer): The client helper to be set.
 
     Returns:
         None
@@ -73,7 +73,7 @@ def set_flight_client(app: FastAPI, client: FastFlightClient) -> None:
     app.state._flight_client = client
 
 
-def get_fast_flight_client(app: FastAPI) -> FastFlightClient:
+def get_fast_flight_client(app: FastAPI) -> FastFlightBouncer:
     """
     Retrieves the client helper for the given FastAPI application.
 
@@ -81,7 +81,7 @@ def get_fast_flight_client(app: FastAPI) -> FastFlightClient:
         app (FastAPI): The FastAPI application instance.
 
     Returns:
-        FastFlightClient: The client helper associated with the given FastAPI application.
+        FastFlightBouncer: The client helper associated with the given FastAPI application.
     """
     helper = getattr(app.state, "_flight_client", None)
     if helper is None:
