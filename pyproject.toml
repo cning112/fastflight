@@ -28,6 +28,9 @@ fastapi = [
 structlog = [
     "structlog"
 ]
+distributed = [
+    "ray[default]>=2.46.0",
+]
 
 [project.scripts]
 fastflight = "fastflight.cli:cli"

@@ -1,5 +1,7 @@
+import json
 from datetime import datetime, timezone
 
+from fastflight import BaseParams
 from fastflight.core.timeseries import TimeSeriesParams
 
 
@@ -23,12 +25,14 @@ def test_timeseries_params_serialization():
     params = TimeSeriesParams(start_time=start, end_time=end)
 
     # Test serialization
-    json_data = params.to_json()
+    json_data = json.loads(params.to_json_bytes())
     assert "param_type" in json_data
     assert json_data["param_type"] == params.fqn()
 
     # Test deserialization
-    serialized_bytes = params.to_bytes()
+    # Need to register TimeSeriesParams first to make it deserializable
+    BaseParams._register(TimeSeriesParams)
+    serialized_bytes = params.to_json_bytes()
     deserialized = TimeSeriesParams.from_bytes(serialized_bytes)
 
     assert deserialized.start_time == start

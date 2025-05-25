@@ -3,7 +3,8 @@
 # **FastFlight** 🚀
 
 **FastFlight** is a framework built on **Apache Arrow Flight**, designed to simplify **high-performance data transfers**
-while improving **usability, integration, and developer experience**.
+while improving **usability, integration, and developer experience**. Now with **intelligent time series processing**
+and **distributed computing** support.
 
 It addresses common **challenges** with native Arrow Flight, such as **opaque request formats, debugging difficulties,
 complex async management, and REST API incompatibility**. **FastFlight** makes it easier to adopt Arrow Flight in
@@ -13,6 +14,8 @@ existing systems.
 
 ✅ **Typed Param Classes** – All data requests are defined via structured, type-safe parameter classes. Easy to debug and
 validate.  
+✅ **Time Series Intelligence** – Smart partitioning and optimization for time series workloads.  
+✅ **Distributed Processing** – Scale horizontally using Ray clusters for large datasets.  
 ✅ **Service Binding via `param_type`** – Clean and explicit mapping from param class → data service. Enables dynamic
 routing and REST support.  
 ✅ **Async & Streaming Ready** – `async for` support with non-blocking batch readers. Ideal for high-throughput
@@ -25,39 +28,69 @@ missing.
 ✅ **Pandas / PyArrow Friendly** – Streamlined APIs for transforming results into pandas DataFrame or Arrow Table.  
 ✅ **CLI-First** – Unified command line to launch, test, and inspect services.
 
-**FastFlight is ideal for high-throughput data systems, real-time querying, log analysis, and financial applications.**
+**FastFlight is ideal for high-throughput data systems, real-time querying, log analysis, financial applications, and
+time series analytics.**
 
----
+## **🆕 Time Series & Distributed Processing**
 
-## **🐳 Docker Deployment**
+FastFlight now includes advanced time series capabilities:
 
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
+### **Smart Partitioning**
 
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
+```python
+from fastflight import TimeSeriesParams, OptimizationHint, optimize_time_series_query
+
+
+# Define your time series parameters
+class StockDataParams(TimeSeriesParams):
+    symbol: str
+    interval: str = "1min"
+
+
+# Automatic intelligent partitioning
+params = StockDataParams(symbol="AAPL", start_time=..., end_time=...)
+partitions = params.get_optimal_partitions(max_workers=8)
 ```
 
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
+### **Query Optimization**
 
----
+```python
+# Real-time queries (low latency)
+hint = OptimizationHint.for_real_time()
+partitions = optimize_time_series_query(params, hint)
+
+# Analytics queries (high throughput)  
+hint = OptimizationHint.for_analytics()
+partitions = optimize_time_series_query(params, hint)
+```
+
+### **Distributed Processing**
+
+```python
+# Scale across Ray cluster
+from fastflight import DistributedTimeSeriesService
+
+distributed_service = DistributedTimeSeriesService(base_service)
+async for batch in distributed_service.aget_batches(params):
+    process_batch(batch)
+```
+
+See **[Time Series Guide](./docs/TIME_SERIES_DISTRIBUTED.md)** for complete documentation.
 
 ## **🚀 Quick Start**
 
 ### **1️⃣ Install FastFlight**
 
 ```bash
+# Basic installation
+pip install "fastflight[default]"
+
+# With distributed processing support
 pip install "fastflight[all]"
-```
 
-or use `uv`
-
-```bash
+# Or use uv
 uv add "fastflight[all]"
 ```
-
----
 
 ## **🐳 Docker Deployment**
 
@@ -70,8 +103,6 @@ docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
 ```
 
 See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
 
 ## **🎯 Using the CLI**
 
@@ -83,107 +114,26 @@ FastFlight provides a command-line interface (CLI) for easy management of **Arro
 fastflight start-fast-flight-server --location grpc://0.0.0.0:8815
 ```
 
-**Options:**
-
-- `--location` (optional): gRPC server address (default: `grpc://0.0.0.0:8815`).
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
-
 ### **Start the FastAPI Server**
 
 ```bash
 fastflight start-fastapi --host 0.0.0.0 --port 8000 --fast-flight-route-prefix /fastflight --flight-location grpc://0.0.0.0:8815
 ```
 
-**Options:**
-
-- `--host` (optional): FastAPI server host (default: `0.0.0.0`).
-- `--port` (optional): FastAPI server port (default: `8000`).
-- `--fast-flight-route-prefix` (optional): API route prefix (default: `/fastflight`).
-- `--flight-location` (optional): Arrow Flight server address (default: `grpc://0.0.0.0:8815`).
-- `--module_paths` (optional): Comma-separated list of module paths to scan for custom data parameter and service
-- classes (default: `fastflight.demo_services`).
-
-**Note**: When using the `/stream` REST endpoint to stream data, make sure the `param_type` field is embedded in the
-request body. It's critical for the server to route the request to the correct data service. For example, for the
-default demo services, the `param_type` should be `fastflight.demo_services.duckdb_demo.DuckDBParams`.
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
-
-### **Start Both FastFlight and FastAPI Servers**
+### **Start Both Servers**
 
 ```bash
 fastflight start-all --api-host 0.0.0.0 --api-port 8000 --fast-flight-route-prefix /fastflight --flight-location grpc://0.0.0.0:8815 --module-paths fastflight.demo_services.duckdb_demo
 ```
 
-This launches both gRPC and REST servers, allowing you to use REST APIs while streaming data via Arrow Flight.
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
-
 ## **📖 Additional Documentation**
 
+- **[Time Series & Distributed Processing](./docs/TIME_SERIES_DISTRIBUTED.md)** – Smart partitioning and Ray
+  integration.
 - **[CLI Guide](./docs/CLI_USAGE.md)** – Detailed CLI usage instructions.
 - **[Docker Deployment](./docs/DOCKER.md)** – Container deployment and Docker Compose guide.
 - **[FastAPI Integration Guide](./src/fastflight/fastapi/README.md)** – Learn how to expose Arrow Flight via FastAPI.
 - **[Technical Documentation](./docs/TECHNICAL_DETAILS.md)** – In-depth implementation details.
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
 
 ## **🛠 Future Plans**
 
@@ -191,45 +141,16 @@ See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
 ✅ **Async & Streaming Support** (Completed)  
 ✅ **REST API Adapter** (Completed)  
 ✅ **CLI Support** (Completed)  
+✅ **Time Series Processing** (Completed)  
+✅ **Distributed Computing** (Completed)  
 🔄 **Support for More Data Sources (SQL, NoSQL, Kafka)** (In Progress)  
-🔄 **Enhanced Debugging & Logging Tools** (In Progress)
+🔄 **Enhanced Debugging & Logging Tools** (In Progress)  
+🔄 **Real-time Stream Processing** (Planned)
 
 Contributions are welcome! If you have suggestions or improvements, feel free to submit an Issue or PR. 🚀
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
 
 ## **📜 License**
 
 This project is licensed under the **MIT License**.
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
 
 **🚀 Ready to accelerate your data transfers? Get started today!**
