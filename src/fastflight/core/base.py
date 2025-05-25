@@ -6,6 +6,7 @@ from typing import AsyncIterable, ClassVar, Generic, Iterable, Self, TypeVar, ge
 
 import pyarrow as pa
 from pydantic import BaseModel
+from pydantic_core import to_json
 
 logger = logging.getLogger(__name__)
 
@@ -86,23 +87,20 @@ class BaseParams(BaseModel, ABC):
             logger.error(f"Error deserializing params: {e}")
             raise
 
-    def to_json(self) -> dict:
+    def to_json_bytes(self) -> bytes:
         """
-        Serialize the params to json, including the fully qualified name.
+        Serialize the params to bytes, including the fully qualified name.
 
         Returns:
-            dict: The json representation of the params.
+            bytes: The bytes representation of the params including the fully qualified name.
         """
         try:
             json_data = self.model_dump()
             json_data["param_type"] = self.__class__.fqn()
-            return json_data
+            return to_json(json_data)
         except (TypeError, ValueError) as e:
             logger.error(f"Error serializing params: {e}")
             raise
-
-    def to_bytes(self) -> bytes:
-        return json.dumps(self.to_json()).encode()
 
 
 DataServiceCls = type["BaseDataService"]

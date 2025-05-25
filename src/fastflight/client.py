@@ -180,7 +180,7 @@ ParamsData = Union[bytes, BaseParams]
 def to_flight_ticket(params: ParamsData) -> flight.Ticket:
     if isinstance(params, bytes):
         return flight.Ticket(params)
-    return flight.Ticket(params.to_bytes())
+    return flight.Ticket(params.to_json_bytes())
 
 
 class FastFlightBouncer:

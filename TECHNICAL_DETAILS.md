@@ -69,13 +69,11 @@ ticket = DuckDBParams(
     parameters=["2024-01-01T00:00:00Z", "2024-01-31T00:00:00Z"]
 )
 
-ticket.to_json()
-{
-    "database_path": "example.duckdb",
-    "query": "select * from financial_data where date >= ? and date <= ?",
-    "parameters": ["2024-01-01T00:00:00Z", "2024-01-31T00:00:00Z"],
-    "param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams"
-}
+ticket.to_json_bytes()
+# b'{"database_path":"example.duckdb","query":"select * from financial_data where 
+# date >= ? and date <= ?","parameters":["2024-01-01T00:00:00Z","2024-01-31T00:00:00Z"],
+# "param_type":"fastflight.demo_services.duckdb_demo.DuckDBParams"}'
+
 ```
 
 2️⃣ **Flight Server uses the `param_type` field to identify the ticket type and match the appropriate data service to
