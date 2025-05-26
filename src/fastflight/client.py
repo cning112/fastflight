@@ -9,6 +9,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.flight as flight
 
+from fastflight.config import bouncer_settings # Import bouncer_settings
 from fastflight.core.base import BaseParams
 from fastflight.exceptions import (
     FastFlightConnectionError,
@@ -16,6 +17,12 @@ from fastflight.exceptions import (
     FastFlightResourceExhaustionError,
     FastFlightServerError,
     FastFlightTimeoutError,
+)
+from fastflight.metrics import ( # Import bouncer metrics
+    bouncer_connections_acquired_total,
+    bouncer_connections_released_total,
+    bouncer_pool_available_connections,
+    bouncer_pool_size,
 )
 from fastflight.resilience import ResilienceConfig, ResilienceManager
 from fastflight.utils.stream_utils import AsyncToSyncConverter, write_arrow_data_to_stream
@@ -82,7 +89,12 @@ class _FlightClientPool:
     """
 
     def __init__(
-        self, flight_server_location: str, size: int = 5, converter: Optional[AsyncToSyncConverter] = None
+        self,
+        flight_server_location: str,
+        size: int = 5,
+        converter: Optional[AsyncToSyncConverter] = None,
+        auth_token: Optional[str] = None,
+        # tls_root_certs: Optional[bytes] = None, # For client-side TLS validation with custom CA
     ) -> None:
         """
         Initialize the internal connection pool.
@@ -91,14 +103,34 @@ class _FlightClientPool:
             flight_server_location (str): The URI of the Flight server.
             size (int): The number of connections to maintain in the pool.
             converter (Optional[AsyncToSyncConverter]): Async-to-sync converter for compatibility.
+            auth_token (Optional[str]): Authentication token for ClientBasicAuthHandler.
+            # tls_root_certs (Optional[bytes]): PEM-encoded root certificates for TLS verification.
         """
         self.flight_server_location = flight_server_location
         self.queue: asyncio.Queue[flight.FlightClient] = asyncio.Queue(maxsize=size)
         self.pool_size = size
+        
+        # Initialize Prometheus gauges for the pool
+        bouncer_pool_size.set(size)
+        # Initialize available connections. This assumes the pool is filled upon creation.
+        bouncer_pool_available_connections.set(size) 
+
+        client_options = {}
+        if auth_token:
+            # Using empty username, token as password for Basic Auth
+            client_options["client_auth_handler"] = flight.ClientBasicAuthHandler("", auth_token)
+            logger.info(f"Client authentication (Basic Auth with token) enabled for connections to {flight_server_location}")
+        
+        # Example for client-side TLS if needed in future, based on config
+        # if "grpc+tls" in flight_server_location and tls_root_certs:
+        #     client_options["tls_root_certs"] = tls_root_certs
+
         for _ in range(size):
-            self.queue.put_nowait(flight.FlightClient(flight_server_location))
+            # Pass additional options like client_auth_handler or tls_root_certs here
+            self.queue.put_nowait(flight.connect(flight_server_location, **client_options))
+            
         self._converter = converter or GLOBAL_CONVERTER
-        logger.info(f"Created internal connection pool with {size} clients for {flight_server_location}")
+        logger.info(f"Created internal connection pool with {size} client(s) for {flight_server_location} (Auth: {'Enabled' if auth_token else 'Disabled'})")
 
     @asynccontextmanager
     async def acquire_async(self, timeout: Optional[float] = None) -> AsyncGenerator[flight.FlightClient, Any]:
@@ -116,7 +148,10 @@ class _FlightClientPool:
         """
         try:
             client = await asyncio.wait_for(self.queue.get(), timeout=timeout)
+            bouncer_connections_acquired_total.inc()
+            bouncer_pool_available_connections.dec()
         except asyncio.TimeoutError:
+            # Consider adding a bouncer_acquisition_timeouts_total counter here
             raise FastFlightResourceExhaustionError(
                 f"Connection pool exhausted - no connections available within {timeout}s (pool size: {self.pool_size})",
                 resource_type="flight_connection_pool",
@@ -127,9 +162,14 @@ class _FlightClientPool:
             yield client
         except Exception as e:
             logger.error(f"Error during client operation: {e}", exc_info=True)
+            # If an error occurs, the connection is still returned to the pool in the finally block.
+            # This is standard practice unless the connection is known to be corrupted.
             raise
         finally:
-            await self.queue.put(client)
+            # This block runs after the `yield client` completes or if an exception occurs within the `with` statement.
+            await self.queue.put(client) # Return client to queue
+            bouncer_connections_released_total.inc()
+            bouncer_pool_available_connections.inc()
 
     @contextlib.contextmanager
     def acquire(self, timeout: Optional[float] = None) -> Generator[flight.FlightClient, Any, None]:
@@ -147,7 +187,10 @@ class _FlightClientPool:
         """
         try:
             client = self._converter.run_coroutine(asyncio.wait_for(self.queue.get(), timeout=timeout))
+            bouncer_connections_acquired_total.inc()
+            bouncer_pool_available_connections.dec()
         except asyncio.TimeoutError:
+            # Consider adding a bouncer_acquisition_timeouts_total counter here
             raise FastFlightResourceExhaustionError(
                 f"Connection pool exhausted - no connections available within {timeout}s (pool size: {self.pool_size})",
                 resource_type="flight_connection_pool",
@@ -158,9 +201,13 @@ class _FlightClientPool:
             yield client
         except Exception as e:
             logger.error(f"Error during client operation: {e}", exc_info=True)
+            # Client is returned to pool in finally block.
             raise
         finally:
-            self.queue.put_nowait(client)
+            # This 'finally' block always runs after the 'yield' if the try block was entered.
+            self.queue.put_nowait(client) # Return client to queue
+            bouncer_connections_released_total.inc()
+            bouncer_pool_available_connections.inc()
 
     async def close_async(self):
         """Close all connections in the pool."""
@@ -212,9 +259,11 @@ class FastFlightBouncer:
         self,
         flight_server_location: str,
         registered_data_types: Dict[str, str] | None = None,
-        client_pool_size: int = 5,
+        client_pool_size: Optional[int] = None, # Allow None to use config default
         converter: Optional[AsyncToSyncConverter] = None,
         resilience_config: Optional[ResilienceConfig] = None,
+        auth_token: Optional[str] = None, # Added auth_token
+        # tls_root_certs_path: Optional[str] = None, # Path to client TLS root certs
     ):
         """
         Initialize the Flight connection bouncer.
@@ -222,13 +271,34 @@ class FastFlightBouncer:
         Args:
             flight_server_location (str): Target Flight server URI (e.g., 'grpc://localhost:8815').
             registered_data_types (Dict[str, str] | None): Registry of available data service types.
-            client_pool_size (int): Number of pooled connections to maintain. Defaults to 5.
+            client_pool_size (Optional[int]): Number of pooled connections to maintain.
+                Defaults to `bouncer_settings.pool_size` if None.
             converter (Optional[AsyncToSyncConverter]): Async-to-sync converter for compatibility.
             resilience_config (Optional[ResilienceConfig]): Resilience patterns configuration
                 (retry, circuit breaker, timeouts).
+            auth_token (Optional[str]): Authentication token for client connections.
+            # tls_root_certs_path (Optional[str]): Path to PEM-encoded root certificates for TLS.
         """
+        effective_pool_size = client_pool_size if client_pool_size is not None else bouncer_settings.pool_size
+        
+        # tls_root_certs_bytes: Optional[bytes] = None
+        # if tls_root_certs_path:
+        #     try:
+        #         with open(tls_root_certs_path, "rb") as f:
+        #             tls_root_certs_bytes = f.read()
+        #         logger.info(f"Loaded client TLS root certificates from {tls_root_certs_path}")
+        #     except IOError as e:
+        #         logger.error(f"Failed to load client TLS root certificates from {tls_root_certs_path}: {e}", exc_info=True)
+        #         # Decide if this should be a fatal error or proceed without client TLS verification override
+
         self._converter = converter or GLOBAL_CONVERTER
-        self._connection_pool = _FlightClientPool(flight_server_location, client_pool_size, converter=self._converter)
+        self._connection_pool = _FlightClientPool(
+            flight_server_location,
+            effective_pool_size,
+            converter=self._converter,
+            auth_token=auth_token,
+            # tls_root_certs=tls_root_certs_bytes
+        )
         self._registered_data_types = dict(registered_data_types or {})
         self._flight_server_location = flight_server_location
 
@@ -239,7 +309,10 @@ class FastFlightBouncer:
 
         self._resilience_manager = ResilienceManager(default_config)
 
-        logger.info(f"Initialized FastFlightBouncer for {flight_server_location} with {client_pool_size} connections")
+        logger.info(
+            f"Initialized FastFlightBouncer for {flight_server_location} "
+            f"with {effective_pool_size} connections (Client Auth: {'Enabled' if auth_token else 'Disabled'})"
+        )
 
     def get_registered_data_types(self) -> Dict[str, str]:
         """Get the registry of available data service types."""
