@@ -3,8 +3,8 @@
 import asyncio
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
-from typing import AsyncIterable, Generic, List, Literal, Optional, TypeVar
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import AsyncIterable, Callable, Generic, Iterable, Iterator, List, Literal, Optional, Tuple, TypeVar
 
 try:
     import ray
@@ -21,9 +21,12 @@ from fastflight.core.timeseries import TimeSeriesParams
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=TimeSeriesParams)
+R = TypeVar("R", bound=Iterator)
 
 # Define backend types as literals for type safety
 BackendType = Literal["ray", "asyncio", "single_threaded"]
+
+_dummy = object()
 
 
 class DistributedTimeSeriesService(BaseDataService[T], Generic[T]):
@@ -132,18 +135,151 @@ class DistributedTimeSeriesService(BaseDataService[T], Generic[T]):
                 yield batch
 
     def get_batches(self, params: T, batch_size: int | None = None, preserve_order: bool = True):
-        """Synchronous version - converts async to sync."""
+        """
+        Synchronous version that avoids AsyncToSyncConverter for better performance.
 
-        async def _collect_batches():
-            batches = []
-            async for batch in self.aget_batches(params, batch_size, preserve_order):
-                batches.append(batch)
-            return batches
+        This method implements the distributed processing logic directly in synchronous code
+        to avoid the single-threaded bottleneck of AsyncToSyncConverter.
+        """
+        # Determine optimal partitions (CPU work done synchronously)
+        max_workers = self._get_max_workers()
+        partitions = params.get_optimal_partitions(max_workers)
 
-        # Use asyncio.run() - available in Python 3.7+
-        batches = asyncio.run(_collect_batches())
-        for batch in batches:
-            yield batch
+        logger.info(f"Processing {len(partitions)} partitions with {self.backend} backend")
+
+        if self.backend == "ray":
+            yield from self._process_with_ray_sync(partitions, batch_size, preserve_order)
+        elif self.backend == "asyncio":
+            yield from self._process_with_asyncio_sync(partitions, batch_size, preserve_order)
+        else:
+            # Single-threaded processing
+            yield from self._process_single_threaded_sync(partitions, batch_size, preserve_order)
+
+    def _process_with_ray_sync(self, partitions: List[T], batch_size: Optional[int], preserve_order: bool):
+        """Process partitions using Ray - synchronous version."""
+        # Submit remote tasks
+        futures = [
+            process_partition_remote.remote(self.base_service_class, partition, batch_size) for partition in partitions
+        ]
+
+        yield from self._stream_results(futures, self._get_ray_result, preserve_order)
+
+    def _process_with_asyncio_sync(self, partitions: List[T], batch_size: Optional[int], preserve_order: bool):
+        """Process partitions using AsyncIO - synchronous version."""
+        max_workers = min(self._get_max_workers(), len(partitions))
+
+        # For AsyncIO, we need to handle streaming differently since we can't easily
+        # check if a generator is "ready" without consuming it
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+
+            def sync_process_partition(partition: T) -> Iterable[pa.RecordBatch]:
+                """Process a single partition and return streaming generator."""
+                service = self.base_service_class()
+                yield from service.get_batches(partition, batch_size)
+
+            # Submit all tasks
+            futures = [executor.submit(sync_process_partition, partition) for partition in partitions]
+
+            yield from self._stream_results(futures, lambda f: f.result(), preserve_order)
+
+    def _process_single_threaded_sync(self, partitions: List[T], batch_size: Optional[int], preserve_order: bool):
+        """Process partitions sequentially in single thread."""
+        logger.info("Using single-threaded processing (distributed disabled)")
+
+        for partition in partitions:
+            try:
+                service = self.base_service_class()
+                for batch in service.get_batches(partition, batch_size):
+                    yield batch
+            except Exception as e:
+                logger.error(f"Single-threaded partition failed: {e}")
+                continue
+
+    @staticmethod
+    def _stream_ready_futures(
+        futures: List[Future],
+        result_getter: Callable[[Future], Iterable[pa.RecordBatch] | None],
+        handle_ready: Callable[[List[Tuple[Future, Iterable[pa.RecordBatch]]]], Iterable[pa.RecordBatch]],
+    ) -> Iterable[pa.RecordBatch]:
+        pending = set(futures)
+
+        while pending:
+            # Find ready futures using the result getter
+            ready_futures = []
+            for future in list(pending):
+                try:
+                    result = result_getter(future)
+                    if result is not None:  # Future is ready
+                        ready_futures.append((future, result))
+                        pending.remove(future)
+                except Exception as e:
+                    logger.error(f"Task failed: {e}")
+                    pending.remove(future)
+                    continue
+
+            # If no futures are ready, wait a bit and try again
+            if not ready_futures:
+                import time
+
+                time.sleep(0.01)  # 10ms sleep
+                continue
+
+            yield from handle_ready(ready_futures)
+
+    @staticmethod
+    def _stream_results(
+        futures: List[Future], result_getter: Callable[[Future], Iterable[pa.RecordBatch] | None], ordered: bool
+    ) -> Iterable[pa.RecordBatch]:
+        """
+        Stream results in submission order using a generic result getter.
+
+        Args:
+            futures: List of futures (Ray ObjectRefs or concurrent.futures.Future)
+            result_getter: Function to get result from a future and check if ready
+        """
+        if ordered:
+            results = {}  # future_index -> List[RecordBatch]
+            future_to_idx = {future: i for i, future in enumerate(futures)}
+            next_expected_idx = 0
+
+            def handle_ready(ready_futures):
+                nonlocal next_expected_idx
+
+                # Process ready results
+                for future, batches in ready_futures:
+                    idx = future_to_idx[future]
+                    results[idx] = batches
+
+                    # Yield consecutive completed partitions in order
+                    while next_expected_idx in results:
+                        for batch in results.pop(next_expected_idx):
+                            yield batch
+                        next_expected_idx += 1
+        else:
+
+            def handle_ready(ready_futures):
+                for _, batches in ready_futures:
+                    for batch in batches:
+                        yield batch
+
+        yield from DistributedTimeSeriesService._stream_ready_futures(futures, result_getter, handle_ready)
+
+    @staticmethod
+    def _get_ray_result(future) -> Iterable[pa.RecordBatch] | None:
+        """
+        Get result from Ray ObjectRef.
+
+        Args:
+            future: Ray ObjectRef
+
+        Returns:
+            List of batches or None if not ready
+        """
+        # Check if ready without blocking
+        ready, _ = ray.wait([future], num_returns=1, timeout=0)
+        if ready:
+            return ray.get(future)
+        return None
 
     async def _process_with_ray(
         self, partitions: List[T], batch_size: Optional[int], preserve_order: bool
@@ -164,15 +300,42 @@ class DistributedTimeSeriesService(BaseDataService[T], Generic[T]):
     async def _process_with_asyncio(
         self, partitions: List[T], batch_size: Optional[int], preserve_order: bool
     ) -> AsyncIterable[pa.RecordBatch]:
-        """Process partitions using AsyncIO with thread pool."""
+        """
+        Process partitions using AsyncIO with thread pool while maintaining streaming.
+
+        This method uses ThreadPoolExecutor to process partitions in parallel threads,
+        but maintains streaming behavior by yielding batches as they are produced
+        rather than collecting them in memory.
+
+        Args:
+            partitions: List of time series partitions to process.
+            batch_size: Maximum size per batch passed to underlying services.
+            preserve_order: If True, yield batches in partition order; if False, yield as completed.
+
+        Yields:
+            pa.RecordBatch: Arrow record batches streamed from partitions.
+        """
+        """Process partitions using AsyncIO with thread pool - maintains streaming."""
         max_workers = min(self._get_max_workers(), len(partitions))
 
         # Use a single ThreadPoolExecutor for all partitions
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
 
-            def sync_process_partition(partition: T):
-                """Process a single partition and return generator."""
+            def sync_process_single_batch(partition: T):
+                """
+                Process a single partition and return streaming generator.
+
+                This function creates a new service instance for the partition
+                and returns the batch generator directly to maintain streaming behavior.
+
+                Args:
+                    partition: The time series partition to process.
+
+                Returns:
+                    Generator yielding pa.RecordBatch instances.
+                """
                 service = self.base_service_class()
+                # Return the generator directly - don't convert to list to maintain streaming
                 return service.get_batches(partition, batch_size)
 
             # Submit all partitions to thread pool
@@ -181,7 +344,7 @@ class DistributedTimeSeriesService(BaseDataService[T], Generic[T]):
             if preserve_order:
                 # Process in order - submit all tasks first
                 futures = [
-                    loop.run_in_executor(executor, sync_process_partition, partition) for partition in partitions
+                    loop.run_in_executor(executor, sync_process_single_batch, partition) for partition in partitions
                 ]
 
                 # Wait for each partition in order and stream its batches
@@ -196,7 +359,7 @@ class DistributedTimeSeriesService(BaseDataService[T], Generic[T]):
             else:
                 # Process as completed - submit and process immediately
                 futures = [
-                    loop.run_in_executor(executor, sync_process_partition, partition) for partition in partitions
+                    loop.run_in_executor(executor, sync_process_single_batch, partition) for partition in partitions
                 ]
 
                 # Stream batches as partitions complete
