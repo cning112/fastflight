@@ -19,6 +19,13 @@ from fastflight.exceptions import FastFlightRetryExhaustedError
 from ..config import CircuitBreakerConfig, ResilienceConfig, RetryConfig
 from ..types import T
 from .circuit_breaker import CircuitBreaker
+# Import Prometheus metrics for circuit breaker
+from fastflight.metrics import (
+    CIRCUIT_BREAKER_STATE_MAP,
+    bouncer_circuit_breaker_failures_total,
+    bouncer_circuit_breaker_state,
+    bouncer_circuit_breaker_successes_total,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +72,16 @@ class ResilienceManager:
         if name not in self.circuit_breakers:
             if config is None:
                 raise ValueError(f"Circuit breaker '{name}' not found and no configuration provided")
-            self.circuit_breakers[name] = CircuitBreaker(name, config)
+            cb = CircuitBreaker(name, config)
+            self.circuit_breakers[name] = cb
+            # Initialize state metric for the new circuit breaker
+            current_state_str = cb.state.value # Assuming .value gives "closed", "open", "half-open"
+            bouncer_circuit_breaker_state.labels(circuit_name=name, state=current_state_str).set(
+                CIRCUIT_BREAKER_STATE_MAP.get(current_state_str, -1) # -1 for unknown/other
+            )
+            # Initialize counters for this CB to zero if not already present (Prometheus handles this)
+            bouncer_circuit_breaker_failures_total.labels(circuit_name=name).inc(0)
+            bouncer_circuit_breaker_successes_total.labels(circuit_name=name).inc(0)
         return self.circuit_breakers[name]
 
     async def execute_with_resilience(
@@ -105,14 +121,32 @@ class ResilienceManager:
             # Create a wrapped function that applies circuit breaker
             if asyncio.iscoroutinefunction(func):
 
-                async def circuit_wrapped_func(*a, **kw):
-                    return await circuit_breaker.call(func, *a, **kw)
-            else:
+            # This common wrapper handles metrics for both async and sync funcs called via the async CB
+            async def common_circuit_wrapped_func_with_metrics(*a, **kw):
+                cb_name = circuit_breaker.name
+                try:
+                    # The actual call to the function via the circuit breaker
+                    # circuit_breaker.call is async and handles both async and sync original functions
+                    result = await circuit_breaker.call(func, *a, **kw)
+                    
+                    # If circuit_breaker.call succeeds, it means the underlying func succeeded
+                    # or the CB allowed the call and it succeeded.
+                    bouncer_circuit_breaker_successes_total.labels(circuit_name=cb_name).inc()
+                except Exception as cb_exc:
+                    # This exception could be from the func itself (if CB is closed/half-open and func fails,
+                    # leading to CB counting a failure) or CircuitBreakerOpen if CB is open.
+                    if not isinstance(cb_exc, asyncio.exceptions.CancelledError): # Don't count cancellations
+                         bouncer_circuit_breaker_failures_total.labels(circuit_name=cb_name).inc()
+                    raise # Re-raise the exception
+                finally:
+                    # Always update the state gauge after a call, as the call might have changed the state
+                    current_state_str = circuit_breaker.state.value
+                    bouncer_circuit_breaker_state.labels(circuit_name=cb_name, state=current_state_str).set(
+                        CIRCUIT_BREAKER_STATE_MAP.get(current_state_str, -1)
+                    )
+                return result # Return the result if no exception was raised or re-raised
 
-                async def circuit_wrapped_func(*a, **kw):
-                    return await circuit_breaker.call(func, *a, **kw)
-
-            wrapped_func = circuit_wrapped_func
+            wrapped_func = common_circuit_wrapped_func_with_metrics
 
         # Apply retry logic if configured
         if effective_config.retry_config:

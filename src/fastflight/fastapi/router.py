@@ -1,20 +1,23 @@
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Security # Import Security
 from fastapi.responses import StreamingResponse
 
 from fastflight.client import FastFlightBouncer
 from fastflight.fastapi.dependencies import body_bytes, fast_flight_client
+from fastflight.fastapi.security import get_api_key # Import get_api_key
 from fastflight.utils.stream_utils import write_arrow_data_to_stream
 
 logger = logging.getLogger(__name__)
 fast_flight_router = APIRouter()
 
 
-@fast_flight_router.get("/registered_data_types")
+@fast_flight_router.get("/registered_data_types", dependencies=[Security(get_api_key)])
 def get_registered_data_types(ff_client: FastFlightBouncer = Depends(fast_flight_client)):
     """
     Retrieve all registered data types from the Flight client.
+
+    Requires API Key authentication.
 
     Returns a list of dictionaries, each mapping a registered BaseParams class fully qualified name (FQN)
     to its corresponding BaseDataService class FQN. This endpoint is useful for debugging or introspection
@@ -29,10 +32,12 @@ def get_registered_data_types(ff_client: FastFlightBouncer = Depends(fast_flight
     return result
 
 
-@fast_flight_router.post("/stream")
+@fast_flight_router.post("/stream", dependencies=[Security(get_api_key)])
 async def read_data(body: bytes = Depends(body_bytes), ff_client: FastFlightBouncer = Depends(fast_flight_client)):
     """
     Endpoint to read data from the Flight server and stream it back in Arrow format.
+
+    Requires API Key authentication.
 
     Args:
         body (bytes): The raw request body bytes. The body should be a JSON-serialized `BaseParams` instance.
@@ -46,3 +51,13 @@ async def read_data(body: bytes = Depends(body_bytes), ff_client: FastFlightBoun
     stream_reader = await ff_client.aget_stream_reader(body)
     stream = await write_arrow_data_to_stream(stream_reader)
     return StreamingResponse(stream, media_type="application/vnd.apache.arrow.stream")
+
+
+@fast_flight_router.get("/health", status_code=200)
+async def health_check():
+    """
+    Simple health check endpoint.
+    """
+    # This endpoint being reachable means the FastAPI app is running.
+    # More sophisticated checks could be added here (e.g., DB connectivity, Flight server ping).
+    return {"status": "healthy"}

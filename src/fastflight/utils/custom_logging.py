@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 import structlog
+from src.fastflight.config import logging_settings
 
 shared_processors = [
     # If log level is too low, abort pipeline and throw away log entry.
@@ -38,10 +39,10 @@ shared_processors = [
 
 
 def setup_logging(
-    console_log_level: str | int = "DEBUG",
-    log_file: None | Path | str = "app.log",
-    file_log_level: str | int = "INFO",
-    file_format: Literal["plain", "json"] = "plain",
+    console_log_level: str | int = logging_settings.log_level.upper(),
+    log_file: None | Path | str = "app.log", # Keep app.log as default, can be overridden by CLI or direct calls
+    file_log_level: str | int = logging_settings.log_level.upper(),
+    file_format: Literal["plain", "json"] = logging_settings.log_format, # type: ignore
 ):
     """
     Set up the logging configuration for the application.

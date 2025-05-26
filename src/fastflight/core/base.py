@@ -83,7 +83,7 @@ class BaseParams(BaseModel, ABC):
             params_cls = cls.lookup(fqn)
             return params_cls.model_validate(json_data)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.error(f"Error deserializing params: {e}")
+            logger.error(f"Error deserializing params: {e}", exc_info=True)
             raise
 
     def to_json(self) -> dict:
@@ -98,7 +98,7 @@ class BaseParams(BaseModel, ABC):
             json_data["param_type"] = self.__class__.fqn()
             return json_data
         except (TypeError, ValueError) as e:
-            logger.error(f"Error serializing params: {e}")
+            logger.error(f"Error serializing params: {e}", exc_info=True)
             raise
 
     def to_bytes(self) -> bytes:
@@ -133,7 +133,7 @@ class BaseDataService(Generic[T], ABC):
                         try:
                             cls._register(param_cls, cls)
                         except ValueError as e:
-                            logger.error(f"Automatic registration failed for {cls.fqn()}: {e}")
+                            logger.error(f"Automatic registration failed for {cls.fqn()}: {e}", exc_info=True)
                 break
 
     @classmethod
