@@ -52,7 +52,7 @@ class FastFlightServer(flight.FlightServerBase):
         """
         try:
             logger.debug("Received ticket: %s", ticket.ticket)
-            data_params, data_service = self._resolve_ticket(ticket)
+            data_params, data_service = self._resolve_ticket(ticket.ticket)
             reader = self._get_batch_reader(data_service, data_params)
             return flight.RecordBatchStream(reader)
         except Exception as e:
@@ -89,9 +89,9 @@ class FastFlightServer(flight.FlightServerBase):
             raise flight.FlightInternalError(f"Error in data retrieval: {type(e).__name__}: {str(e)}")
 
     @staticmethod
-    def _resolve_ticket(ticket: flight.Ticket) -> tuple[BaseParams, BaseDataService]:
+    def _resolve_ticket(ticket: bytes) -> tuple[BaseParams, BaseDataService]:
         try:
-            req_params = BaseParams.from_bytes(ticket.ticket)
+            req_params = BaseParams.from_bytes(ticket)
             service_cls = BaseDataService.lookup(req_params.fqn())
             return req_params, cast(BaseDataService, service_cls())
         except KeyError as e:

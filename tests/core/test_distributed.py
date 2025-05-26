@@ -132,7 +132,7 @@ class TestDistributedTimeSeriesService:
         base_service = MockDataService()
         distributed_service = DistributedTimeSeriesService(base_service)
 
-        workers = distributed_service._get_available_workers()
+        workers = distributed_service._get_max_workers()
         assert isinstance(workers, int)
         assert workers > 0
 

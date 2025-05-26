@@ -1,8 +1,10 @@
-"""Distributed processing support using Ray."""
+"""Distributed processing support with Ray -> AsyncIO fallback."""
 
 import asyncio
 import logging
-from typing import AsyncIterable, Generic, List, Optional, TypeVar
+import os
+from concurrent.futures import ThreadPoolExecutor
+from typing import AsyncIterable, Generic, List, Literal, Optional, TypeVar
 
 try:
     import ray
@@ -20,81 +22,89 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=TimeSeriesParams)
 
+# Define backend types as literals for type safety
+BackendType = Literal["ray", "asyncio", "single_threaded"]
+
 
 class DistributedTimeSeriesService(BaseDataService[T], Generic[T]):
     """
-    Distributed data service using Ray for parallel processing of time series queries.
+    Distributed data service with intelligent backend fallback and configurable distribution.
 
-    Automatically partitions large time series queries across Ray workers for horizontal scaling.
-    The service splits queries by time windows and processes them in parallel, streaming results
-    back as they complete.
+    Execution order: Ray -> AsyncIO -> Single-threaded
+
+    - If Ray is available and distributed enabled: Uses Ray for true distributed processing
+    - If Ray unavailable but distributed enabled: Falls back to AsyncIO with thread pool
+    - If distributed disabled: Uses single-threaded sequential processing
 
     Args:
         base_service: The underlying data service to distribute
-        ray_address: Ray cluster address (None for local Ray)
+        ray_address: Ray cluster address (None for local Ray, ignored if Ray unavailable)
+        max_workers: Maximum number of workers (auto-detected if None)
+        enable_distributed: Whether to enable distributed processing (default: True)
 
     Examples:
-        Basic distributed processing:
+        Basic usage (auto-selects best backend):
 
         >>> service = StockDataService()
         >>> distributed = DistributedTimeSeriesService(service)
-        >>> params = StockDataParams(
-        ...     symbol="AAPL",
-        ...     start_time=datetime(2024, 1, 1),
-        ...     end_time=datetime(2024, 2, 1)  # 1 month of data
-        ... )
-        >>> async for batch in distributed.aget_batches(params):
-        ...     process_batch(batch)
+        >>> # Uses Ray or AsyncIO automatically
 
-        With specific Ray cluster:
+        Disable distributed processing:
 
-        >>> distributed = DistributedTimeSeriesService(
-        ...     service,
-        ...     ray_address="ray://head-node:10001"
-        ... )
+        >>> distributed = DistributedTimeSeriesService(service, enable_distributed=False)
+        >>> # Forces single-threaded processing
 
-        Process flow for large query:
-        1. Query: Jan 1-31 stock data (44,640 points)
-        2. Auto-partition into 8 tasks (based on available workers)
-        3. Distribute across Ray cluster:
-           - Worker1: Jan 1-4   (5,580 points)
-           - Worker2: Jan 5-8   (5,580 points)
-           - Worker3: Jan 9-12  (5,580 points)
-           - ...
-        4. Stream results as tasks complete
-        5. Total time: ~30 seconds vs 5 minutes single-threaded
+        Control worker count:
 
-    Architecture:
-        Client → DistributedService → Ray Workers → Results Stream
-                      ↓ partition query
-                      ↓ submit remote tasks
-                      ↓ stream results async
+        >>> distributed = DistributedTimeSeriesService(service, max_workers=4)
+        >>> # Limits to 4 workers regardless of backend
 
-    Performance Benefits:
-        - Linear scaling with worker count
-        - Memory efficient streaming
-        - Automatic load balancing
-        - Fault tolerance via Ray
+        The service will automatically:
+        1. Try Ray if available and distributed enabled
+        2. Fall back to AsyncIO with threading if Ray unavailable
+        3. Use single-threaded if distributed disabled
     """
 
-    def __init__(self, base_service: BaseDataService[T], ray_address: Optional[str] = None):
-        if not RAY_AVAILABLE:
-            raise ImportError("Ray is required for distributed processing. Install with: pip install ray")
-
+    def __init__(
+        self,
+        base_service: BaseDataService[T],
+        ray_address: Optional[str] = None,
+        max_workers: Optional[int] = None,
+        enable_distributed: bool = True,
+    ):
         self.base_service = base_service
         self.base_service_class = base_service.__class__
-        if not ray.is_initialized():
-            ray.init(address=ray_address)
+        self.ray_address = ray_address
+        self.max_workers = max_workers
+        self.enable_distributed = enable_distributed
+
+        # Determine which backend to use
+        self.backend: BackendType = self._select_backend()
+        logger.info(f"Selected backend: {self.backend} (distributed: {self.enable_distributed})")
+
+    def _select_backend(self) -> BackendType:
+        """Select the best available backend."""
+        # If distributed processing is disabled, use single-threaded
+        if not self.enable_distributed:
+            return "single_threaded"
+
+        if RAY_AVAILABLE:
+            try:
+                # Try to initialize Ray if not already done
+                if not ray.is_initialized():
+                    ray.init(address=self.ray_address)
+                return "ray"
+            except Exception as e:
+                logger.warning(f"Ray initialization failed: {e}, falling back to asyncio")
+
+        # AsyncIO is always available
+        return "asyncio"
 
     async def aget_batches(
         self, params: T, batch_size: int | None = None, preserve_order: bool = True
     ) -> AsyncIterable[pa.RecordBatch]:
         """
-        Get batches using distributed processing across Ray workers.
-
-        Automatically partitions the query based on data size and available workers,
-        then processes partitions in parallel. Results can be streamed in order or
-        as they complete for maximum throughput.
+        Get batches using the best available distributed processing backend.
 
         Args:
             params: Time series parameters with start_time, end_time, etc.
@@ -102,84 +112,120 @@ class DistributedTimeSeriesService(BaseDataService[T], Generic[T]):
             preserve_order: If True, yield batches in time order; if False, yield as completed
 
         Yields:
-            RecordBatch: Arrow record batches in time order (if preserve_order=True)
-
-        Examples:
-            Time-ordered processing (default for time series):
-
-            >>> # Data returned in chronological order: Jan 1-4, Jan 5-8, Jan 9-12...
-            >>> async for batch in service.aget_batches(params):
-            ...     analyze_sequential_data(batch)
-
-            Maximum throughput (for aggregation workloads):
-
-            >>> # Data returned as workers complete: Jan 9-12, Jan 1-4, Jan 5-8...
-            >>> async for batch in service.aget_batches(params, preserve_order=False):
-            ...     aggregate_totals(batch)  # Order doesn't matter
-
-            Execution comparison:
-            - preserve_order=True: Maintains chronology but may wait for slow workers
-            - preserve_order=False: Maximum throughput, results as completed
-
-            Performance Notes:
-            - preserve_order=True: Slight memory overhead for buffering
-            - preserve_order=False: ~10-20% faster for large queries
-            - Time series analysis typically requires preserve_order=True
+            RecordBatch: Arrow record batches
         """
         # Determine optimal partitions
-        max_workers = self._get_available_workers()
+        max_workers = self._get_max_workers()
         partitions = params.get_optimal_partitions(max_workers)
 
-        logger.info(f"Splitting query into {len(partitions)} partitions across {max_workers} workers")
+        logger.info(f"Processing {len(partitions)} partitions with {self.backend} backend")
 
-        # Submit remote tasks
-        futures = [
-            process_partition_remote.remote(self.base_service_class, partition, batch_size) for partition in partitions
-        ]
-
-        # Stream results as they complete
-        if preserve_order:
-            async for batch in self._stream_results_ordered(futures):
+        if self.backend == "ray":
+            async for batch in self._process_with_ray(partitions, batch_size, preserve_order):
+                yield batch
+        elif self.backend == "asyncio":
+            async for batch in self._process_with_asyncio(partitions, batch_size, preserve_order):
                 yield batch
         else:
-            async for batch in self._stream_results(futures):
+            # Single-threaded processing
+            async for batch in self._process_single_threaded(partitions, batch_size, preserve_order):
                 yield batch
 
     def get_batches(self, params: T, batch_size: int | None = None, preserve_order: bool = True):
         """Synchronous version - converts async to sync."""
 
-        async def _async_gen():
+        async def _collect_batches():
+            batches = []
             async for batch in self.aget_batches(params, batch_size, preserve_order):
+                batches.append(batch)
+            return batches
+
+        # Use asyncio.run() - available in Python 3.7+
+        batches = asyncio.run(_collect_batches())
+        for batch in batches:
+            yield batch
+
+    async def _process_with_ray(
+        self, partitions: List[T], batch_size: Optional[int], preserve_order: bool
+    ) -> AsyncIterable[pa.RecordBatch]:
+        """Process partitions using Ray."""
+        # Submit remote tasks
+        futures = [
+            process_partition_remote.remote(self.base_service_class, partition, batch_size) for partition in partitions
+        ]
+
+        if preserve_order:
+            async for batch in self._stream_ray_results_ordered(futures):
+                yield batch
+        else:
+            async for batch in self._stream_ray_results_unordered(futures):
                 yield batch
 
-        # Use asyncio to run the async generator
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            async_gen = _async_gen()
-            while True:
-                try:
-                    yield loop.run_until_complete(async_gen.__anext__())
-                except StopAsyncIteration:
-                    break
-        finally:
-            loop.close()
+    async def _process_with_asyncio(
+        self, partitions: List[T], batch_size: Optional[int], preserve_order: bool
+    ) -> AsyncIterable[pa.RecordBatch]:
+        """Process partitions using AsyncIO with thread pool."""
+        max_workers = min(self._get_max_workers(), len(partitions))
 
-    @staticmethod
-    async def _stream_results_ordered(futures: List) -> AsyncIterable[pa.RecordBatch]:
-        """
-        Stream results in partition order, maintaining time series chronology.
+        # Use a single ThreadPoolExecutor for all partitions
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
 
-        Buffers completed results until they can be yielded in the correct order.
-        This ensures time series data maintains temporal ordering at the cost of
-        some memory usage and potential latency.
+            def sync_process_partition(partition: T):
+                """Process a single partition and return generator."""
+                service = self.base_service_class()
+                return service.get_batches(partition, batch_size)
 
-        Args:
-            futures: Ray ObjectRef futures in partition order
+            # Submit all partitions to thread pool
+            loop = asyncio.get_running_loop()
 
-        Yields:
-            RecordBatch: Batches in chronological order
-        """
+            if preserve_order:
+                # Process in order - submit all tasks first
+                futures = [
+                    loop.run_in_executor(executor, sync_process_partition, partition) for partition in partitions
+                ]
+
+                # Wait for each partition in order and stream its batches
+                for future in futures:
+                    try:
+                        batch_generator = await future
+                        for batch in batch_generator:
+                            yield batch
+                    except Exception as e:
+                        logger.error(f"AsyncIO partition failed: {e}")
+                        continue
+            else:
+                # Process as completed - submit and process immediately
+                futures = [
+                    loop.run_in_executor(executor, sync_process_partition, partition) for partition in partitions
+                ]
+
+                # Stream batches as partitions complete
+                for future in asyncio.as_completed(futures):
+                    try:
+                        batch_generator = await future
+                        for batch in batch_generator:
+                            yield batch
+                    except Exception as e:
+                        logger.error(f"AsyncIO partition failed: {e}")
+                        continue
+
+    async def _process_single_threaded(
+        self, partitions: List[T], batch_size: Optional[int], preserve_order: bool
+    ) -> AsyncIterable[pa.RecordBatch]:
+        """Process partitions sequentially in single thread."""
+        logger.info("Using single-threaded processing (distributed disabled)")
+
+        for partition in partitions:
+            try:
+                service = self.base_service_class()
+                for batch in service.get_batches(partition, batch_size):
+                    yield batch
+            except Exception as e:
+                logger.error(f"Single-threaded partition failed: {e}")
+                continue
+
+    async def _stream_ray_results_ordered(self, futures: List) -> AsyncIterable[pa.RecordBatch]:
+        """Stream Ray results in partition order."""
         results = {}  # partition_index -> List[RecordBatch]
         future_to_idx = {future: i for i, future in enumerate(futures)}
         pending = set(futures)
@@ -201,39 +247,11 @@ class DistributedTimeSeriesService(BaseDataService[T], Generic[T]):
                         next_expected_idx += 1
 
                 except Exception as e:
-                    logger.error(f"Task failed: {e}")
+                    logger.error(f"Ray task failed: {e}")
                     continue
 
-    @staticmethod
-    async def _stream_results(futures: List) -> AsyncIterable[pa.RecordBatch]:
-        """
-        Stream results from Ray futures as they complete.
-
-        Uses Ray's wait() mechanism to efficiently collect results without blocking
-        on slow workers. Yields batches as soon as any worker completes its task.
-
-        Args:
-            futures: List of Ray ObjectRef futures from remote tasks
-
-        Yields:
-            RecordBatch: Processed batches from completed workers
-
-        Examples:
-            Internal flow when processing 8 partitions:
-
-            Time 0s:  Submit 8 tasks → [Future1, Future2, ..., Future8]
-            Time 5s:  Future3 completes → yield batches from Worker3
-            Time 7s:  Future1, Future5 complete → yield batches from Worker1, Worker5
-            Time 12s: Future2, Future8 complete → yield batches from Worker2, Worker8
-            Time 15s: Remaining futures complete → yield final batches
-
-            Result order is non-deterministic (based on worker speed, not partition order).
-
-        Error Handling:
-            - Failed tasks are logged and skipped
-            - Partial results are still returned
-            - Could be extended with retry logic
-        """
+    async def _stream_ray_results_unordered(self, futures: List) -> AsyncIterable[pa.RecordBatch]:
+        """Stream Ray results as they complete."""
         pending = set(futures)
 
         while pending:
@@ -246,23 +264,39 @@ class DistributedTimeSeriesService(BaseDataService[T], Generic[T]):
                     for batch in batches:
                         yield batch
                 except Exception as e:
-                    logger.error(f"Task failed: {e}")
-                    # Could implement retry logic here
+                    logger.error(f"Ray task failed: {e}")
                     continue
 
-    @staticmethod
-    def _get_available_workers() -> int:
-        """Get number of available Ray workers."""
-        try:
-            return len(ray.nodes())
-        except:
-            return 4  # Fallback default
+    def _get_max_workers(self) -> int:
+        """Get maximum number of workers based on backend."""
+        if not self.enable_distributed:
+            return 1
+
+        if self.max_workers:
+            return self.max_workers
+
+        if self.backend == "ray":
+            try:
+                return len(ray.nodes()) * 2 if ray.is_initialized() else 4
+            except:
+                return 4
+        else:
+            # For AsyncIO, use a reasonable number of threads
+            return min(16, (os.cpu_count() or 1) * 2)
+
+    def get_backend_info(self) -> dict:
+        """Get information about the current backend."""
+        return {
+            "backend": self.backend,
+            "distributed_enabled": self.enable_distributed,
+            "ray_available": RAY_AVAILABLE,
+            "max_workers": self._get_max_workers(),
+            "ray_initialized": ray.is_initialized() if RAY_AVAILABLE else False,
+        }
 
 
-try:
-    import ray
-
-    RAY_AVAILABLE = True
+# Ray remote function (only defined if Ray is available)
+if RAY_AVAILABLE:
 
     @ray.remote
     def process_partition_remote(
@@ -271,10 +305,6 @@ try:
         """
         Remote function to process a single time series partition on a Ray worker.
 
-        Creates a fresh instance of the data service on the worker node and processes
-        the assigned time partition. This function runs in parallel across multiple
-        Ray workers.
-
         Args:
             service_class: Class of the data service (not instance, to avoid serialization)
             params: Time series parameters for this specific partition
@@ -282,51 +312,20 @@ try:
 
         Returns:
             List of RecordBatch objects from this partition
-
-        Examples:
-            Ray execution on different workers:
-
-            Worker 1 processes:
-            >>> params1 = StockDataParams(
-            ...     symbol="AAPL",
-            ...     start_time=datetime(2024, 1, 1, 9, 0),
-            ...     end_time=datetime(2024, 1, 1, 11, 0)  # 2 hours
-            ... )
-            >>> batches = process_partition_remote.remote(StockDataService, params1)
-            >>> # Returns ~120 records (1 per minute)
-
-            Worker 2 processes:
-            >>> params2 = StockDataParams(
-            ...     symbol="AAPL",
-            ...     start_time=datetime(2024, 1, 1, 11, 0),
-            ...     end_time=datetime(2024, 1, 1, 13, 0)  # Next 2 hours
-            ... )
-            >>> batches = process_partition_remote.remote(StockDataService, params2)
-
-            Execution flow per worker:
-            1. Worker receives (service_class, params, batch_size)
-            2. Creates service instance: service = StockDataService()
-            3. Processes partition: service.get_batches(params, batch_size)
-            4. Collects all batches into list
-            5. Returns batches to coordinator
-
-        Design Notes:
-            - Service class (not instance) is passed to avoid serialization issues
-            - Each worker creates its own database connections/resources
-            - Workers process independently and in parallel
-            - No shared state between workers (stateless design)
         """
         service = service_class()
         batches = []
 
-        for batch in service.get_batches(params, batch_size):
-            batches.append(batch)
+        try:
+            for batch in service.get_batches(params, batch_size):
+                batches.append(batch)
+        except Exception as e:
+            logger.error(f"Ray worker error processing partition: {e}")
+            # Return empty list instead of failing the entire job
 
         return batches
-
-except ImportError:
-    RAY_AVAILABLE = False
-
+else:
+    # Dummy function when Ray is not available
     def process_partition_remote(*args, **kwargs):
         """Dummy function when Ray is not available."""
-        raise ImportError("Ray is required for distributed processing. Install with: pip install ray")
+        raise ImportError("Ray is not available")
