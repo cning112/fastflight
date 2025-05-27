@@ -1,34 +1,20 @@
 # Multi-stage build for optimized production image
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
-# Install uv for fast dependency management  
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 # Set working directory
 WORKDIR /app
 
 # Copy dependency files
-COPY pyproject.toml uv.lock ./
+COPY requirements.txt ./
 
-# Install dependencies in virtual environment
-RUN uv sync --frozen --no-dev
-
-# Production stage
-FROM python:3.11-slim
-
-# Install uv in production image
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
-
-WORKDIR /app
-
-# Copy virtual environment from builder
-COPY --from=builder /app/.venv /app/.venv
+# Install dependencies
+RUN uv pip install -r requirements.txt --system --no-cache --cache-dir /tmp/uv-cache
+RUN rm -fr /tmp/uv-cache
 
 # Copy source code
 COPY src ./src
-
-# Set environment variables
-ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src"
 
 # Health check
@@ -36,5 +22,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import fastflight; print('OK')" || exit 1
 
 # Use CLI as entry point
-ENTRYPOINT ["fastflight"]
+ENTRYPOINT ["python", "-m", "fastflight.cli"]
 CMD ["start-fast-flight-server"]

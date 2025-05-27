@@ -13,12 +13,12 @@ repos:
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.7.8
     hooks:
-      - id: uv-sync
-        args: [ pyproject.toml, --all-extras, --group, dev, -o, requirements.txt ]
+      - id: uv-lock
         files: pyproject.toml
-  #      - id: pip-compile
-  #        args: [ pyproject.toml, -o, requirements.txt ]
-  #        files: pyproject.toml
+
+      - id: pip-compile
+        args: [ pyproject.toml, --all-extras, -o, requirements.txt ]
+        files: pyproject.toml
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.15.0
