@@ -1,5 +1,3 @@
-from fastflight.data_services.sql_service import SQLParams
-
 # **FastFlight Technical Documentation**
 
 ## **📌 Overview**
@@ -144,8 +142,6 @@ class CsvFileService(BaseDataService[CsvFileParams]):
 
 - **[CLI Guide](./CLI_USAGE.md)** – FastFlight command-line tool usage instructions.
 - **[FastAPI Integration Guide](./fastapi/README.md)** – How to expose Arrow Flight as a REST API.
-- **[Performance Benchmarking](./docs/BENCHMARK.md)** – Performance comparisons between FastFlight and traditional API
-  solutions.
 
 ---
 

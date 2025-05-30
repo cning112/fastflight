@@ -23,12 +23,12 @@ Once installed, the `fastflight` command becomes available.
 ### **1️⃣ Start the FastFlight Server**
 
 ```bash
-fastflight start-fast-flight-server --location grpc://0.0.0.0:8815
+fastflight start-fast-flight-server grpc://0.0.0.0:8815
 ```
 
-**Options:**
+**Arguments:**
 
-- `--location` (optional): Specify the gRPC server address (default: `grpc://0.0.0.0:8815`).
+- `LOCATION` (optional): Specify the gRPC server address (default: `grpc://0.0.0.0:8815`).
 
 ### **2️⃣ Start the FastAPI Server**
 
@@ -42,6 +42,7 @@ fastflight start-fastapi --host 0.0.0.0 --port 8000 --fast-flight-route-prefix /
 - `--port` (optional): Set FastAPI server port (default: `8000`).
 - `--fast-flight-route-prefix` (optional): API route prefix (default: `/fastflight`).
 - `--flight-location` (optional): Address of the Arrow Flight server (default: `grpc://0.0.0.0:8815`).
+- `--module-paths` (optional): Module paths to scan for parameter classes (default: `fastflight.demo_services`).
 
 ### **3️⃣ Start Both FastFlight and FastAPI Servers**
 
@@ -55,6 +56,7 @@ fastflight start-all --api-host 0.0.0.0 --api-port 8000 --fast-flight-route-pref
 - `--api-port` (optional): FastAPI server port (default: `8000`).
 - `--fast-flight-route-prefix` (optional): API route prefix (default: `/fastflight`).
 - `--flight-location` (optional): Address of the Arrow Flight server (default: `grpc://0.0.0.0:8815`).
+- `--module-paths` (optional): Module paths to scan for parameter classes (default: `fastflight.demo_services`).
 
 This command launches **both FastFlight and FastAPI servers** as separate processes and supports `Ctrl+C` termination.
 

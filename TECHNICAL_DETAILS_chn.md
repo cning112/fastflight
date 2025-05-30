@@ -54,10 +54,10 @@ FastFlight 采用 **结构化 Ticket 机制**，避免原生 Arrow Flight 仅支
 
 ```json
 {
-  "param_type": "duckdb.query",
-  "query": "SELECT * FROM flights WHERE year = 2023",
-  "limit": 1000,
-  "timeout": 30
+    "database_path": "示例.duckdb",
+    "query": "SELECT * FROM 财务数据 WHERE date >= ? AND date <= ?",
+    "parameters": ["2024-01-01T00:00:00Z", "2024-01-31T00:00:00Z"],
+    "param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams"
 }
 ```
 
@@ -107,18 +107,26 @@ FastFlight 采用 **列式存储格式（Apache Arrow）**，避免传统 JSON /
 开发者可以通过继承 `BaseDataService` 扩展数据源，例如支持 Kafka、MongoDB、Elasticsearch：
 
 ```python
-from fastflight.service import BaseDataService
+from fastflight.core.base import BaseParams, BaseDataService # 确保导入路径正确
+from typing import AsyncIterable
+import pyarrow as pa # 假设需要 pyarrow
 
+# 定义参数类
+class 自定义参数(BaseParams):
+    # 根据需要定义参数字段
+    # 例如: 文件路径: str
+    文件路径: str
 
-class CustomService(BaseDataService):
-    def fetch_data(self, request):
-        return get_custom_data(request)  # 替换为实际数据获取逻辑
-```
-
-注册数据服务：
-
-```python
-server.register_service(CustomService(), "custom_dataset")
+# 定义数据服务类
+class 自定义数据服务(BaseDataService[自定义参数]):
+    async def aget_batches(self, params: 自定义参数, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
+        # 实现数据获取逻辑
+        # 例如: 从文件读取数据并生成 RecordBatch
+        # for batch in some_data_source:
+        #     yield batch
+        # 此处为示意, 具体实现需填充
+        if False: # 避免 "unreachable code" 警告, 实际应为具体逻辑
+            yield None
 ```
 
 ---
@@ -127,7 +135,6 @@ server.register_service(CustomService(), "custom_dataset")
 
 - **[CLI 指南](./CLI_USAGE.md)** – FastFlight 命令行工具使用说明。
 - **[FastAPI 集成指南](./fastapi/README.md)** – 如何将 Arrow Flight 作为 REST API 暴露。
-- **[性能基准测试](./docs/BENCHMARK.md)** – FastFlight 与传统 API 方案的性能对比。
 
 ---
 

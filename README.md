@@ -59,20 +59,6 @@ uv add "fastflight[all]"
 
 ---
 
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
-
 ## **🎯 Using the CLI**
 
 FastFlight provides a command-line interface (CLI) for easy management of **Arrow Flight and FastAPI servers**.
@@ -86,20 +72,6 @@ fastflight start-fast-flight-server --location grpc://0.0.0.0:8815
 **Options:**
 
 - `--location` (optional): gRPC server address (default: `grpc://0.0.0.0:8815`).
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
 
 ---
 
@@ -124,20 +96,6 @@ default demo services, the `param_type` should be `fastflight.demo_services.duck
 
 ---
 
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
-
 ### **Start Both FastFlight and FastAPI Servers**
 
 ```bash
@@ -148,40 +106,12 @@ This launches both gRPC and REST servers, allowing you to use REST APIs while st
 
 ---
 
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
-
 ## **📖 Additional Documentation**
 
 - **[CLI Guide](./docs/CLI_USAGE.md)** – Detailed CLI usage instructions.
 - **[Docker Deployment](./docs/DOCKER.md)** – Container deployment and Docker Compose guide.
 - **[FastAPI Integration Guide](./src/fastflight/fastapi/README.md)** – Learn how to expose Arrow Flight via FastAPI.
 - **[Technical Documentation](./docs/TECHNICAL_DETAILS.md)** – In-depth implementation details.
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
 
 ---
 
@@ -198,37 +128,9 @@ Contributions are welcome! If you have suggestions or improvements, feel free to
 
 ---
 
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
-
 ## **📜 License**
 
 This project is licensed under the **MIT License**.
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
 
 ---
 
