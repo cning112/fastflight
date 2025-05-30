@@ -29,20 +29,6 @@ missing.
 
 ---
 
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
-
 ## **🚀 Quick Start**
 
 ### **1️⃣ Install FastFlight**
@@ -57,19 +43,28 @@ or use `uv`
 uv add "fastflight[all]"
 ```
 
----
-
-## **🐳 Docker Deployment**
+### **2️⃣ Start the Server**
 
 ```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
+# Start both FastFlight and FastAPI servers
+fastflight start-all --api-host 0.0.0.0 --api-port 8000 --flight-location grpc://0.0.0.0:8815
 ```
 
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
+This launches both gRPC and REST servers, allowing you to use REST APIs while streaming data via Arrow Flight.
+
+### **3️⃣ Test with Demo Service**
+
+```bash
+# Example REST API call to DuckDB demo service
+curl -X POST "http://localhost:8000/fastflight/stream" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams",
+    "database_path": ":memory:",
+    "query": "SELECT 1 as test_column",
+    "parameters": []
+  }'
+```
 
 ---
 
@@ -77,111 +72,133 @@ See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
 
 FastFlight provides a command-line interface (CLI) for easy management of **Arrow Flight and FastAPI servers**.
 
-### **Start the FastFlight Server**
+### **Start Individual Services**
 
 ```bash
+# Start only the FastFlight server
 fastflight start-fast-flight-server --location grpc://0.0.0.0:8815
+
+# Start only the FastAPI server
+fastflight start-fastapi --host 0.0.0.0 --port 8000 --location grpc://0.0.0.0:8815
 ```
 
-**Options:**
+### **Start Both Services**
 
-- `--location` (optional): gRPC server address (default: `grpc://0.0.0.0:8815`).
+```bash
+fastflight start-all --api-host 0.0.0.0 --api-port 8000 --location grpc://0.0.0.0:8815
+```
+
+**Important**: When using the `/stream` REST endpoint, ensure the `param_type` field is included in the request body for proper service routing.
 
 ---
 
 ## **🐳 Docker Deployment**
 
+### **Quick Start with Docker Compose**
+
 ```bash
-# Quick start with Docker Compose
+# Development setup (both servers in one container)
 docker-compose --profile dev up
 
-# Or run manually
+# Production setup (separated services)
+docker-compose up
+
+# Background mode
+docker-compose up -d
+```
+
+### **Manual Docker Commands**
+
+```bash
+# Run both servers
 docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
+
+# Run only FastFlight server
+docker run -p 8815:8815 fastflight:latest start-fast-flight-server
+
+# Run only FastAPI server
+docker run -p 8000:8000 fastflight:latest start-fastapi
 ```
 
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
+See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options and configuration.
 
 ---
 
-### **Start the FastAPI Server**
+## **💡 Usage Examples**
 
-```bash
-fastflight start-fastapi --host 0.0.0.0 --port 8000 --fast-flight-route-prefix /fastflight --flight-location grpc://0.0.0.0:8815
+### **Python Client Example**
+
+```python
+from fastflight import FastFlightBouncer
+from fastflight.demo_services.duckdb_demo import DuckDBParams
+
+# Create client
+client = FastFlightBouncer("grpc://localhost:8815")
+
+# Define query parameters
+params = DuckDBParams(
+    database_path=":memory:",
+    query="SELECT 1 as test_column, 'hello' as message",
+    parameters=[]
+)
+
+# Fetch data as Arrow Table
+table = client.get_pa_table(params)
+print(f"Received {len(table)} rows")
+
+# Convert to Pandas DataFrame
+df = table.to_pandas()
+print(df)
 ```
 
-**Options:**
+### **Async Streaming Example**
 
-- `--host` (optional): FastAPI server host (default: `0.0.0.0`).
-- `--port` (optional): FastAPI server port (default: `8000`).
-- `--fast-flight-route-prefix` (optional): API route prefix (default: `/fastflight`).
-- `--flight-location` (optional): Arrow Flight server address (default: `grpc://0.0.0.0:8815`).
-- `--module_paths` (optional): Comma-separated list of module paths to scan for custom data parameter and service
-- classes (default: `fastflight.demo_services`).
+```python
+import asyncio
+from fastflight import FastFlightBouncer
 
-**Note**: When using the `/stream` REST endpoint to stream data, make sure the `param_type` field is embedded in the
-request body. It's critical for the server to route the request to the correct data service. For example, for the
-default demo services, the `param_type` should be `fastflight.demo_services.duckdb_demo.DuckDBParams`.
+async def stream_data():
+    client = FastFlightBouncer("grpc://localhost:8815")
+    
+    async for batch in client.aget_record_batches(params):
+        print(f"Received batch with {batch.num_rows} rows")
+        # Process batch incrementally
+
+asyncio.run(stream_data())
+```
 
 ---
 
-## **🐳 Docker Deployment**
+## **📖 Documentation**
 
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
+- **[CLI Guide](./docs/CLI_USAGE.md)** – Detailed CLI usage instructions
+- **[Docker Deployment](./docs/DOCKER.md)** – Container deployment and Docker Compose guide
+- **[Error Handling](./docs/ERROR_HANDLING.md)** – Comprehensive error handling and resilience patterns
+- **[Technical Details](./TECHNICAL_DETAILS.md)** – In-depth implementation details and architecture
+- **[FastAPI Integration](./src/fastflight/fastapi/README.md)** – REST API integration guide
 
 ---
 
-### **Start Both FastFlight and FastAPI Servers**
+## **🛠 Extending FastFlight**
 
-```bash
-fastflight start-all --api-host 0.0.0.0 --api-port 8000 --fast-flight-route-prefix /fastflight --flight-location grpc://0.0.0.0:8815 --module-paths fastflight.demo_services.duckdb_demo
+Create custom data services by extending `BaseDataService`:
+
+```python
+from fastflight.core.base import BaseDataService, BaseParams
+import pyarrow as pa
+
+class CustomParams(BaseParams):
+    source_path: str
+    filter_condition: str
+
+class CustomDataService(BaseDataService[CustomParams]):
+    def get_batches(self, params: CustomParams, batch_size: int | None = None):
+        # Your custom data fetching logic here
+        yield pa.RecordBatch.from_arrays(
+            [pa.array([1, 2, 3])], 
+            ["custom_column"]
+        )
 ```
-
-This launches both gRPC and REST servers, allowing you to use REST APIs while streaming data via Arrow Flight.
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
-
----
-
-## **📖 Additional Documentation**
-
-- **[CLI Guide](./docs/CLI_USAGE.md)** – Detailed CLI usage instructions.
-- **[Docker Deployment](./docs/DOCKER.md)** – Container deployment and Docker Compose guide.
-- **[FastAPI Integration Guide](./src/fastflight/fastapi/README.md)** – Learn how to expose Arrow Flight via FastAPI.
-- **[Technical Documentation](./docs/TECHNICAL_DETAILS.md)** – In-depth implementation details.
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
 
 ---
 
@@ -191,44 +208,18 @@ See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
 ✅ **Async & Streaming Support** (Completed)  
 ✅ **REST API Adapter** (Completed)  
 ✅ **CLI Support** (Completed)  
+✅ **Enhanced Error Handling & Resilience** (Completed)  
 🔄 **Support for More Data Sources (SQL, NoSQL, Kafka)** (In Progress)  
-🔄 **Enhanced Debugging & Logging Tools** (In Progress)
+🔄 **Performance Benchmarking Tools** (In Progress)  
+🔄 **Production Monitoring & Observability** (Planned)
 
 Contributions are welcome! If you have suggestions or improvements, feel free to submit an Issue or PR. 🚀
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
 
 ---
 
 ## **📜 License**
 
 This project is licensed under the **MIT License**.
-
----
-
-## **🐳 Docker Deployment**
-
-```bash
-# Quick start with Docker Compose
-docker-compose --profile dev up
-
-# Or run manually
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
-```
-
-See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options.
 
 ---
 
