@@ -34,7 +34,7 @@ def apply_paths(func):
 @cli.command()
 @apply_paths
 def start_fast_flight_server(
-    location: Annotated[str, typer.Argument(help="Flight server location")] = "grpc://0.0.0.0:8815",
+    location: Annotated[str, typer.Option(help="Flight server location")] = "grpc://0.0.0.0:8815",
 ):
     """
     Start the FastFlight server.
@@ -57,7 +57,7 @@ def start_fastapi(
     fast_flight_route_prefix: Annotated[
         str, typer.Option(help="Route prefix for FastFlight API integration")
     ] = "/fastflight",
-    flight_location: Annotated[
+    location: Annotated[
         str, typer.Option(help="Flight server location that FastAPI will connect to")
     ] = "grpc://0.0.0.0:8815",
     module_paths: Annotated[
@@ -71,7 +71,7 @@ def start_fastapi(
         host (str): Host address for the FastAPI server (default: "0.0.0.0").
         port (int): Port for the FastAPI server (default: 8000).
         fast_flight_route_prefix (str): API route prefix for FastFlight integration (default: "/fastflight").
-        flight_location (str): The gRPC location of the Flight server that FastAPI will connect to (default: "grpc://0.0.0.0:8815").
+        location (str): The gRPC location of the Flight server that FastAPI will connect to (default: "grpc://0.0.0.0:8815").
         module_paths (list[str, ...]): Module paths to scan for parameter classes (default: ("fastflight.demo_services",)).
 
     """
@@ -80,7 +80,7 @@ def start_fastapi(
     from fastflight.fastapi import create_app
 
     typer.echo(f"Starting FastAPI Server at {host}:{port}")
-    app = create_app(list(module_paths), route_prefix=fast_flight_route_prefix, flight_location=flight_location)
+    app = create_app(list(module_paths), route_prefix=fast_flight_route_prefix, flight_location=location)
     uvicorn.run(app, host=host, port=port)
 
 
@@ -92,7 +92,7 @@ def start_all(
     fast_flight_route_prefix: Annotated[
         str, typer.Option(help="Route prefix for FastFlight API integration")
     ] = "/fastflight",
-    flight_location: Annotated[
+    location: Annotated[
         str, typer.Option(help="Flight server location that FastAPI will connect to")
     ] = "grpc://0.0.0.0:8815",
     module_paths: Annotated[
@@ -106,13 +106,20 @@ def start_all(
         api_host (str): Host address for the FastAPI server (default: "0.0.0.0").
         api_port (int): Port for the FastAPI server (default: 8000).
         fast_flight_route_prefix (str): API route prefix for FastFlight integration (default: "/fastflight").
-        flight_location (str): The gRPC location of the Flight server (default: "grpc://0.0.0.0:8815").
+        location (str): The gRPC location of the Flight server (default: "grpc://0.0.0.0:8815").
         module_paths (list[str]): Module paths to scan for parameter classes (default: ("fastflight.demo_services",)).
     """
-    # Create processes
-    flight_process = multiprocessing.Process(target=start_fast_flight_server, args=(flight_location,))
+    # Create processes using kwargs for both functions since they now use options
+    flight_process = multiprocessing.Process(target=start_fast_flight_server, kwargs={"location": location})
     api_process = multiprocessing.Process(
-        target=start_fastapi, args=(api_host, api_port, fast_flight_route_prefix, flight_location, module_paths)
+        target=start_fastapi,
+        kwargs={
+            "host": api_host,
+            "port": api_port,
+            "fast_flight_route_prefix": fast_flight_route_prefix,
+            "location": location,
+            "module_paths": module_paths,
+        },
     )
 
     flight_process.start()

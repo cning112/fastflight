@@ -1,5 +1,3 @@
-from fastflight.data_services.sql_service import SQLParams
-
 # **FastFlight Technical Documentation**
 
 ## **📌 Overview**
@@ -29,24 +27,37 @@ FastFlight consists of the following core components:
 
 ```text
 +----------------------------+
-|       Client (Python)      |
-|    Flight Client (PyArrow) |
+|       Client Application   |
+|   FastFlightBouncer        |
+|   - Connection Pooling     |
+|   - Retry & Circuit Breaker|
+|   - Error Handling         |
 +----------------------------+
            ▲
-           |  gRPC
+           |  gRPC (pooled)
            ▼
 +----------------------------+
 |      FastFlight Server     |
 | - Handles Flight Requests  |
 | - Uses Parameterized Ticket|
+| - Service Registration     |
 | - Streams Data Efficiently |
 +----------------------------+
            ▲
-           | JDBC/ODBC
+           | Data fetching
            ▼
 +----------------------------+
-|      SQL / NoSQL DB        |
-|  (Columnar or Row-Based)   |
+|    Data Services Layer     |
+|  - DuckDB Service          |
+|  - Custom Data Services    |
+|  - BaseDataService API     |
++----------------------------+
+           ▲
+           | JDBC/ODBC/API
+           ▼
++----------------------------+
+|      Data Sources          |
+|  (SQL, NoSQL, Files, etc.) |
 +----------------------------+
 ```
 
@@ -63,19 +74,30 @@ byte (`bytes`) transmission. The data flow is as follows:
 1️⃣ **Client sends a parameterized Ticket request**
 
 ```python
-ticket = DuckDBParams(
+from fastflight import FastFlightBouncer
+from fastflight.demo_services.duckdb_demo import DuckDBParams
+
+# Client sends a parameterized Ticket request
+params = DuckDBParams(
     database_path="example.duckdb",
     query="select * from financial_data where date >= ? and date <= ?",
     parameters=["2024-01-01T00:00:00Z", "2024-01-31T00:00:00Z"]
 )
 
-ticket.to_json()
+# The params serialize to JSON with param_type for service routing
+params.to_json()
 {
     "database_path": "example.duckdb",
     "query": "select * from financial_data where date >= ? and date <= ?",
     "parameters": ["2024-01-01T00:00:00Z", "2024-01-31T00:00:00Z"],
     "param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams"
 }
+
+# Use FastFlightBouncer for connection pooling and resilience
+bouncer = FastFlightBouncer("grpc://localhost:8815")
+table = bouncer.get_pa_table(params)  # Synchronous
+# or
+table = await bouncer.aget_pa_table(params)  # Asynchronous
 ```
 
 2️⃣ **Flight Server uses the `param_type` field to identify the ticket type and match the appropriate data service to
@@ -142,10 +164,9 @@ class CsvFileService(BaseDataService[CsvFileParams]):
 
 ## **📖 Related Documentation**
 
-- **[CLI Guide](./CLI_USAGE.md)** – FastFlight command-line tool usage instructions.
-- **[FastAPI Integration Guide](./fastapi/README.md)** – How to expose Arrow Flight as a REST API.
-- **[Performance Benchmarking](./docs/BENCHMARK.md)** – Performance comparisons between FastFlight and traditional API
-  solutions.
+- **[CLI Guide](./docs/CLI_USAGE.md)** – FastFlight command-line tool usage instructions.
+- **[FastAPI Integration Guide](./src/fastflight/fastapi/README.md)** – How to expose Arrow Flight as a REST API.
+- **[Error Handling Guide](./docs/ERROR_HANDLING.md)** – Comprehensive error handling and resilience patterns.
 
 ---
 
