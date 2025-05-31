@@ -232,12 +232,10 @@ class FastFlightBouncer:
         self._registered_data_types = dict(registered_data_types or {})
         self._flight_server_location = flight_server_location
 
-        # Configure circuit breaker with server-specific name
-        default_config = resilience_config or ResilienceConfig.create_default()
-        if default_config.circuit_breaker_name is None:
-            default_config = default_config.with_circuit_breaker_name(f"flight_bouncer_{flight_server_location}")
-
-        self._resilience_manager = ResilienceManager(default_config)
+        resilience_config = resilience_config or ResilienceConfig.create_noop()
+        if resilience_config.circuit_breaker_name is None:
+            resilience_config = resilience_config.with_circuit_breaker_name(f"flight_bouncer_{flight_server_location}")
+        self._resilience_manager = ResilienceManager(resilience_config)
 
         logger.info(f"Initialized FastFlightBouncer for {flight_server_location} with {client_pool_size} connections")
 
