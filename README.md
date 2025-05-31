@@ -46,8 +46,8 @@ uv add "fastflight[all]"
 ### **2️⃣ Start the Server**
 
 ```bash
-# Start both FastFlight and FastAPI servers
-fastflight start-all --api-host 0.0.0.0 --api-port 8000 --flight-location grpc://0.0.0.0:8815
+# Start both FastFlight and REST API servers
+fastflight start-all --flight-location grpc://0.0.0.0:8815 --rest-host 0.0.0.0 --rest-port 8000
 ```
 
 This launches both gRPC and REST servers, allowing you to use REST APIs while streaming data via Arrow Flight.
@@ -70,22 +70,22 @@ curl -X POST "http://localhost:8000/fastflight/stream" \
 
 ## **🎯 Using the CLI**
 
-FastFlight provides a command-line interface (CLI) for easy management of **Arrow Flight and FastAPI servers**.
+FastFlight provides a command-line interface (CLI) for easy management of **Arrow Flight and REST API servers**.
 
 ### **Start Individual Services**
 
 ```bash
 # Start only the FastFlight server
-fastflight start-fast-flight-server --location grpc://0.0.0.0:8815
+fastflight start-flight-server --flight-location grpc://0.0.0.0:8815
 
-# Start only the FastAPI server
-fastflight start-fastapi --host 0.0.0.0 --port 8000 --location grpc://0.0.0.0:8815
+# Start only the REST API server
+fastflight start-rest-server --rest-host 0.0.0.0 --rest-port 8000 --flight-location grpc://0.0.0.0:8815
 ```
 
 ### **Start Both Services**
 
 ```bash
-fastflight start-all --api-host 0.0.0.0 --api-port 8000 --location grpc://0.0.0.0:8815
+fastflight start-all --flight-location grpc://0.0.0.0:8815 --rest-host 0.0.0.0 --rest-port 8000
 ```
 
 **Important**: When using the `/stream` REST endpoint, ensure the `param_type` field is included in the request body for proper service routing.
@@ -114,10 +114,10 @@ docker-compose up -d
 docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
 
 # Run only FastFlight server
-docker run -p 8815:8815 fastflight:latest start-fast-flight-server
+docker run -p 8815:8815 fastflight:latest start-flight-server
 
-# Run only FastAPI server
-docker run -p 8000:8000 fastflight:latest start-fastapi
+# Run only REST API server
+docker run -p 8000:8000 fastflight:latest start-rest-server
 ```
 
 See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options and configuration.
