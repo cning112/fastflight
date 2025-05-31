@@ -88,7 +88,8 @@ fastflight start-rest-server --rest-host 0.0.0.0 --rest-port 8000 --flight-locat
 fastflight start-all --flight-location grpc://0.0.0.0:8815 --rest-host 0.0.0.0 --rest-port 8000
 ```
 
-**Important**: When using the `/stream` REST endpoint, ensure the `param_type` field is included in the request body for proper service routing.
+**Important**: When using the `/stream` REST endpoint, ensure the `param_type` field is included in the request body for
+proper service routing.
 
 ---
 
@@ -157,12 +158,14 @@ print(df)
 import asyncio
 from fastflight import FastFlightBouncer
 
+
 async def stream_data():
     client = FastFlightBouncer("grpc://localhost:8815")
-    
+
     async for batch in client.aget_record_batches(params):
         print(f"Received batch with {batch.num_rows} rows")
         # Process batch incrementally
+
 
 asyncio.run(stream_data())
 ```
@@ -175,7 +178,7 @@ asyncio.run(stream_data())
 - **[Docker Deployment](./docs/DOCKER.md)** – Container deployment and Docker Compose guide
 - **[Error Handling](./docs/ERROR_HANDLING.md)** – Comprehensive error handling and resilience patterns
 - **[Technical Details](./TECHNICAL_DETAILS.md)** – In-depth implementation details and architecture
-- **[FastAPI Integration](./src/fastflight/fastapi/README.md)** – REST API integration guide
+- **[FastAPI Integration](./src/fastflight/fastapi_integration/README.md)** – REST API integration guide
 
 ---
 
@@ -187,15 +190,17 @@ Create custom data services by extending `BaseDataService`:
 from fastflight.core.base import BaseDataService, BaseParams
 import pyarrow as pa
 
+
 class CustomParams(BaseParams):
     source_path: str
     filter_condition: str
+
 
 class CustomDataService(BaseDataService[CustomParams]):
     def get_batches(self, params: CustomParams, batch_size: int | None = None):
         # Your custom data fetching logic here
         yield pa.RecordBatch.from_arrays(
-            [pa.array([1, 2, 3])], 
+            [pa.array([1, 2, 3])],
             ["custom_column"]
         )
 ```

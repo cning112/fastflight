@@ -165,7 +165,8 @@ class CsvFileService(BaseDataService[CsvFileParams]):
 ## **📖 Related Documentation**
 
 - **[CLI Guide](./docs/CLI_USAGE.md)** – FastFlight command-line tool usage instructions.
-- **[FastAPI Integration Guide](./src/fastflight/fastapi/README.md)** – How to expose Arrow Flight as a REST API.
+- **[FastAPI Integration Guide](./src/fastflight/fastapi_integration/README.md)** – How to expose Arrow Flight as a REST
+  API.
 - **[Error Handling Guide](./docs/ERROR_HANDLING.md)** – Comprehensive error handling and resilience patterns.
 
 ---

@@ -126,7 +126,7 @@ server.register_service(CustomService(), "custom_dataset")
 ## **📖 相关文档**
 
 - **[CLI 指南](./CLI_USAGE.md)** – FastFlight 命令行工具使用说明。
-- **[FastAPI 集成指南](./fastapi/README.md)** – 如何将 Arrow Flight 作为 REST API 暴露。
+- **[FastAPI 集成指南](./fastapi_integration/README.md)** – 如何将 Arrow Flight 作为 REST API 暴露。
 - **[性能基准测试](./docs/BENCHMARK.md)** – FastFlight 与传统 API 方案的性能对比。
 
 ---

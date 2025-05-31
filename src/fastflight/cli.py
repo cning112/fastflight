@@ -62,7 +62,7 @@ def _start_rest_server(rest_host: str, rest_port: int, rest_prefix: str, flight_
     """Start REST server in a separate process."""
     import uvicorn
 
-    from fastflight.fastapi import create_app
+    from fastflight.fastapi_integration import create_app
 
     print(f"Starting REST API Server at {rest_host}:{rest_port}")
     app = create_app(modules, route_prefix=rest_prefix, flight_location=flight_location)

@@ -1,7 +1,7 @@
 from starlette.requests import Request
 
 from fastflight.client import FastFlightBouncer
-from fastflight.fastapi.lifespan import get_fast_flight_bouncer
+from fastflight.fastapi_integration.lifespan import get_fast_flight_bouncer
 
 
 async def body_bytes(request: Request) -> bytes:
