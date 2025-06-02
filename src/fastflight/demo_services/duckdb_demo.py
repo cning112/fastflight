@@ -4,6 +4,7 @@ Demo services for FastFlight. These are not imported by default and are only use
 
 import asyncio
 import logging
+import threading
 from typing import Any, AsyncIterable, Iterable, Sequence
 
 import pyarrow as pa
@@ -29,18 +30,32 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
     Executes SQL queries and returns results in Arrow format.
     """
 
-    def get_batches(self, params: DuckDBParams, batch_size: int | None = None) -> Iterable[pa.RecordBatch]:
-        try:
-            import duckdb
-        except ImportError:
-            logger.error("DuckDB not installed")
-            raise ImportError("DuckDB not installed. Install with 'pip install duckdb' or 'uv add duckdb'")
+    def __init__(self):
+        super().__init__()
+        self._thread_local = threading.local()
 
+    def _get_connection(self, db_path: str):
+        # Get the connection for the current thread
+        if not hasattr(self._thread_local, "connection"):
+            try:
+                import duckdb
+            except ImportError:
+                logger.error("DuckDB not installed")
+                raise ImportError("DuckDB not installed. Install with 'pip install duckdb' or 'uv add duckdb'")
+
+            current_thread = threading.current_thread()
+            logger.info(f"Creating DuckDB connection for thread: {current_thread.name}")
+
+            self._thread_local.connection = duckdb.connect(db_path)
+
+        return self._thread_local.connection
+
+    def get_batches(self, params: DuckDBParams, batch_size: int | None = None) -> Iterable[pa.RecordBatch]:
         try:
             db_path = params.database_path or ":memory:"
             logger.info(f"Connecting to DuckDB at {db_path}")
 
-            conn = duckdb.connect(db_path)
+            conn = self._get_connection(db_path)
             try:
                 query_parameters = params.parameters or {}
                 logger.info(f"Executing query: {params.query}")
@@ -78,12 +93,3 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
         batches = await loop.run_in_executor(None, blocking_get_batches)
         for batch in batches:
             yield batch
-
-
-# Example JSON payload for DuckDBParams via REST endpoint:
-# {
-#   "param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams",
-#   "database_path": "example.duckdb",
-#   "query": "SELECT * FROM flights WHERE origin = ?",
-#   "parameters": ["JFK"]
-# }

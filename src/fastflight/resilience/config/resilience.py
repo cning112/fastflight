@@ -111,6 +111,12 @@ class ResilienceConfig(BaseModel):
         return max_time
 
     @classmethod
+    def create_noop(cls) -> "ResilienceConfig":
+        return cls(
+            retry_config=None, circuit_breaker_config=None, circuit_breaker_name=None, enable_circuit_breaker=False
+        )
+
+    @classmethod
     def create_default(cls) -> "ResilienceConfig":
         """Create a ResilienceConfig with default settings for general production use."""
         return cls(

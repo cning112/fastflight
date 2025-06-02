@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from fastflight.client import FastFlightBouncer
-from fastflight.fastapi.dependencies import body_bytes, fast_flight_bouncer
+from fastflight.fastapi_integration.dependencies import body_bytes, fast_flight_bouncer
 from fastflight.utils.stream_utils import write_arrow_data_to_stream
 
 logger = logging.getLogger(__name__)

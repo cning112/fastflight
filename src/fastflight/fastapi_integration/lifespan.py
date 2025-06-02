@@ -1,17 +1,21 @@
 import logging
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import AsyncContextManager, Callable
+from typing import AsyncContextManager, Callable, Optional
 
 from fastapi import FastAPI
 
 from fastflight.client import FastFlightBouncer
+from fastflight.resilience.config.resilience import ResilienceConfig
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def fast_flight_bouncer_lifespan(
-    app: FastAPI, registered_data_types: dict[str, str], flight_location: str = "grpc://0.0.0.0:8815"
+    app: FastAPI,
+    registered_data_types: dict[str, str],
+    flight_location: str = "grpc://0.0.0.0:8815",
+    resilience_config: Optional[ResilienceConfig] = None,
 ):
     """
     Manage FastFlightBouncer lifecycle for FastAPI application.
@@ -22,9 +26,12 @@ async def fast_flight_bouncer_lifespan(
         app: FastAPI application instance.
         registered_data_types: Registry of available data service types.
         flight_location: Flight server gRPC endpoint.
+        resilience_config: Optional resilience configuration for the bouncer.
     """
     logger.info("Starting FastFlightBouncer at %s", flight_location)
-    bouncer = FastFlightBouncer(flight_location, registered_data_types)
+    if resilience_config:
+        logger.info("Using resilience configuration: %s", resilience_config)
+    bouncer = FastFlightBouncer(flight_location, registered_data_types, resilience_config=resilience_config)
     set_flight_bouncer(app, bouncer)
     try:
         yield
@@ -39,6 +46,7 @@ async def combine_lifespans(
     app: FastAPI,
     registered_data_types: dict[str, str],
     flight_location: str = "grpc://0.0.0.0:8815",
+    resilience_config: Optional[ResilienceConfig] = None,
     *other: Callable[[FastAPI], AsyncContextManager],
 ):
     """
@@ -48,10 +56,13 @@ async def combine_lifespans(
         app: FastAPI application instance.
         registered_data_types: Registry of data service types.
         flight_location: Flight server gRPC endpoint.
+        resilience_config: Optional resilience configuration for the bouncer.
         *other: Additional context managers to combine.
     """
     async with AsyncExitStack() as stack:
-        await stack.enter_async_context(fast_flight_bouncer_lifespan(app, registered_data_types, flight_location))
+        await stack.enter_async_context(
+            fast_flight_bouncer_lifespan(app, registered_data_types, flight_location, resilience_config)
+        )
         for c in other:
             await stack.enter_async_context(c(app))
         logger.info("Combined lifespan started")

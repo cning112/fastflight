@@ -24,7 +24,7 @@ Ensure that the Flight Server is running at your desired `flight_location`, e.g.
 ### 2️⃣ **Run the FastAPI Server**
 
 ```bash
-uvicorn fastflight.fastapi.app:create_app --factory --reload
+uvicorn fastflight.fastapi_integration:create_app --factory --reload
 ```
 
 By default, API endpoints will be mounted at `/fastflight`.
@@ -36,7 +36,7 @@ By default, API endpoints will be mounted at `/fastflight`.
 To change the FastAPI API prefix, for example, to `/api/v1/fastflight`, modify the app initialization:
 
 ```python
-from fastflight.fastapi.app import create_app
+from fastflight.fastapi_integration import create_app
 
 app = create_app(route_prefix="/api/v1/fastflight")
 ```
@@ -71,7 +71,7 @@ etc.
 ```python
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from fastflight.fastapi.app import create_app
+from fastflight.fastapi_integration import create_app
 
 
 @asynccontextmanager
@@ -97,7 +97,7 @@ Custom lifespan end
 
 ```
 fastflight/
-│── fastapi/
+│── fastapi_integration/
 │   │── __init__.py          # Exports core API components
 │   │── app.py               # FastAPI application entry point
 │   │── lifespan.py          # FastAPI lifespan management
