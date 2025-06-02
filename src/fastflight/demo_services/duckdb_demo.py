@@ -5,6 +5,7 @@ Demo services for FastFlight. These are not imported by default and are only use
 import asyncio
 import logging
 import threading
+import time
 import weakref
 from typing import Any, AsyncIterable, Iterable, Sequence
 
@@ -114,6 +115,7 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
                 arrow_table = result.arrow()
 
                 for batch in arrow_table.to_batches(max_chunksize=batch_size):
+                    time.sleep(0.01)  # simulate synchronous I/O delay
                     yield batch
 
             except Exception as e:
@@ -127,122 +129,27 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
 
     async def aget_batches(self, params: DuckDBParams, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:  # type: ignore
         """
-        True async implementation with the following improvements:
-
-        1. Streaming execution - doesn't load all data into memory
-        2. Cooperative yielding - allows other coroutines to run
-        3. Connection pooling - efficient resource management
-        4. Incremental fetching - processes data as it becomes available
-        5. Memory-efficient batching - controls memory usage
-
-        This provides real async benefits compared to the blocking approach.
+        Efficient async implementation using DuckDB's native Arrow support.
+        Avoids unnecessary fetchmany + pandas conversion.
         """
-        # Default batch size - balance between memory usage and efficiency
         if batch_size is None:
             batch_size = 10000
 
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            raise RuntimeError("aget_batches() must be called within an async context with an active event loop.")
-
+        loop = asyncio.get_running_loop()
         db_path = params.database_path or ":memory:"
-        conn = None
+        conn = await _connection_pool.get_connection(db_path)
 
         try:
-            # Get connection from pool asynchronously
-            conn = await _connection_pool.get_connection(db_path)
 
-            # Prepare and execute query in thread executor
-            query_parameters = params.parameters or {}
-            logger.info(f"Executing async streaming query: {params.query}")
-            logger.debug(f"With parameters: {query_parameters}")
+            def get_arrow_batches():
+                result = conn.execute(params.query, params.parameters or {})
+                table = result.arrow()
+                return table.to_batches(max_chunksize=batch_size)
 
-            def execute_query():
-                """Execute query and return result cursor."""
-                return conn.execute(params.query, query_parameters)
+            batches = await loop.run_in_executor(None, get_arrow_batches)
 
-            result = await loop.run_in_executor(None, execute_query)
-
-            # Stream results using fetchmany for true incremental processing
-            batches_yielded = 0
-            total_rows = 0
-
-            while True:
-
-                def fetch_chunk():
-                    """Fetch a chunk of rows incrementally."""
-                    try:
-                        chunk = result.fetchmany(batch_size)
-                        return chunk, [desc[0] for desc in result.description] if chunk else (None, None)
-                    except Exception as e:
-                        # If fetchmany is not supported, fall back to fetchall (less ideal)
-                        logger.debug(f"fetchmany failed, using fallback: {e}")
-                        try:
-                            all_data = result.fetchall()
-                            columns = [desc[0] for desc in result.description]
-                            return all_data, columns
-                        except Exception:
-                            # Last resort: use arrow() method
-                            arrow_table = result.arrow()
-                            return arrow_table, None
-
-                # Fetch data chunk in thread executor
-                chunk_data, columns = await loop.run_in_executor(None, fetch_chunk)
-
-                if chunk_data is None or len(chunk_data) == 0:
-                    logger.info(
-                        f"Async streaming completed. Batches yielded: {batches_yielded}, Total rows: {total_rows}"
-                    )
-                    break
-
-                # Handle different return types from fallback mechanisms
-                if isinstance(chunk_data, pa.Table):
-                    # Direct Arrow table from fallback
-                    for batch in chunk_data.to_batches(max_chunksize=batch_size):
-                        yield batch
-                        batches_yielded += 1
-                        total_rows += len(batch)
-
-                        # Cooperative yielding every few batches
-                        if batches_yielded % 5 == 0:
-                            await asyncio.sleep(0)
-                    break  # Arrow fallback gives us all data at once
-
-                else:
-                    # Regular row data - convert to Arrow batch
-                    def create_arrow_batch():
-                        import pandas as pd
-
-                        df = pd.DataFrame(chunk_data, columns=columns)
-                        table = pa.Table.from_pandas(df)
-                        return table.to_batches(max_chunksize=batch_size)
-
-                    # Convert to Arrow in thread executor to avoid blocking
-                    arrow_batches = await loop.run_in_executor(None, create_arrow_batch)
-
-                    # Yield each batch with cooperative yielding
-                    for batch in arrow_batches:
-                        yield batch
-                        batches_yielded += 1
-                        total_rows += len(batch)
-
-                        # Cooperative yielding - critical for async performance
-                        if batches_yielded % 5 == 0:
-                            await asyncio.sleep(0)  # Allow other coroutines to run
-
-                # If we got less than requested batch_size, we're at the end
-                if len(chunk_data) < batch_size:
-                    logger.debug(f"Received {len(chunk_data)} rows, less than batch_size {batch_size}, ending stream")
-                    break
-
-                # Add small delay between chunks to allow other async operations
-                await asyncio.sleep(0.001)  # 1ms delay for better async behavior
-
-        except Exception as e:
-            logger.error(f"Error in async DuckDB batch streaming: {e}", exc_info=True)
-            raise
+            for i, batch in enumerate(batches):
+                await asyncio.sleep(0.01)  # simulate async I/O delay
+                yield batch
         finally:
-            # Always clean up connection
-            if conn:
-                await _connection_pool.close_connection(conn)
+            await _connection_pool.close_connection(conn)
