@@ -9,7 +9,7 @@ from pyarrow import RecordBatchReader, flight
 
 from fastflight.core.base import BaseDataService, BaseParams
 from fastflight.utils.debug import debuggable
-from fastflight.utils.stream_utils import AsyncToSyncConverter
+from fastflight.utils.stream_utils import get_thread_local_converter
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class FastFlightServer(flight.FlightServerBase):
     def __init__(self, location: str):
         super().__init__(location)
         self.location = location
-        self._converter = AsyncToSyncConverter()
+        self._converter = get_thread_local_converter()
 
     def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         """
