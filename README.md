@@ -174,6 +174,7 @@ asyncio.run(stream_data())
 
 ## **📖 Documentation**
 
+- **[Data Service Developer Guide](DATA_SERVICE_DEV_GUIDE.md)** – Guide for implementing custom data services
 - **[CLI Guide](./docs/CLI_USAGE.md)** – Detailed CLI usage instructions
 - **[Docker Deployment](./docs/DOCKER.md)** – Container deployment and Docker Compose guide
 - **[Error Handling](./docs/ERROR_HANDLING.md)** – Comprehensive error handling and resilience patterns
@@ -182,28 +183,10 @@ asyncio.run(stream_data())
 
 ---
 
-## **🛠 Extending FastFlight**
+## **🛠 Custom Data Services**
 
-Create custom data services by extending `BaseDataService`:
-
-```python
-from fastflight.core.base import BaseDataService, BaseParams
-import pyarrow as pa
-
-
-class CustomParams(BaseParams):
-    source_path: str
-    filter_condition: str
-
-
-class CustomDataService(BaseDataService[CustomParams]):
-    def get_batches(self, params: CustomParams, batch_size: int | None = None):
-        # Your custom data fetching logic here
-        yield pa.RecordBatch.from_arrays(
-            [pa.array([1, 2, 3])],
-            ["custom_column"]
-        )
-```
+FastFlight supports extending to custom data sources. See **[Data Service Developer Guide](DATA_SERVICE_DEV_GUIDE.md)**
+for implementation details.
 
 ---
 
