@@ -6,8 +6,8 @@ import pandas as pd
 import pyarrow as pa
 from pyarrow import flight
 
-from base_cases import FlightServerTestCase
 from fastflight.utils.stream_utils import write_arrow_data_to_stream
+from tests.base_cases import FlightServerTestCase
 
 
 class TestWriteArrowDataToStream(unittest.TestCase):

@@ -2,9 +2,9 @@ import unittest
 
 import pyarrow as pa
 
-from base_cases import FlightServerTestCase
 from fastflight import FastFlightError
 from fastflight.client import FastFlightBouncer
+from tests.base_cases import FlightServerTestCase
 
 
 # We assume that FlightServerTestCase is defined as in the previous refactoring,
