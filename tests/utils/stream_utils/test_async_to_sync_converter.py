@@ -256,3 +256,87 @@ class TestAsyncToSyncConverterAdvanced(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAsyncToSyncConverter(unittest.TestCase):
+    """Test cases for AsyncToSyncConverter class."""
+
+    def setUp(self):
+        """Set up test environment before each test."""
+        self.converter = AsyncToSyncConverter()
+
+    def tearDown(self):
+        """Clean up after each test."""
+        self.converter.close()
+        # self.loop.close()
+
+    def test_init_without_loop(self):
+        """Test initialization without an event loop."""
+        converter = AsyncToSyncConverter()
+        self.assertIsNotNone(converter.loop)
+        self.assertIsNotNone(converter.loop_thread)
+        converter.close()
+
+    def test_run_coroutine(self):
+        """Test running a coroutine with run_coroutine."""
+
+        async def test_coro():
+            return "test_result"
+
+        result = self.converter.run_coroutine(test_coro())
+        self.assertEqual(result, "test_result")
+
+    def test_syncify_async_iter_basic(self):
+        """Test basic functionality of syncify_async_iter."""
+
+        async def test_gen():
+            for i in range(5):
+                yield i
+
+        result = list(self.converter.syncify_async_iter(test_gen()))
+        self.assertEqual(result, [0, 1, 2, 3, 4])
+
+    def test_syncify_async_iter_with_exception(self):
+        """Test syncify_async_iter with an exception in the async iterator."""
+
+        async def test_gen_with_error():
+            yield 0
+            yield 1
+            raise ValueError("Test error")
+            yield 2  # This won't be reached
+
+        with self.assertRaises(ValueError):
+            list(self.converter.syncify_async_iter(test_gen_with_error()))
+
+    def test_syncify_async_iter_empty(self):
+        """Test syncify_async_iter with an empty iterator."""
+
+        async def empty_gen():
+            if False:  # This condition is never met
+                yield 1
+
+        result = list(self.converter.syncify_async_iter(empty_gen()))
+        self.assertEqual(result, [])
+
+    def test_context_manager(self):
+        """Test using the converter as a context manager."""
+        with AsyncToSyncConverter() as converter:
+
+            async def test_coro():
+                return "test_context_manager"
+
+            result = converter.run_coroutine(test_coro())
+            self.assertEqual(result, "test_context_manager")
+
+    def test_awaitable_returning_async_iterable(self):
+        """Test syncify_async_iter with an awaitable that returns an async iterable."""
+
+        async def get_async_iterable():
+            async def inner_gen():
+                for i in range(3):
+                    yield i
+
+            return inner_gen()
+
+        result = list(self.converter.syncify_async_iter(get_async_iterable()))
+        self.assertEqual(result, [0, 1, 2])
