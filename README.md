@@ -59,7 +59,7 @@ This launches both gRPC and REST servers, allowing you to use REST APIs while st
 curl -X POST "http://localhost:8000/fastflight/stream" \
   -H "Content-Type: application/json" \
   -d '{
-    "param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams",
+    "type": "fastflight.demo_services.duckdb_demo.DuckDBParams",
     "database_path": ":memory:",
     "query": "SELECT 1 as test_column",
     "parameters": []
@@ -88,7 +88,7 @@ fastflight start-rest-server --rest-host 0.0.0.0 --rest-port 8000 --flight-locat
 fastflight start-all --flight-location grpc://0.0.0.0:8815 --rest-host 0.0.0.0 --rest-port 8000
 ```
 
-**Important**: When using the `/stream` REST endpoint, ensure the `param_type` field is included in the request body for
+**Important**: When using the `/stream` REST endpoint, ensure the `type` field is included in the request body for
 proper service routing.
 
 ---
@@ -126,6 +126,11 @@ See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options and con
 ---
 
 ## **💡 Usage Examples**
+
+For comprehensive examples, see the [`examples/` directory](./examples/) which includes:
+
+- **Multi-Protocol Demo**: [`examples/multi_protocol_demo/`](./examples/multi_protocol_demo/) - Complete demonstration of FastFlight with both gRPC and REST interfaces
+- **Benchmark Tools**: [`examples/benchmark/`](./examples/benchmark/) - Performance measurement and analysis comparing sync vs async operations
 
 ### **Python Client Example**
 

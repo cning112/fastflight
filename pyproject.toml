@@ -28,11 +28,23 @@ fastapi = [
 structlog = [
     "structlog"
 ]
+examples = [
+    "matplotlib>=3.10.1",
+    "seaborn>=0.13.2",
+    "httpx",
+    "rich",
+    "sqlalchemy>=2.0.38"
+]
 all = [
     "typer>=0.15.2",
     "duckdb",
     "fastapi[standard]",
-    "structlog"
+    "structlog",
+    "matplotlib>=3.10.1",
+    "seaborn>=0.13.2",
+    "httpx",
+    "rich",
+    "sqlalchemy>=2.0.38"
 ]
 
 [project.scripts]
