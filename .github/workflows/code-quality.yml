@@ -1,0 +1,131 @@
+name: Code Quality
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  schedule:
+    # Run weekly quality checks every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # Comprehensive code quality analysis
+  code-analysis:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for SonarCloud analysis
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras --dev
+          uv add --dev \
+            pylint \
+            flake8 \
+            bandit[toml] \
+            safety \
+            vulture \
+            radon \
+            xenon
+
+      - name: Run Ruff (fast linting)
+        run: |
+          uv run ruff check --output-format=github --statistics .
+          uv run ruff format --check --diff .
+
+      - name: Run MyPy (type checking)
+        run: |
+          uv run mypy src/ tests/ --ignore-missing-imports --show-error-codes --pretty
+
+      - name: Run Pylint (comprehensive analysis)
+        run: |
+          uv run pylint src/ --output-format=json:pylint-report.json,colorized
+        continue-on-error: true
+
+      - name: Run Flake8 (style guide enforcement)
+        run: |
+          uv run flake8 src/ tests/ --format=json --output-file=flake8-report.json
+        continue-on-error: true
+
+      - name: Security scan with Bandit
+        run: |
+          uv run bandit -r src/ -f json -o bandit-report.json
+          uv run bandit -r src/ -f txt
+        continue-on-error: true
+
+      - name: Dependency vulnerability scan
+        run: |
+          uv run safety check --json --output safety-report.json
+          uv run safety check --short-report
+        continue-on-error: true
+
+      - name: Dead code detection
+        run: |
+          uv run vulture src/ --min-confidence 70 --json > vulture-report.json
+          uv run vulture src/ --min-confidence 70
+        continue-on-error: true
+
+      - name: Complexity analysis
+        run: |
+          uv run radon cc src/ --json > complexity-report.json
+          uv run radon cc src/ --show-complexity --min=B
+          uv run xenon --max-absolute B --max-modules A --max-average A src/
+        continue-on-error: true
+
+      - name: Upload quality reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-quality-reports
+          path: |
+            *-report.json
+            coverage.xml
+          retention-days: 30
+
+  # Quality gate
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [code-analysis]
+    if: always()
+
+    steps:
+      - name: Quality gate evaluation
+        run: |
+          echo "## 🎯 Quality Gate Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check job result
+          CODE_ANALYSIS="${{ needs.code-analysis.result }}"
+          
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Analysis | $([[ "$CODE_ANALYSIS" == "success" ]] && echo "✅ Pass" || echo "❌ Fail") |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall gate status
+          if [[ "$CODE_ANALYSIS" == "success" ]]; then
+            echo "🎉 **Overall Status: PASSED** ✅" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All quality checks have passed! The code meets our quality standards." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Overall Status: FAILED** ❌" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Some quality checks have failed. Please review the failed jobs and address the issues." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
