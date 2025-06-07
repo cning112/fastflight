@@ -28,6 +28,12 @@ fastapi = [
 structlog = [
     "structlog"
 ]
+all = [
+    "typer>=0.15.2",
+    "duckdb",
+    "fastapi[standard]",
+    "structlog"
+]
 
 [project.scripts]
 fastflight = "fastflight.cli:cli"
