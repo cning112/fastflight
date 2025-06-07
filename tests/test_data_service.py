@@ -1,5 +1,5 @@
 import json
-from typing import Any, AsyncIterable, Iterable
+from typing import Any, AsyncGenerator, Iterable
 
 import pyarrow as pa
 import pytest
@@ -40,11 +40,8 @@ class SampleParamsAsync(BaseParams):
 class SampleDataServiceAsync(BaseDataService[SampleParamsAsync]):
     async def aget_batches(
         self, params: SampleParamsAsync, batch_size: int | None = None
-    ) -> AsyncIterable[RecordBatch | Any]:
-        async def gen():
-            yield pa.RecordBatch.from_arrays([pa.array([1, 2, 3])], ["sample_column"])
-
-        return gen()
+    ) -> AsyncGenerator[RecordBatch, None]:
+        yield pa.RecordBatch.from_arrays([pa.array([1, 2, 3])], ["sample_column"])
 
 
 @pytest.mark.asyncio
@@ -54,7 +51,7 @@ async def test_sampledataservice_aget_batches():
     params = SampleParamsAsync(some_field="test")
 
     batches = []
-    async for batch in await service.aget_batches(params):
+    async for batch in service.aget_batches(params):
         batches.append(batch)
 
     assert len(batches) == 1
@@ -64,13 +61,13 @@ async def test_sampledataservice_aget_batches():
 
 
 # Test duplicate param registration raises
-def test_duplicate_param_registration_raises():
+def test_duplicate_param_registration_raises() -> None:
     class MyParams(BaseParams):
         foo: str
 
     # Register once (should succeed)
     class MyService(BaseDataService[MyParams]):
-        def get_batches(self, params, batch_size=None):
+        def get_batches(self, params: MyParams, batch_size: int | None = None) -> Iterable[RecordBatch]:
             yield pa.RecordBatch.from_arrays([pa.array([1])], ["col"])
 
     # Register again (should raise ValueError)
@@ -79,12 +76,12 @@ def test_duplicate_param_registration_raises():
 
 
 # Test duplicate service registration raises
-def test_duplicate_service_registration_raises():
+def test_duplicate_service_registration_raises() -> None:
     class MyParams2(BaseParams):
         bar: str
 
     class MyService2(BaseDataService[MyParams2]):
-        def get_batches(self, params, batch_size=None):
+        def get_batches(self, params: MyParams2, batch_size: int | None = None) -> Iterable[RecordBatch]:
             yield pa.RecordBatch.from_arrays([pa.array([1])], ["col"])
 
     # Try to register again for the same param class

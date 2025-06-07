@@ -24,4 +24,9 @@ repos:
     rev: v1.15.0
     hooks:
       - id: mypy
-        args: [ "--ignore-missing-imports" ]
+        files: ^(src|tests|examples)/.*\.py$
+        additional_dependencies: [
+          pandas-stubs>=2.2.3.241126,
+          pyarrow-stubs>=17.17,
+          types-requests,
+        ]

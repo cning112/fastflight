@@ -4,7 +4,7 @@ ResilienceConfig: Unified configuration for retry and circuit breaker behavior.
 Includes factory methods for common usage patterns like high availability or batch processing.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
@@ -100,10 +100,12 @@ class ResilienceConfig(BaseModel):
         max_time = 0.0
 
         if self.retry_config:
-            max_time += self.retry_config.total_max_delay
+            # Type cast to ensure MyPy understands this is a float
+            max_time += cast(float, self.retry_config.total_max_delay)
 
         if self.circuit_breaker_config and self.enable_circuit_breaker:
-            max_time += self.circuit_breaker_config.max_recovery_time
+            # Type cast to ensure MyPy understands this is a float
+            max_time += cast(float, self.circuit_breaker_config.max_recovery_time)
 
         if self.operation_timeout:
             max_time += self.operation_timeout

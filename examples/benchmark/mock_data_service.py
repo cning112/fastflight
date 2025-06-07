@@ -10,7 +10,7 @@ Core improvements:
 import asyncio
 import logging
 import time
-from typing import AsyncIterable, Iterable
+from typing import AsyncGenerator, Iterable
 
 import numpy as np
 import pyarrow as pa
@@ -40,10 +40,12 @@ def create_benchmark_table(total_rows: int, total_cols: int, variant: str = "def
     """Create benchmark table"""
     column_names = [f"col_{i}" for i in range(total_cols)]
 
+    # Explicitly type the columns list to allow mixed array types
+    columns: list[pa.Array] = []
+
     if variant == "simple":
         columns = [pa.array(np.arange(total_rows, dtype=np.int32)) for _ in range(total_cols)]
     elif variant == "complex":
-        columns = []
         for i in range(total_cols):
             if i % 3 == 0:
                 columns.append(pa.array(np.random.randint(0, 1_000_000, size=total_rows, dtype=np.int64)))
@@ -93,9 +95,19 @@ class MockDataService(BaseDataService[MockDataParams]):
 class MockDataServiceAsync(BaseDataService[MockDataParamsAsync]):
     """Asynchronous data service - simplified version"""
 
+    def get_batches(self, params: MockDataParamsAsync, batch_size: int | None = None) -> Iterable[pa.RecordBatch]:
+        """Synchronous implementation for compatibility"""
+        table = TABLES[params.data_variant]
+        delay = params.delay_per_row * params.rows_per_batch
+
+        for batch in table.to_batches(params.rows_per_batch):
+            if delay > 0:
+                time.sleep(delay)
+            yield batch
+
     async def aget_batches(
         self, params: MockDataParamsAsync, batch_size: int | None = None
-    ) -> AsyncIterable[pa.RecordBatch]:
+    ) -> AsyncGenerator[pa.RecordBatch, None]:
         table = TABLES[params.data_variant]
         delay = params.delay_per_row * params.rows_per_batch
 

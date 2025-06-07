@@ -1,6 +1,6 @@
 import asyncio
 from pathlib import Path
-from typing import AsyncIterable, Iterable
+from typing import AsyncGenerator, Iterable
 
 import pyarrow as pa
 import pyarrow.csv as csv
@@ -44,7 +44,7 @@ class CsvFileParamsAsync(BaseParams):
 class CsvFileServiceAsync(BaseDataService[CsvFileParamsAsync]):
     async def aget_batches(
         self, params: CsvFileParamsAsync, batch_size: int | None = None
-    ) -> AsyncIterable[pa.RecordBatch]:
+    ) -> AsyncGenerator[pa.RecordBatch, None]:
         queue: asyncio.Queue[pa.RecordBatch | None] = asyncio.Queue()
 
         async def produce():

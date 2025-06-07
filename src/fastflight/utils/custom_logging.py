@@ -17,7 +17,6 @@ try:
     HAS_STRUCTLOG = True
 except ImportError:
     HAS_STRUCTLOG = False
-    structlog = None
 
 
 def _get_shared_processors():

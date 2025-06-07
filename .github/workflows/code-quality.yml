@@ -2,9 +2,9 @@ name: Code Quality
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [ main, develop ]
   push:
-    branches: [main, develop]
+    branches: [ main, develop ]
   schedule:
     # Run weekly quality checks every Sunday at 2 AM UTC
     - cron: '0 2 * * 0'
@@ -51,7 +51,7 @@ jobs:
 
       - name: Run MyPy (type checking)
         run: |
-          uv run mypy src/ tests/ --ignore-missing-imports --show-error-codes --pretty
+          uv run mypy src/ tests/ examples/ --ignore-missing-imports --show-error-codes --pretty
 
       - name: Run Pylint (comprehensive analysis)
         run: |
@@ -101,7 +101,7 @@ jobs:
   quality-gate:
     name: Quality Gate
     runs-on: ubuntu-latest
-    needs: [code-analysis]
+    needs: [ code-analysis ]
     if: always()
 
     steps:
