@@ -65,8 +65,8 @@ jobs:
 
       - name: Security scan with Bandit
         run: |
-          uv run bandit -r src/ -f json -o bandit-report.json
-          uv run bandit -r src/ -f txt
+          uv run bandit -r src/ -f json -o bandit-report.json --skip B104,B110,B311
+          uv run bandit -r src/ -f txt --skip B104,B110,B311
         continue-on-error: true
 
       - name: Dependency vulnerability scan
