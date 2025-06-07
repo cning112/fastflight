@@ -18,11 +18,9 @@ from fastflight.exceptions import (
     FastFlightTimeoutError,
 )
 from fastflight.resilience import ResilienceConfig, ResilienceManager
-from fastflight.utils.stream_utils import AsyncToSyncConverter, write_arrow_data_to_stream
+from fastflight.utils.stream_utils import AsyncToSyncConverter, get_thread_local_converter, write_arrow_data_to_stream
 
 logger = logging.getLogger(__name__)
-
-GLOBAL_CONVERTER = AsyncToSyncConverter()
 
 
 def _handle_flight_error(error: Exception, operation_context: str) -> Exception:
@@ -97,7 +95,7 @@ class _FlightClientPool:
         self.pool_size = size
         for _ in range(size):
             self.queue.put_nowait(flight.FlightClient(flight_server_location))
-        self._converter = converter or GLOBAL_CONVERTER
+        self._converter = converter or get_thread_local_converter()
         logger.info(f"Created internal connection pool with {size} clients for {flight_server_location}")
 
     @asynccontextmanager
@@ -227,7 +225,7 @@ class FastFlightBouncer:
             resilience_config (Optional[ResilienceConfig]): Resilience patterns configuration
                 (retry, circuit breaker, timeouts).
         """
-        self._converter = converter or GLOBAL_CONVERTER
+        self._converter = converter or get_thread_local_converter()
         self._connection_pool = _FlightClientPool(flight_server_location, client_pool_size, converter=self._converter)
         self._registered_data_types = dict(registered_data_types or {})
         self._flight_server_location = flight_server_location
@@ -407,39 +405,6 @@ class FastFlightBouncer:
         async for chunk in await write_arrow_data_to_stream(reader):
             yield chunk
 
-    def get_stream_reader(
-        self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
-    ) -> flight.FlightStreamReader:
-        """
-        Synchronously bounce a request to get a Flight stream reader.
-
-        Args:
-            params: Flight request parameters or raw ticket bytes.
-            resilience_config: Override default resilience settings for this request.
-
-        Returns:
-            flight.FlightStreamReader: Stream reader from the Flight server.
-        """
-
-        def _bounce_request_sync():
-            """Internal synchronous request bouncing."""
-            try:
-                flight_ticket = to_flight_ticket(params)
-                with self._connection_pool.acquire() as client:
-                    return client.do_get(flight_ticket)
-            except Exception as e:
-                logger.error(f"Sync request bouncing failed for {self._flight_server_location}: {e}", exc_info=True)
-                raise _handle_flight_error(e, "synchronous request bouncing")
-
-        try:
-            return self._converter.run_coroutine(
-                self._resilience_manager.execute_with_resilience(_bounce_request_sync, config=resilience_config)
-            )
-        except Exception as e:
-            if isinstance(e, FastFlightError):
-                raise
-            raise _handle_flight_error(e, "synchronous bouncer request")
-
     def get_pa_table(self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None) -> pa.Table:
         """
         Synchronously bounce a request to get an Arrow Table.
@@ -451,7 +416,7 @@ class FastFlightBouncer:
         Returns:
             pa.Table: The data from the Flight server as an Arrow Table.
         """
-        return self.get_stream_reader(params, resilience_config=resilience_config).read_all()
+        return self._converter.run_coroutine(self.aget_pa_table(params, resilience_config=resilience_config))
 
     def get_pd_dataframe(
         self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
@@ -466,7 +431,7 @@ class FastFlightBouncer:
         Returns:
             pd.DataFrame: The data from the Flight server as a Pandas DataFrame.
         """
-        return self.get_stream_reader(params, resilience_config=resilience_config).read_all().to_pandas()
+        return self._converter.run_coroutine(self.aget_pd_dataframe(params, resilience_config=resilience_config))
 
     async def close_async(self) -> None:
         """

@@ -59,7 +59,7 @@ This launches both gRPC and REST servers, allowing you to use REST APIs while st
 curl -X POST "http://localhost:8000/fastflight/stream" \
   -H "Content-Type: application/json" \
   -d '{
-    "param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams",
+    "type": "fastflight.demo_services.duckdb_demo.DuckDBParams",
     "database_path": ":memory:",
     "query": "SELECT 1 as test_column",
     "parameters": []
@@ -88,7 +88,7 @@ fastflight start-rest-server --rest-host 0.0.0.0 --rest-port 8000 --flight-locat
 fastflight start-all --flight-location grpc://0.0.0.0:8815 --rest-host 0.0.0.0 --rest-port 8000
 ```
 
-**Important**: When using the `/stream` REST endpoint, ensure the `param_type` field is included in the request body for
+**Important**: When using the `/stream` REST endpoint, ensure the `type` field is included in the request body for
 proper service routing.
 
 ---
@@ -126,6 +126,11 @@ See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options and con
 ---
 
 ## **💡 Usage Examples**
+
+For comprehensive examples, see the [`examples/` directory](./examples/) which includes:
+
+- **Multi-Protocol Demo**: [`examples/multi_protocol_demo/`](./examples/multi_protocol_demo/) - Complete demonstration of FastFlight with both gRPC and REST interfaces
+- **Benchmark Tools**: [`examples/benchmark/`](./examples/benchmark/) - Performance measurement and analysis comparing sync vs async operations
 
 ### **Python Client Example**
 
@@ -174,6 +179,7 @@ asyncio.run(stream_data())
 
 ## **📖 Documentation**
 
+- **[Data Service Developer Guide](DATA_SERVICE_DEV_GUIDE.md)** – Guide for implementing custom data services
 - **[CLI Guide](./docs/CLI_USAGE.md)** – Detailed CLI usage instructions
 - **[Docker Deployment](./docs/DOCKER.md)** – Container deployment and Docker Compose guide
 - **[Error Handling](./docs/ERROR_HANDLING.md)** – Comprehensive error handling and resilience patterns
@@ -182,28 +188,10 @@ asyncio.run(stream_data())
 
 ---
 
-## **🛠 Extending FastFlight**
+## **🛠 Custom Data Services**
 
-Create custom data services by extending `BaseDataService`:
-
-```python
-from fastflight.core.base import BaseDataService, BaseParams
-import pyarrow as pa
-
-
-class CustomParams(BaseParams):
-    source_path: str
-    filter_condition: str
-
-
-class CustomDataService(BaseDataService[CustomParams]):
-    def get_batches(self, params: CustomParams, batch_size: int | None = None):
-        # Your custom data fetching logic here
-        yield pa.RecordBatch.from_arrays(
-            [pa.array([1, 2, 3])],
-            ["custom_column"]
-        )
-```
+FastFlight supports extending to custom data sources. See **[Data Service Developer Guide](DATA_SERVICE_DEV_GUIDE.md)**
+for implementation details.
 
 ---
 

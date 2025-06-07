@@ -1,7 +1,3 @@
-"""
-Demo services for FastFlight. These are not imported by default and are only used in CLI/testing scenarios.
-"""
-
 import asyncio
 import logging
 import threading

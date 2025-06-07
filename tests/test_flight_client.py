@@ -2,8 +2,9 @@ import unittest
 
 import pyarrow as pa
 
-from base_cases import FlightServerTestCase
+from fastflight import FastFlightError
 from fastflight.client import FastFlightBouncer
+from tests.base_cases import FlightServerTestCase
 
 
 # We assume that FlightServerTestCase is defined as in the previous refactoring,
@@ -30,6 +31,17 @@ class TestFlightClient(FlightServerTestCase):
             ipc_reader = pa.ipc.open_stream(pa.BufferReader(result_chunks[0]))
             received_table = ipc_reader.read_all()
             self.assertTrue(received_table.equals(self.get_server_data()[b"dummy"]))
+
+    async def test_connection_returned_on_failure(self):
+        bouncer = FastFlightBouncer(self.location, client_pool_size=1)
+
+        async def fail_callback(reader):
+            raise RuntimeError("Simulated failure")
+
+        with self.assertRaises(FastFlightError):
+            await bouncer.aget_stream_reader_with_callback(b"dummy", fail_callback)
+
+        assert bouncer._connection_pool.queue.qsize() == 1
 
 
 if __name__ == "__main__":

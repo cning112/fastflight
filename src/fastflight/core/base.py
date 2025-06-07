@@ -15,8 +15,95 @@ ParamsCls = type["BaseParams"]
 
 class BaseParams(BaseModel, ABC):
     """
-    A base class for query params, implementing common serialization methods
-    and managing the registry for different params types.
+    Abstract base class for query parameters in FastFlight data services.
+
+    This class provides a robust foundation for type-safe parameter handling with automatic
+    serialization/deserialization and a global registry system for parameter types. It leverages
+    Pydantic for data validation and JSON schema generation.
+
+    Key Features:
+        - Type-safe parameter validation using Pydantic
+        - Automatic registration system with fully qualified names (FQN)
+        - JSON serialization/deserialization with type information preservation
+        - Thread-safe registry for parameter type lookup
+        - Extensible design for custom parameter types
+
+    Design Principles:
+        - Domain modeling first: Each parameter class represents a specific data access pattern
+        - Immutable by design: Parameters should be treated as value objects
+        - Fail-fast validation: Invalid parameters are caught at creation time
+        - Explicit over implicit: Parameter types are clearly identified in serialized form
+
+    Registry System:
+        The class maintains a global registry mapping fully qualified names to parameter classes.
+        This enables type-safe deserialization and supports plugin-style architectures where
+        parameter types can be registered at runtime.
+
+    Serialization Requirements:
+        All fields in subclasses must be JSON serializable. For complex types, implement
+        custom serializers and validators using Pydantic's field_serializer and field_validator
+        decorators.
+
+    Example Implementation:
+        ```python
+        from pathlib import Path
+        from pydantic import Field, field_serializer, field_validator
+
+        class CsvFileParams(BaseParams):
+            \"\"\"Parameters for CSV file data access.\"\"\"
+
+            path: Path = Field(..., description="Path to the CSV file")
+            delimiter: str = Field(",", description="CSV delimiter character")
+            has_header: bool = Field(True, description="Whether CSV has header row")
+            encoding: str = Field("utf-8", description="File encoding")
+
+            @field_serializer("path")
+            def serialize_path(self, path: Path) -> str:
+                \"\"\"Serialize Path to string for JSON compatibility.\"\"\"
+                return str(path)
+
+            @field_validator("path", mode="before")
+            @classmethod
+            def parse_path(cls, v: str | Path) -> Path:
+                \"\"\"Parse string or Path to Path object.\"\"\"
+                return Path(v)
+
+            @field_validator("delimiter")
+            @classmethod
+            def validate_delimiter(cls, v: str) -> str:
+                \"\"\"Ensure delimiter is a single character.\"\"\"
+                if len(v) != 1:
+                    raise ValueError("Delimiter must be a single character")
+                return v
+        ```
+
+    Usage Pattern:
+        ```python
+        # Create parameters
+        params = CsvFileParams(path="/data/file.csv", delimiter=";")
+
+        # Serialize for transport
+        serialized = params.to_bytes()
+
+        # Deserialize with type preservation
+        restored = BaseParams.from_bytes(serialized)
+        assert isinstance(restored, CsvFileParams)
+        ```
+
+    Thread Safety:
+        The registry operations are thread-safe. Multiple threads can safely register
+        parameter types and perform lookups concurrently.
+
+    Performance Considerations:
+        - Registry lookups are O(1) dictionary operations
+        - JSON serialization performance depends on field complexity
+        - Pydantic's built-in validation caching optimizes repeated operations
+        - For high-frequency scenarios, consider parameter object reuse
+
+    See Also:
+        - BaseDataService: The corresponding service interface for these parameters
+        - Pydantic documentation: https://docs.pydantic.dev/
+        - Arrow Flight documentation: https://arrow.apache.org/docs/python/flight.html
     """
 
     registry: ClassVar[dict[str, ParamsCls]] = {}

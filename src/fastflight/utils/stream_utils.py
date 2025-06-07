@@ -46,11 +46,19 @@ class AsyncToSyncConverter:
     def __init__(self) -> None:
         """
         Initializes the AsyncToSyncConverter.
+
+        - Creates a new asyncio event loop and starts it in a dedicated background thread.
+        - Designed for use in synchronous contexts where async generators or coroutines must be consumed.
+
+        ⚠️ Note:
+            - This class is lightweight and intended for thread-local usage.
+            - Each thread should create and manage its own instance (see `get_thread_local_converter`).
+            - Avoid sharing instances across threads to ensure safety and avoid contention.
         """
-        # Create a new event loop and run it in a separate thread.
         self.loop = asyncio.new_event_loop()
         self.loop_thread = threading.Thread(target=self._start_loop, daemon=True)
         self.loop_thread.start()
+        self._closed = False
         logger.info("Created a new event loop and started a new thread.")
 
     def _start_loop(self) -> None:
@@ -63,35 +71,40 @@ class AsyncToSyncConverter:
 
     def close(self) -> None:
         """
-        Safely stops the event loop and waits for the thread to join.
-        This method is only needed if a new event loop and thread were created.
+        Safely shuts down the internal event loop and joins the background thread.
+
+        - Idempotent: multiple calls have no side effect after the first close.
+        - This method should be explicitly called (or used via `with` block) to release thread and loop resources.
+
+        ⚠️ Do not use the converter after calling `close()`. All operations will raise RuntimeError.
         """
-        # Stop the event loop and join the thread only if a new loop was created in a separate thread.
+        if self._closed:
+            logger.info("AsyncToSyncConverter already closed.")
+            return
         if self.loop_thread:
             logger.info("Stopping the event loop and joining the thread.")
             self.loop.call_soon_threadsafe(self.loop.stop)
-            self.loop_thread.join()  # Ensure the thread is joined after stopping the loop.
+            self.loop_thread.join()
             logger.info("Event loop stopped, and thread joined.")
+        self._closed = True
 
     def run_coroutine(self, coro: Awaitable[T]) -> T:
         """
-        Submits a coroutine to the internal event loop and blocks until the result is available.
+        Runs a coroutine in the converter's event loop and returns its result synchronously.
 
         ⚠️ Warning:
-            This method blocks the calling thread until the coroutine completes.
-            If the coroutine is I/O or CPU intensive, it may block the main thread and impact performance.
+            - This blocks the calling thread until the coroutine completes.
+            - Do NOT use for long-running or blocking coroutines.
+            - For async-safe usage, call the coroutine directly from an async context instead.
 
-        Best Practice:
-            - Only use this for lightweight, non-blocking coroutines.
-            - Prefer async code paths where possible.
-            - Use `run_coroutine_background()` if you need a non-blocking future.
+        Example:
+            result = converter.run_coroutine(my_async_func())
 
-        Args:
-            coro (Awaitable[T]): The coroutine to run.
-
-        Returns:
-            T: The result of the coroutine.
+        Raises:
+            RuntimeError: If the converter has been closed.
         """
+        if self._closed:
+            raise RuntimeError("AsyncToSyncConverter has been closed")
         future = asyncio.run_coroutine_threadsafe(coro, self.loop)
         result = future.result()
         return result
@@ -120,22 +133,13 @@ class AsyncToSyncConverter:
         """
         Converts an asynchronous iterable into a synchronous iterator.
         Note that this method doesn't load the entire async iterable into memory and then iterates over it.
-
-        Args:
-            ait (AsyncIterable[T] | Awaitable[AsyncIterable[T]]): The async iterable or awaitable returning an async iterable.
-
-        Returns:
-            Iterator[T]: A synchronous iterator that can be used in a for loop.
         """
-
+        if self._closed:
+            raise RuntimeError("AsyncToSyncConverter has been closed")
         sentinel = object()  # Unique sentinel object to mark the end of the iteration.
         queue: asyncio.Queue = asyncio.Queue()
-
         logger.debug("Scheduling the async iterable to run in the event loop.")
-        # Schedule the async iterable to run in the event loop.
         self.loop.call_soon_threadsafe(lambda: asyncio.ensure_future(self._iterate(queue, ait, sentinel)))
-
-        # Synchronously retrieve results from the queue.
         while True:
             result = self.run_coroutine(queue.get())  # Fetch the next result from the queue.
             if result is sentinel:
@@ -148,6 +152,12 @@ class AsyncToSyncConverter:
                     raise item
                 else:
                     yield item
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def __enter__(self) -> "AsyncToSyncConverter":
         """
@@ -388,3 +398,14 @@ def read_table_from_arrow_stream(stream: Iterable[bytes]) -> pa.Table:
 def read_dataframe_from_arrow_stream(stream: Iterable[bytes]) -> pd.DataFrame:
     table = read_table_from_arrow_stream(stream)
     return table.to_pandas()
+
+
+_thread_local = threading.local()
+
+
+def get_thread_local_converter() -> AsyncToSyncConverter:
+    converter = getattr(_thread_local, "converter", None)
+    if converter is None or getattr(converter, "_closed", True):
+        converter = AsyncToSyncConverter()
+        _thread_local.converter = converter
+    return converter
