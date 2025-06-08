@@ -14,11 +14,11 @@ env:
   PYTHON_VERSION: "3.11"
 
 jobs:
-  # Comprehensive code quality analysis
+  # Streamlined code quality analysis
   code-analysis:
     name: Code Quality Analysis
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -33,18 +33,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
-        run: |
-          uv sync --all-extras --dev
-          uv add --dev \
-            pylint \
-            flake8 \
-            bandit[toml] \
-            safety \
-            vulture \
-            radon \
-            xenon
+        run: uv sync --all-extras --dev
 
-      - name: Run Ruff (fast linting)
+      - name: Run Ruff (linting & formatting)
         run: |
           uv run ruff check --output-format=github --statistics .
           uv run ruff format --check --diff .
@@ -53,20 +44,10 @@ jobs:
         run: |
           uv run mypy src/ tests/ examples/ --ignore-missing-imports --show-error-codes --pretty
 
-      - name: Run Pylint (comprehensive analysis)
-        run: |
-          uv run pylint src/ --output-format=json:pylint-report.json,colorized
-        continue-on-error: true
-
-      - name: Run Flake8 (style guide enforcement)
-        run: |
-          uv run flake8 src/ tests/ --format=json --output-file=flake8-report.json
-        continue-on-error: true
-
       - name: Security scan with Bandit
         run: |
-          uv run bandit -r src/ -f json -o bandit-report.json --skip B104,B110,B311
-          uv run bandit -r src/ -f txt --skip B104,B110,B311
+          uv run bandit -r src/ -f json -o bandit-report.json --configfile pyproject.toml
+          uv run bandit -r src/ -f txt --configfile pyproject.toml
         continue-on-error: true
 
       - name: Dependency vulnerability scan

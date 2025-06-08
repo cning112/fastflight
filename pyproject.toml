@@ -61,20 +61,67 @@ dev = [
     "pytest-cov",
     "ruff",
     "bandit[toml]>=1.8.3",
+    "safety",
+    "vulture",
+    "radon",
+    "xenon",
 ]
 
 [tool.ruff]
+target-version = "py310"
 line-length = 120
 src = ["src", "tests", "examples"]
 
 [tool.ruff.format]
 skip-magic-trailing-comma = true
+quote-style = "double"
+indent-style = "space"
 
 [tool.ruff.lint]
-# On top of the default `select` (`E4`, E7`, `E9`, and `F`), enable isort (`I`)
-extend-select = ["I"]
-isort.split-on-trailing-comma = false
+# Start simple and expand gradually
+select = [
+    "E", # pycodestyle errors
+    "W", # pycodestyle warnings
+    "F", # Pyflakes
+    "I", # isort
+    "B", # flake8-bugbear (catches common bugs)
+    "C4", # flake8-comprehensions (performance)
+    "UP", # pyupgrade (modernize syntax)
+    "SIM", # flake8-simplify (code simplification)
+    "RUF", # Ruff-specific rules
+]
 
+ignore = [
+    # Allow print statements (useful for CLI applications)
+    "T201",
+    # Allow TODO comments during development
+    "FIX002",
+    # Allow function calls in argument defaults (common in FastAPI/Pydantic)
+    "B008", # Do not perform function calls in argument defaults
+]
+
+# Auto-fix safe rules
+fixable = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+split-on-trailing-comma = false
+force-single-line = false
+known-first-party = ["fastflight"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can be more relaxed
+"tests/**/*" = ["B011"]  # Allow assert False
+# Examples can use print statements  
+"examples/**/*" = ["T201"]
+# CLI modules can use print
+"src/fastflight/cli.py" = ["T201"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+show_error_codes = true
+files = ["src"]
 
 [tool.bandit]
 # Paths to exclude from scanning
@@ -93,3 +140,28 @@ severity = "medium"
 [tool.bandit.assert_used]
 # Allow asserts in test files (if we scan them)
 skips = ["*test*.py", "*tests*.py"]
+
+[tool.vulture]
+paths = ["src"]
+min_confidence = 70
+ignore_names = ["_*", "test_*"]
+exclude = ["tests/", "examples/"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--disable-warnings",
+    "-ra",
+    "--cov=fastflight",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=xml",
+    "--cov-report=html",
+]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
