@@ -16,7 +16,6 @@ import statistics
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from typing import List, Optional
 
 import pandas as pd
 
@@ -41,14 +40,14 @@ logger = logging.getLogger(__name__)
 class BenchmarkConfig:
     """Benchmark configuration"""
 
-    server_location: str = "grpc://0.0.0.0:8815"
+    server_location: str = "grpc://0.0.0.0:8815"  # nosec B104
 
     # Test parameter ranges
-    delay_per_row_values: List[float] = dataclasses.field(
+    delay_per_row_values: list[float] = dataclasses.field(
         default_factory=lambda: [1e-6, 1e-5]  # 1µs, 10µs
     )
-    rows_per_batch_values: List[int] = dataclasses.field(default_factory=lambda: [1000, 5000, 10000])
-    concurrent_requests_values: List[int] = dataclasses.field(default_factory=lambda: [1, 3, 5, 10])
+    rows_per_batch_values: list[int] = dataclasses.field(default_factory=lambda: [1000, 5000, 10000])
+    concurrent_requests_values: list[int] = dataclasses.field(default_factory=lambda: [1, 3, 5, 10])
 
     # Test control
     warmup_runs: int = 1
@@ -78,7 +77,7 @@ class SingleRunResult:
     # Metadata
     timestamp: datetime
     success: bool
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 @dataclasses.dataclass
@@ -112,7 +111,7 @@ class BenchmarkRunner:
 
     def __init__(self, config: BenchmarkConfig):
         self.config = config
-        self.results: List[SingleRunResult] = []
+        self.results: list[SingleRunResult] = []
 
     def calculate_throughput(self, start_timestamp: float, end_timestamp: float, data_size_bytes: int) -> float:
         """Calculate throughput (MB/s)"""
@@ -158,18 +157,19 @@ class BenchmarkRunner:
 
     def run_concurrent_requests(
         self, concurrent_requests: int, rows_per_batch: int, delay_per_row: float, mode: str
-    ) -> List[SingleRunResult]:
+    ) -> list[SingleRunResult]:
         """Execute concurrent requests"""
         logger.info(
-            f"Running {concurrent_requests} concurrent {mode=} requests, each with {rows_per_batch=} and {delay_per_row=}..."
+            f"Running {concurrent_requests} concurrent {mode=} requests, each with "
+            f"{rows_per_batch=} and {delay_per_row=}..."
         )
 
-        results: List[SingleRunResult] = []
+        results: list[SingleRunResult] = []
 
         with ThreadPoolExecutor(max_workers=concurrent_requests) as executor:
             # Submit all tasks, each task uses independent client as context
             futures = []
-            for i in range(concurrent_requests):
+            for _i in range(concurrent_requests):
                 future = executor.submit(self._run_single_request_with_context, rows_per_batch, delay_per_row, mode)
                 futures.append(future)
 
@@ -207,7 +207,7 @@ class BenchmarkRunner:
 
     def run_benchmark_scenario(
         self, rows_per_batch: int, concurrent_requests: int, delay_per_row: float, mode: str
-    ) -> List[SingleRunResult]:
+    ) -> list[SingleRunResult]:
         """Run benchmark for specific scenario"""
 
         scenario_name = f"{mode}_{rows_per_batch}rows_{concurrent_requests}conc_{delay_per_row:.0e}delay"
@@ -233,7 +233,7 @@ class BenchmarkRunner:
 
         return all_results
 
-    def aggregate_results(self, results: List[SingleRunResult]) -> Optional[AggregatedResult]:
+    def aggregate_results(self, results: list[SingleRunResult]) -> AggregatedResult | None:
         """Aggregate single run results"""
         if not results:
             return None
@@ -370,7 +370,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="FastFlight Benchmark Runner")
     parser.add_argument("--quick", action="store_true", help="Run quick test")
-    parser.add_argument("--server", default="grpc://0.0.0.0:8815", help="Server address")
+    parser.add_argument("--server", default="grpc://127.0.0.1:8815", help="Server address")
     parser.add_argument("--output", default="benchmark_results.csv", help="Output filename")
     parser.add_argument("--runs", type=int, default=3, help="Number of runs per scenario")
 
@@ -382,10 +382,7 @@ if __name__ == "__main__":
     input("Press Enter to continue...")
 
     # Create configuration
-    if args.quick:
-        config = create_quick_config()
-    else:
-        config = create_default_config()
+    config = create_quick_config() if args.quick else create_default_config()
 
     # Apply command line arguments
     config.server_location = args.server

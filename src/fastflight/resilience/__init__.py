@@ -42,14 +42,11 @@ from .core import CircuitBreaker, ResilienceManager
 from .types import CircuitState, RetryStrategy
 
 __all__ = [
-    # Types
-    "RetryStrategy",
-    "CircuitState",
-    # Configuration
-    "RetryConfig",
-    "CircuitBreakerConfig",
-    "ResilienceConfig",
-    # Core classes
     "CircuitBreaker",
+    "CircuitBreakerConfig",
+    "CircuitState",
+    "ResilienceConfig",
     "ResilienceManager",
+    "RetryConfig",
+    "RetryStrategy",
 ]

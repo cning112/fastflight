@@ -44,9 +44,9 @@ def load_benchmark_data(filename: str = "benchmark_results.csv") -> pd.DataFrame
         print(f"✅ Loaded {len(df)} benchmark records from {filename}")
         return df
     except FileNotFoundError:
-        raise FileNotFoundError(f"Benchmark results file '{filename}' not found. Run benchmark first.")
+        raise FileNotFoundError(f"Benchmark results file '{filename}' not found. Run benchmark first.") from None
     except Exception as e:
-        raise RuntimeError(f"Error loading benchmark data: {e}")
+        raise RuntimeError(f"Error loading benchmark data: {e}") from e
 
 
 def plot_performance_improvement(df: pd.DataFrame) -> None:
@@ -190,7 +190,12 @@ def plot_performance_improvement(df: pd.DataFrame) -> None:
 
     # Add value labels and improvement percentages
     for i, (sync_val, async_val, improvement) in enumerate(
-        zip(summary_data["sync_throughput"], summary_data["async_throughput"], summary_data["improvement_pct"])
+        zip(
+            summary_data["sync_throughput"],
+            summary_data["async_throughput"],
+            summary_data["improvement_pct"],
+            strict=False,
+        )
     ):
         ax_summary.text(
             i - width / 2,
@@ -239,7 +244,8 @@ def plot_performance_improvement(df: pd.DataFrame) -> None:
 
     for _, row in summary_data.iterrows():
         print(
-            f"   {row['delay_label']}: {row['improvement_pct']:.0f}% faster ({row['sync_throughput']:.0f} → {row['async_throughput']:.0f} MB/s)"
+            f"   {row['delay_label']}: {row['improvement_pct']:.0f}% faster "
+            f"({row['sync_throughput']:.0f} → {row['async_throughput']:.0f} MB/s)"
         )
 
 

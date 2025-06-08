@@ -26,26 +26,26 @@ from fastflight.server import FastFlightServer
 
 __all__ = [
     # Core classes
-    "FastFlightBouncer",
-    "FastFlightServer",
     "BaseDataService",
     "BaseParams",
+    # Resilience components
+    "CircuitBreakerConfig",
     # Exception hierarchy
-    "FastFlightError",
-    "FastFlightConnectionError",
-    "FastFlightTimeoutError",
     "FastFlightAuthenticationError",
-    "FastFlightServerError",
+    "FastFlightBouncer",
+    "FastFlightCircuitOpenError",
+    "FastFlightConnectionError",
     "FastFlightDataServiceError",
     "FastFlightDataValidationError",
-    "FastFlightSerializationError",
+    "FastFlightError",
     "FastFlightResourceExhaustionError",
-    "FastFlightCircuitOpenError",
     "FastFlightRetryExhaustedError",
-    # Resilience components
+    "FastFlightSerializationError",
+    "FastFlightServer",
+    "FastFlightServerError",
+    "FastFlightTimeoutError",
     "ResilienceConfig",
+    "ResilienceManager",
     "RetryConfig",
     "RetryStrategy",
-    "CircuitBreakerConfig",
-    "ResilienceManager",
 ]

@@ -45,7 +45,7 @@ def import_all_modules_in_package(package_name: str) -> None:
         >>> # Now all params/services under fastflight.params are imported and registered.
     """
     package = importlib.import_module(package_name)
-    for finder, name, ispkg in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
+    for _, name, _ in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
         importlib.import_module(name)
 
 

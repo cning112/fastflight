@@ -4,8 +4,6 @@ Circuit breaker configuration model with validation and recovery time estimation
 Prevents cascading failures by controlling access to failing resources.
 """
 
-from typing import Type
-
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from fastflight.exceptions import FastFlightConnectionError, FastFlightServerError, FastFlightTimeoutError
@@ -52,7 +50,7 @@ class CircuitBreakerConfig(BaseModel):
 
     timeout: float = Field(default=30.0, gt=0.0, le=300.0, description="Operation timeout in seconds")
 
-    monitored_exceptions: tuple[Type[Exception], ...] = Field(
+    monitored_exceptions: tuple[type[Exception], ...] = Field(
         default=(FastFlightConnectionError, FastFlightServerError, FastFlightTimeoutError),
         description="Tuple of exception types monitored by the circuit breaker",
     )

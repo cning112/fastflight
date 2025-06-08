@@ -5,7 +5,7 @@ This module provides a comprehensive set of exceptions that allow clients to han
 different types of errors appropriately, enabling better error recovery and user experience.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class FastFlightError(Exception):
@@ -16,7 +16,7 @@ class FastFlightError(Exception):
     all FastFlight-specific errors with a single exception type when needed.
     """
 
-    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
         super().__init__(message)
         self.message = message
         self.details = details or {}
@@ -41,9 +41,7 @@ class FastFlightTimeoutError(FastFlightConnectionError):
     or other network operations that have time constraints.
     """
 
-    def __init__(
-        self, message: str, timeout_duration: Optional[float] = None, details: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, message: str, timeout_duration: float | None = None, details: dict[str, Any] | None = None):
         super().__init__(message, details)
         self.timeout_duration = timeout_duration
 
@@ -66,7 +64,7 @@ class FastFlightServerError(FastFlightError):
     client configuration or network connectivity.
     """
 
-    def __init__(self, message: str, server_error_code: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, server_error_code: str | None = None, details: dict[str, Any] | None = None):
         super().__init__(message, details)
         self.server_error_code = server_error_code
 
@@ -79,7 +77,7 @@ class FastFlightDataServiceError(FastFlightServerError):
     or data processing errors within the registered data services.
     """
 
-    def __init__(self, message: str, service_name: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, service_name: str | None = None, details: dict[str, Any] | None = None):
         super().__init__(message, details=details)
         self.service_name = service_name
 
@@ -93,7 +91,7 @@ class FastFlightDataValidationError(FastFlightError):
     """
 
     def __init__(
-        self, message: str, validation_errors: Optional[Dict[str, Any]] = None, details: Optional[Dict[str, Any]] = None
+        self, message: str, validation_errors: dict[str, Any] | None = None, details: dict[str, Any] | None = None
     ):
         super().__init__(message, details)
         self.validation_errors = validation_errors or {}
@@ -118,7 +116,7 @@ class FastFlightResourceExhaustionError(FastFlightError):
     are reached, or other resource constraints prevent operation completion.
     """
 
-    def __init__(self, message: str, resource_type: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str, resource_type: str | None = None, details: dict[str, Any] | None = None):
         super().__init__(message, details)
         self.resource_type = resource_type
 
@@ -132,11 +130,7 @@ class FastFlightCircuitOpenError(FastFlightError):
     """
 
     def __init__(
-        self,
-        message: str,
-        circuit_name: str,
-        retry_after: Optional[float] = None,
-        details: Optional[Dict[str, Any]] = None,
+        self, message: str, circuit_name: str, retry_after: float | None = None, details: dict[str, Any] | None = None
     ):
         super().__init__(message, details)
         self.circuit_name = circuit_name
@@ -155,8 +149,8 @@ class FastFlightRetryExhaustedError(FastFlightError):
         self,
         message: str,
         attempt_count: int,
-        last_error: Optional[Exception] = None,
-        details: Optional[Dict[str, Any]] = None,
+        last_error: Exception | None = None,
+        details: dict[str, Any] | None = None,
     ):
         super().__init__(message, details)
         self.attempt_count = attempt_count

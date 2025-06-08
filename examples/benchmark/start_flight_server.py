@@ -3,7 +3,7 @@ import argparse
 from fastflight.server import FastFlightServer
 from fastflight.utils.custom_logging import setup_logging
 
-DEFAULT_LOC = "grpc://0.0.0.0:8815"
+DEFAULT_LOC = "grpc://127.0.0.1:8815"
 
 if __name__ == "__main__":
     # Parse command line arguments

@@ -1,42 +1,410 @@
-name: Manually Bump Version and Create Tag
+name: Bump Version and Release
 
 on:
   workflow_dispatch:
     inputs:
       version_type:
-        description: 'Type of version bump (patch, minor, major)'
+        description: 'Type of version bump'
         required: true
+        type: choice
         default: 'patch'
+        options:
+          - patch
+          - minor
+          - major
+          - prepatch
+          - preminor
+          - premajor
+      prerelease_identifier:
+        description: 'Pre-release identifier (alpha, beta, rc)'
+        required: false
+        type: choice
+        default: ''
+        options:
+          - ''
+          - alpha
+          - beta
+          - rc
+      create_release:
+        description: 'Create GitHub release after version bump'
+        required: false
+        default: true
+        type: boolean
+      skip_tests:
+        description: 'Skip running tests before version bump'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: "3.11"
 
 jobs:
-  bump_version:
+  # Validate current state before bumping
+  pre-bump-validation:
+    name: Pre-bump Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      current-version: ${{ steps.current-version.outputs.version }}
+      new-version: ${{ steps.new-version.outputs.version }}
+      branch-name: ${{ steps.branch.outputs.name }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v3
         with:
-          python-version: '3.x'
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install dependencies
+      - name: Verify main branch
         run: |
-          python -m pip install --upgrade pip
-          pip install bump2version
+          CURRENT_BRANCH=$(git branch --show-current)
+          if [[ "$CURRENT_BRANCH" != "main" ]]; then
+            echo "❌ Version bumps should only be done from main branch"
+            echo "Current branch: $CURRENT_BRANCH"
+            exit 1
+          fi
+
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --quiet HEAD; then
+            echo "❌ There are uncommitted changes"
+            git status
+            exit 1
+          fi
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Get current version
+        id: current-version
+        run: |
+          CURRENT_VERSION=$(grep "version = " pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Calculate new version
+        id: new-version
+        run: |
+          uv add --dev bump2version
+          CURRENT_VERSION="${{ steps.current-version.outputs.version }}"
+          VERSION_TYPE="${{ github.event.inputs.version_type }}"
+          PRERELEASE_ID="${{ github.event.inputs.prerelease_identifier }}"
+          
+          # Create temporary bumpversion config for dry run
+          cat > .bumpversion-temp.cfg << EOF
+          [bumpversion]
+          current_version = $CURRENT_VERSION
+          parse = (?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(\.(?P<release>[a-z]+)(?P<num>\d+))?
+          serialize = 
+            {major}.{minor}.{patch}.{release}{num}
+            {major}.{minor}.{patch}
+          commit = False
+          tag = False
+
+          [bumpversion:part:release]
+          optional_value = gamma
+          values =
+            alpha
+            beta
+            rc
+            gamma
+
+          [bumpversion:file:pyproject.toml]
+          search = version = "{current_version}"
+          replace = version = "{new_version}"
+          EOF
+          
+          # Handle pre-release versions
+          if [[ "$VERSION_TYPE" == "prepatch" || "$VERSION_TYPE" == "preminor" || "$VERSION_TYPE" == "premajor" ]]; then
+            if [[ -z "$PRERELEASE_ID" ]]; then
+              PRERELEASE_ID="alpha"
+            fi
+            VERSION_TYPE="${VERSION_TYPE#pre}${PRERELEASE_ID}1"
+          fi
+          
+          # Dry run to get new version
+          NEW_VERSION=$(uv run bump2version --config-file .bumpversion-temp.cfg --dry-run --list $VERSION_TYPE | grep new_version | cut -d= -f2)
+          
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "New version will be: $NEW_VERSION"
+          
+          # Clean up temp file
+          rm .bumpversion-temp.cfg
+
+      - name: Set branch name
+        id: branch
+        run: |
+          echo "name=bump-version-${{ steps.new-version.outputs.version }}" >> $GITHUB_OUTPUT
+
+  # Run tests before bumping (optional)
+  pre-bump-tests:
+    name: Pre-bump Tests
+    needs: pre-bump-validation
+    if: ${{ !inputs.skip_tests }}
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
+  # Perform the version bump
+  bump-version:
+    name: Bump Version
+    runs-on: ubuntu-latest
+    needs: [pre-bump-validation]
+    if: always() && (needs.pre-bump-validation.result == 'success') && (needs.pre-bump-tests.result == 'success' || inputs.skip_tests)
+    timeout-minutes: 10
+    outputs:
+      tag-name: ${{ steps.bump.outputs.tag-name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Configure Git
         run: |
-          git config --global user.email "github-actions@github.com"
-          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
 
-      - name: Bump version and create tag
-        run: |
-          bump2version ${{ github.event.inputs.version_type }} --allow-dirty
+      - name: Install bump2version
+        run: uv add --dev bump2version
 
-      - name: Push changes back to the repository
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update bumpversion configuration
         run: |
-          git push --follow-tags
+          cat > .bumpversion.cfg << EOF
+          [bumpversion]
+          current_version = ${{ needs.pre-bump-validation.outputs.current-version }}
+          parse = (?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(\.(?P<release>[a-z]+)(?P<num>\d+))?
+          serialize = 
+            {major}.{minor}.{patch}.{release}{num}
+            {major}.{minor}.{patch}
+          commit = True
+          tag = True
+          tag_name = v{new_version}
+          commit_args = --no-verify
+          message = 🔖 Bump version: {current_version} → {new_version}
+
+          [bumpversion:part:release]
+          optional_value = gamma
+          values =
+            alpha
+            beta
+            rc
+            gamma
+
+          [bumpversion:file:pyproject.toml]
+          search = version = "{current_version}"
+          replace = version = "{new_version}"
+          EOF
+
+      - name: Bump version
+        id: bump
+        run: |
+          VERSION_TYPE="${{ github.event.inputs.version_type }}"
+          PRERELEASE_ID="${{ github.event.inputs.prerelease_identifier }}"
+          
+          # Handle pre-release versions
+          if [[ "$VERSION_TYPE" == "prepatch" || "$VERSION_TYPE" == "preminor" || "$VERSION_TYPE" == "premajor" ]]; then
+            if [[ -z "$PRERELEASE_ID" ]]; then
+              PRERELEASE_ID="alpha"
+            fi
+            VERSION_TYPE="${VERSION_TYPE#pre}${PRERELEASE_ID}1"
+          fi
+          
+          # Perform the bump
+          uv run bump2version $VERSION_TYPE
+          
+          # Get the new tag
+          TAG_NAME=$(git describe --tags --exact-match HEAD)
+          echo "tag-name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "Created tag: $TAG_NAME"
+
+      - name: Push changes
+        run: |
+          git push origin main --follow-tags
+
+  # Generate changelog
+  generate-changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    needs: [pre-bump-validation, bump-version]
+    timeout-minutes: 10
+    outputs:
+      changelog: ${{ steps.changelog.outputs.changelog }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "${{ needs.bump-version.outputs.tag-name }}" | head -n1)
+          CURRENT_TAG="${{ needs.bump-version.outputs.tag-name }}"
+          
+          echo "Generating changelog from $PREVIOUS_TAG to $CURRENT_TAG"
+          
+          # Generate changelog content
+          cat > changelog.md << EOF
+          ## What's Changed
+          
+          EOF
+          
+          # Get commits between tags
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            git log --oneline --pretty=format:"* %s (%an)" "$PREVIOUS_TAG..$CURRENT_TAG" >> changelog.md
+          else
+            git log --oneline --pretty=format:"* %s (%an)" >> changelog.md
+          fi
+          
+          # Add contributors
+          echo "" >> changelog.md
+          echo "" >> changelog.md
+          echo "## Contributors" >> changelog.md
+          echo "" >> changelog.md
+          
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            git log --pretty=format:"* %an" "$PREVIOUS_TAG..$CURRENT_TAG" | sort | uniq >> changelog.md
+          else
+            git log --pretty=format:"* %an" | sort | uniq >> changelog.md
+          fi
+          
+          # Set output (escape newlines for GitHub Actions)
+          CHANGELOG=$(cat changelog.md)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload changelog
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog-${{ needs.pre-bump-validation.outputs.new-version }}
+          path: changelog.md
+
+  # Create GitHub release
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [pre-bump-validation, bump-version, generate-changelog]
+    if: ${{ inputs.create_release }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build release assets
+        run: |
+          uv sync --all-extras --dev
+          uv build
+          
+          # Generate checksums
+          cd dist
+          sha256sum * > SHA256SUMS
+          cd ..
+
+      - name: Determine release type
+        id: release-type
+        run: |
+          VERSION="${{ needs.pre-bump-validation.outputs.new-version }}"
+          if [[ "$VERSION" =~ (alpha|beta|rc|dev) ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+            echo "release-type=Pre-release" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "release-type=Release" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.bump-version.outputs.tag-name }}
+          name: FastFlight ${{ needs.pre-bump-validation.outputs.new-version }}
+          body: |
+            # FastFlight ${{ needs.pre-bump-validation.outputs.new-version }}
+            
+            ${{ needs.generate-changelog.outputs.changelog }}
+            
+            ## Installation
+            
+            ```bash
+            pip install fastflight==${{ needs.pre-bump-validation.outputs.new-version }}
+            ```
+            
+            ## Verification
+            
+            ```bash
+            python -c "import fastflight; print(fastflight.__version__)"
+            ```
+            
+            ---
+            
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ needs.bump-version.outputs.tag-name }}...HEAD
+          files: |
+            dist/*
+          prerelease: ${{ steps.release-type.outputs.prerelease }}
+          draft: false
+          generate_release_notes: true
+
+  # Summary and notifications
+  summary:
+    name: Version Bump Summary
+    runs-on: ubuntu-latest
+    needs: [pre-bump-validation, bump-version, generate-changelog, create-release]
+    if: always()
+
+    steps:
+      - name: Create summary
+        run: |
+          echo "## 🎉 Version Bump Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Previous Version:** ${{ needs.pre-bump-validation.outputs.current-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**New Version:** ${{ needs.pre-bump-validation.outputs.new-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ needs.bump-version.outputs.tag-name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version Type:** ${{ github.event.inputs.version_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.bump-version.result }}" == "success" ]]; then
+            echo "✅ Version successfully bumped and pushed to repository" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Version bump failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [[ "${{ inputs.create_release }}" == "true" ]]; then
+            if [[ "${{ needs.create-release.result }}" == "success" ]]; then
+              echo "✅ GitHub release created successfully" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "🔗 **Release URL:** https://github.com/${{ github.repository }}/releases/tag/${{ needs.bump-version.outputs.tag-name }}" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "❌ GitHub release creation failed" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "ℹ️ GitHub release skipped (as requested)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. 🏷️ Tag **${{ needs.bump-version.outputs.tag-name }}** has been created" >> $GITHUB_STEP_SUMMARY
+          echo "2. 📦 To publish to PyPI, go to the [Publish workflow](../../actions/workflows/publish.yml) and run it manually" >> $GITHUB_STEP_SUMMARY
+          echo "3. 📋 Review the generated changelog and update documentation if needed" >> $GITHUB_STEP_SUMMARY

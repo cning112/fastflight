@@ -10,8 +10,9 @@ import asyncio
 import sys
 import tempfile
 import time
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Callable, Iterable, TypeVar
+from typing import TypeVar
 
 import httpx
 import pandas as pd
@@ -73,7 +74,7 @@ class ServiceComparison:
         console.print(f"\n📊 Testing {service_name}: {description}")
         console.print("=" * 60)
 
-        results = {"grpc_sync": None, "grpc_async": None, "rest": None}
+        results: dict[str, pd.DataFrame | None] = {"grpc_sync": None, "grpc_async": None, "rest": None}
         timings = {"grpc_sync": 0.0, "grpc_async": 0.0, "rest": 0.0}
 
         # Test gRPC Sync

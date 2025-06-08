@@ -2,8 +2,9 @@ import asyncio
 import contextlib
 import inspect
 import logging
+from collections.abc import AsyncGenerator, AsyncIterable, Callable, Generator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, AsyncIterable, Callable, Dict, Generator, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 import pandas as pd
 import pyarrow as pa
@@ -36,32 +37,32 @@ def _handle_flight_error(error: Exception, operation_context: str) -> Exception:
     """
     if isinstance(error, flight.FlightUnavailableError):
         return FastFlightConnectionError(
-            f"Flight server unavailable during {operation_context}: {str(error)}",
+            f"Flight server unavailable during {operation_context}: {error!s}",
             details={"original_error": str(error), "error_type": type(error).__name__},
         )
     elif isinstance(error, flight.FlightTimedOutError):
         return FastFlightTimeoutError(
-            f"Operation timed out during {operation_context}: {str(error)}",
+            f"Operation timed out during {operation_context}: {error!s}",
             details={"original_error": str(error), "error_type": type(error).__name__},
         )
     elif isinstance(error, flight.FlightInternalError):
         return FastFlightServerError(
-            f"Server internal error during {operation_context}: {str(error)}",
+            f"Server internal error during {operation_context}: {error!s}",
             details={"original_error": str(error), "error_type": type(error).__name__},
         )
-    elif isinstance(error, (ConnectionError, OSError)):
+    elif isinstance(error, ConnectionError | OSError):
         return FastFlightConnectionError(
-            f"Connection failed during {operation_context}: {str(error)}",
+            f"Connection failed during {operation_context}: {error!s}",
             details={"original_error": str(error), "error_type": type(error).__name__},
         )
     elif isinstance(error, TimeoutError):
         return FastFlightTimeoutError(
-            f"Timeout occurred during {operation_context}: {str(error)}",
+            f"Timeout occurred during {operation_context}: {error!s}",
             details={"original_error": str(error), "error_type": type(error).__name__},
         )
     else:
         return FastFlightError(
-            f"Unexpected error during {operation_context}: {str(error)}",
+            f"Unexpected error during {operation_context}: {error!s}",
             details={"original_error": str(error), "error_type": type(error).__name__},
         )
 
@@ -80,7 +81,7 @@ class _FlightClientPool:
     """
 
     def __init__(
-        self, flight_server_location: str, size: int = 5, converter: Optional[AsyncToSyncConverter] = None
+        self, flight_server_location: str, size: int = 5, converter: AsyncToSyncConverter | None = None
     ) -> None:
         """
         Initialize the internal connection pool.
@@ -99,7 +100,7 @@ class _FlightClientPool:
         logger.info(f"Created internal connection pool with {size} clients for {flight_server_location}")
 
     @asynccontextmanager
-    async def acquire_async(self, timeout: Optional[float] = None) -> AsyncGenerator[flight.FlightClient, Any]:
+    async def acquire_async(self, timeout: float | None = None) -> AsyncGenerator[flight.FlightClient, Any]:
         """
         Acquire a connection from the pool asynchronously.
 
@@ -119,7 +120,7 @@ class _FlightClientPool:
                 f"Connection pool exhausted - no connections available within {timeout}s (pool size: {self.pool_size})",
                 resource_type="flight_connection_pool",
                 details={"pool_size": self.pool_size, "timeout": timeout},
-            )
+            ) from None
 
         try:
             yield client
@@ -130,7 +131,7 @@ class _FlightClientPool:
             await self.queue.put(client)
 
     @contextlib.contextmanager
-    def acquire(self, timeout: Optional[float] = None) -> Generator[flight.FlightClient, Any, None]:
+    def acquire(self, timeout: float | None = None) -> Generator[flight.FlightClient, Any, None]:
         """
         Acquire a connection from the pool synchronously.
 
@@ -150,7 +151,7 @@ class _FlightClientPool:
                 f"Connection pool exhausted - no connections available within {timeout}s (pool size: {self.pool_size})",
                 resource_type="flight_connection_pool",
                 details={"pool_size": self.pool_size, "timeout": timeout},
-            )
+            ) from None
 
         try:
             yield client
@@ -172,7 +173,7 @@ class _FlightClientPool:
 
 R = TypeVar("R")
 
-ParamsData = Union[bytes, BaseParams]
+ParamsData = bytes | BaseParams
 
 
 def to_flight_ticket(params: ParamsData) -> flight.Ticket:
@@ -209,10 +210,10 @@ class FastFlightBouncer:
     def __init__(
         self,
         flight_server_location: str,
-        registered_data_types: Dict[str, str] | None = None,
+        registered_data_types: dict[str, str] | None = None,
         client_pool_size: int = 5,
-        converter: Optional[AsyncToSyncConverter] = None,
-        resilience_config: Optional[ResilienceConfig] = None,
+        converter: AsyncToSyncConverter | None = None,
+        resilience_config: ResilienceConfig | None = None,
     ):
         """
         Initialize the Flight connection bouncer.
@@ -237,11 +238,11 @@ class FastFlightBouncer:
 
         logger.info(f"Initialized FastFlightBouncer for {flight_server_location} with {client_pool_size} connections")
 
-    def get_registered_data_types(self) -> Dict[str, str]:
+    def get_registered_data_types(self) -> dict[str, str]:
         """Get the registry of available data service types."""
         return self._registered_data_types
 
-    def get_connection_pool_status(self) -> Dict[str, Any]:
+    def get_connection_pool_status(self) -> dict[str, Any]:
         """
         Get current status of the connection pool and bouncer.
 
@@ -264,7 +265,7 @@ class FastFlightBouncer:
         """
         self._resilience_manager.update_default_config(config)
 
-    def get_circuit_breaker_status(self) -> Dict[str, Any]:
+    def get_circuit_breaker_status(self) -> dict[str, Any]:
         """
         Get the current status of the circuit breaker for this bouncer.
 
@@ -295,7 +296,7 @@ class FastFlightBouncer:
         callback: Callable[[flight.FlightStreamReader], R],
         *,
         run_in_thread: bool = True,
-        resilience_config: Optional[ResilienceConfig] = None,
+        resilience_config: ResilienceConfig | None = None,
     ) -> R:
         """
         Route a request through the connection bouncer and apply a callback to the stream.
@@ -330,17 +331,17 @@ class FastFlightBouncer:
                         return callback(reader)
             except Exception as e:
                 logger.error(f"Request bouncing failed for {self._flight_server_location}: {e}", exc_info=True)
-                raise _handle_flight_error(e, "request bouncing")
+                raise _handle_flight_error(e, "request bouncing") from e
 
         try:
             return await self._resilience_manager.execute_with_resilience(_bounce_request, config=resilience_config)
         except Exception as e:
             if isinstance(e, FastFlightError):
                 raise
-            raise _handle_flight_error(e, "bouncer request processing")
+            raise _handle_flight_error(e, "bouncer request processing") from e
 
     async def aget_stream_reader(
-        self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
+        self, params: ParamsData, resilience_config: ResilienceConfig | None = None
     ) -> flight.FlightStreamReader:
         """
         Bounce a request to get a Flight stream reader.
@@ -356,7 +357,7 @@ class FastFlightBouncer:
             params, callback=lambda x: x, run_in_thread=False, resilience_config=resilience_config
         )
 
-    async def aget_pa_table(self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None) -> pa.Table:
+    async def aget_pa_table(self, params: ParamsData, resilience_config: ResilienceConfig | None = None) -> pa.Table:
         """
         Bounce a request to get a PyArrow table asynchronously.
 
@@ -372,7 +373,7 @@ class FastFlightBouncer:
         )
 
     async def aget_pd_dataframe(
-        self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
+        self, params: ParamsData, resilience_config: ResilienceConfig | None = None
     ) -> pd.DataFrame:
         """
         Bounce a request to get a pandas DataFrame asynchronously.
@@ -389,7 +390,7 @@ class FastFlightBouncer:
         )
 
     async def aget_stream(
-        self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
+        self, params: ParamsData, resilience_config: ResilienceConfig | None = None
     ) -> AsyncIterable[bytes]:
         """
         Bounce a request to generate a stream of Arrow data bytes asynchronously.
@@ -405,7 +406,7 @@ class FastFlightBouncer:
         async for chunk in await write_arrow_data_to_stream(reader):
             yield chunk
 
-    def get_pa_table(self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None) -> pa.Table:
+    def get_pa_table(self, params: ParamsData, resilience_config: ResilienceConfig | None = None) -> pa.Table:
         """
         Synchronously bounce a request to get an Arrow Table.
 
@@ -418,9 +419,7 @@ class FastFlightBouncer:
         """
         return self._converter.run_coroutine(self.aget_pa_table(params, resilience_config=resilience_config))
 
-    def get_pd_dataframe(
-        self, params: ParamsData, resilience_config: Optional[ResilienceConfig] = None
-    ) -> pd.DataFrame:
+    def get_pd_dataframe(self, params: ParamsData, resilience_config: ResilienceConfig | None = None) -> pd.DataFrame:
         """
         Synchronously bounce a request to get a pandas DataFrame.
 

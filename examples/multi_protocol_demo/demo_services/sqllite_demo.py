@@ -1,4 +1,4 @@
-from typing import Iterable
+from collections.abc import Iterable
 
 import pyarrow as pa
 from sqlalchemy import create_engine, text
@@ -28,5 +28,4 @@ class SQLService(BaseDataService[SQLParams]):
                 columns = list(result.keys())
                 arrays = [pa.array([row[i] for row in rows]) for i in range(len(columns))]
                 table = pa.Table.from_arrays(arrays, columns)
-                for batch in table.to_batches():
-                    yield batch
+                yield from table.to_batches()

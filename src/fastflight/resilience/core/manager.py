@@ -12,7 +12,7 @@ Usage:
 
 import asyncio
 import logging
-from typing import Callable, Dict, Optional
+from collections.abc import Callable
 
 from fastflight.exceptions import FastFlightRetryExhaustedError
 
@@ -47,11 +47,11 @@ class ResilienceManager:
         >>> result = await manager.execute_with_resilience(flaky_operation, config=config)
     """
 
-    def __init__(self, default_config: Optional[ResilienceConfig] = None):
-        self.circuit_breakers: Dict[str, CircuitBreaker] = {}
+    def __init__(self, default_config: ResilienceConfig | None = None):
+        self.circuit_breakers: dict[str, CircuitBreaker] = {}
         self.default_config = default_config or ResilienceConfig.create_default()
 
-    def get_circuit_breaker(self, name: str, config: Optional[CircuitBreakerConfig] = None) -> CircuitBreaker:
+    def get_circuit_breaker(self, name: str, config: CircuitBreakerConfig | None = None) -> CircuitBreaker:
         """
         Get or create a circuit breaker with the specified name and configuration.
 
@@ -69,7 +69,7 @@ class ResilienceManager:
         return self.circuit_breakers[name]
 
     async def execute_with_resilience(
-        self, func: Callable[..., T], *args, config: Optional[ResilienceConfig] = None, **kwargs
+        self, func: Callable[..., T], *args, config: ResilienceConfig | None = None, **kwargs
     ) -> T:
         """
         Execute a function (sync or async) with automatic retry and circuit breaker support.
@@ -135,7 +135,7 @@ class ResilienceManager:
         Returns:
             The result of the function execution.
         """
-        last_exception: Optional[Exception] = None
+        last_exception: Exception | None = None
 
         for attempt in range(1, retry_config.max_attempts + 1):
             try:
@@ -153,7 +153,8 @@ class ResilienceManager:
                 if attempt < retry_config.max_attempts:
                     delay = retry_config.calculate_delay(attempt)
                     logger.warning(
-                        f"Operation failed (attempt {attempt}/{retry_config.max_attempts}), retrying in {delay:.2f}s: {e}"
+                        f"Operation failed (attempt {attempt}/{retry_config.max_attempts}), retrying in {delay:.2f}s: "
+                        f"{e}"
                     )
                     await asyncio.sleep(delay)
 
