@@ -37,7 +37,7 @@ jobs:
 
       - name: Run Ruff (linting & formatting)
         run: |
-          uv run ruff check --output-format=github --statistics .
+          uv run ruff check --output-format=github .
           uv run ruff format --check --diff .
 
       - name: Run MyPy (type checking)
