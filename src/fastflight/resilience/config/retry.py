@@ -5,7 +5,6 @@ Provides validation and delay calculation for various retry backoff strategies.
 """
 
 import random
-from typing import Type
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
@@ -61,7 +60,7 @@ class RetryConfig(BaseModel):
         default=0.1, ge=0.0, le=1.0, description="Jitter factor for randomized delays (0.0 to 1.0)"
     )
 
-    retryable_exceptions: tuple[Type[Exception], ...] = Field(
+    retryable_exceptions: tuple[type[Exception], ...] = Field(
         default=(FastFlightConnectionError, FastFlightTimeoutError, FastFlightServerError),
         description="Tuple of exception types that should trigger retry",
     )

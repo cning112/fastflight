@@ -10,7 +10,7 @@ Core improvements:
 import asyncio
 import logging
 import time
-from typing import AsyncGenerator, Iterable
+from collections.abc import AsyncGenerator, Iterable
 
 import numpy as np
 import pyarrow as pa
@@ -76,7 +76,7 @@ def prepare_static_data():
     logger.info("Pre-built test data:")
     for variant, table in TABLES.items():
         size_mb = table.nbytes / (1024 * 1024)
-        logger.info(f"  {variant}: {table.num_rows:,} rows × {table.num_columns} columns = {size_mb:.2f} MB")
+        logger.info(f"  {variant}: {table.num_rows:,} rows x {table.num_columns} columns = {size_mb:.2f} MB")
 
 
 class MockDataService(BaseDataService[MockDataParams]):

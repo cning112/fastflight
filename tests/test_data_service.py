@@ -1,5 +1,6 @@
 import json
-from typing import Any, AsyncGenerator, Iterable
+from collections.abc import AsyncGenerator, Iterable
+from typing import Any
 
 import pyarrow as pa
 import pytest

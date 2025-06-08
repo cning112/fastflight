@@ -1,8 +1,9 @@
 import json
 import logging
 from abc import ABC
+from collections.abc import AsyncGenerator, Iterable
 from functools import partial
-from typing import AsyncGenerator, ClassVar, Generic, Iterable, TypeVar, get_args, get_origin
+from typing import ClassVar, Generic, TypeVar, get_args, get_origin
 
 import pyarrow as pa
 from pydantic import BaseModel
@@ -290,7 +291,8 @@ class BaseDataService(Generic[T], ABC):
 
         Args:
             params (T): The parameters for fetching data.
-            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
+            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service
+                implementation.
 
         Yields:
             AsyncGenerator[pa.RecordBatch, None]: An async generator of RecordBatches.
@@ -305,7 +307,8 @@ class BaseDataService(Generic[T], ABC):
 
         Args:
             params (T): The parameters for fetching data.
-            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
+            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service
+                implementation.
 
         Yields:
             pa.RecordBatch: A generator of RecordBatch instances.

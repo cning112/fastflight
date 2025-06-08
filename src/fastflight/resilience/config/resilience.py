@@ -4,7 +4,7 @@ ResilienceConfig: Unified configuration for retry and circuit breaker behavior.
 Includes factory methods for common usage patterns like high availability or batch processing.
 """
 
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
@@ -52,15 +52,13 @@ class ResilienceConfig(BaseModel):
         frozen=False,  # Allow mutation for method chaining
     )
 
-    retry_config: Optional[RetryConfig] = Field(
-        default=None, description="Retry configuration, None to disable retries"
-    )
+    retry_config: RetryConfig | None = Field(default=None, description="Retry configuration, None to disable retries")
 
-    circuit_breaker_config: Optional[CircuitBreakerConfig] = Field(
+    circuit_breaker_config: CircuitBreakerConfig | None = Field(
         default=None, description="Circuit breaker configuration"
     )
 
-    circuit_breaker_name: Optional[str] = Field(
+    circuit_breaker_name: str | None = Field(
         default=None,
         min_length=1,
         max_length=100,
@@ -70,20 +68,22 @@ class ResilienceConfig(BaseModel):
 
     enable_circuit_breaker: bool = Field(default=True, description="Whether to enable circuit breaker functionality")
 
-    operation_timeout: Optional[float] = Field(
-        default=None, gt=0.0, le=3600.0, description="Operation timeout in seconds"
-    )
+    operation_timeout: float | None = Field(default=None, gt=0.0, le=3600.0, description="Operation timeout in seconds")
 
-    custom_error_handlers: Dict[str, Any] = Field(default_factory=dict, description="Custom error handlers by name")
+    custom_error_handlers: dict[str, Any] = Field(default_factory=dict, description="Custom error handlers by name")
 
-    tags: Dict[str, str] = Field(default_factory=dict, description="Additional tags for monitoring and identification")
+    tags: dict[str, str] = Field(default_factory=dict, description="Additional tags for monitoring and identification")
 
     @field_validator("circuit_breaker_name")
     def validate_circuit_breaker_name_if_enabled(cls, v, info):
         """Ensure circuit breaker name is provided if circuit breaker is enabled"""
-        if info.data and info.data.get("enable_circuit_breaker", True) and v is None:
-            if info.data.get("circuit_breaker_config") is not None:
-                raise ValueError("circuit_breaker_name is required when circuit breaker is enabled")
+        if (
+            info.data
+            and info.data.get("enable_circuit_breaker", True)
+            and v is None
+            and info.data.get("circuit_breaker_config") is not None
+        ):
+            raise ValueError("circuit_breaker_name is required when circuit breaker is enabled")
         return v
 
     @computed_field

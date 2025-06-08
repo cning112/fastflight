@@ -1,4 +1,5 @@
-from typing import AsyncContextManager, Callable, Optional
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 
 from fastapi import FastAPI
 
@@ -12,8 +13,8 @@ def create_app(
     module_paths: list[str],
     route_prefix: str = "/fastflight",
     flight_location: str = "grpc://0.0.0.0:8815",
-    resilience_config: Optional[ResilienceConfig] = None,
-    *lifespans: Callable[[FastAPI], AsyncContextManager],
+    resilience_config: ResilienceConfig | None = None,
+    *lifespans: Callable[[FastAPI], AbstractAsyncContextManager],
 ) -> FastAPI:
     # Import all custom data parameter and service classes, and check if they are registered
     registered_data_types = {}

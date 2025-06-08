@@ -7,7 +7,8 @@ import logging
 import threading
 import time
 import weakref
-from typing import Any, AsyncIterable, Iterable, Sequence
+from collections.abc import AsyncIterable, Iterable, Sequence
+from typing import Any
 
 import pyarrow as pa
 
@@ -41,8 +42,8 @@ class AsyncDuckDBConnectionPool:
         """Get a DuckDB connection, creating new one if needed."""
         try:
             import duckdb
-        except ImportError:
-            raise ImportError("DuckDB not installed. Install with 'pip install duckdb' or 'uv add duckdb'")
+        except ImportError as e:
+            raise ImportError("DuckDB not installed. Install with 'pip install duckdb' or 'uv add duckdb'") from e
 
         async with self._lock:
             # For now, create new connection each time to avoid threading issues
@@ -89,9 +90,9 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
         if not hasattr(self._thread_local, "connection"):
             try:
                 import duckdb
-            except ImportError:
+            except ImportError as e:
                 logger.error("DuckDB not installed")
-                raise ImportError("DuckDB not installed. Install with 'pip install duckdb' or 'uv add duckdb'")
+                raise ImportError("DuckDB not installed. Install with 'pip install duckdb' or 'uv add duckdb'") from e
 
             current_thread = threading.current_thread()
             logger.info(f"Creating DuckDB connection for thread: {current_thread.name}")
@@ -119,12 +120,12 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
                     yield batch
 
             except Exception as e:
-                logger.error(f"DuckDB execution error at {db_path}: {str(e)}", exc_info=True)
+                logger.error(f"DuckDB execution error at {db_path}: {e!s}", exc_info=True)
                 raise
             finally:
                 conn.close()
         except Exception as e:
-            logger.error(f"DuckDB service error at {params.database_path or ':memory:'}: {str(e)}", exc_info=True)
+            logger.error(f"DuckDB service error at {params.database_path or ':memory:'}: {e!s}", exc_info=True)
             raise
 
     async def aget_batches(self, params: DuckDBParams, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:  # type: ignore
@@ -148,7 +149,7 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
 
             batches = await loop.run_in_executor(None, get_arrow_batches)
 
-            for i, batch in enumerate(batches):
+            for batch in batches:
                 await asyncio.sleep(0.01)  # simulate async I/O delay
                 yield batch
         finally:

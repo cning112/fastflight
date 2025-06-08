@@ -10,7 +10,7 @@ import signal
 import time
 from enum import Enum
 from functools import wraps
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
 import typer
 
@@ -37,17 +37,17 @@ cli = typer.Typer(help="FastFlight CLI - Manage FastFlight and REST API Servers"
 
 def create_resilience_config(
     resilience_preset: ResiliencePreset,
-    retry_max_attempts: Optional[int] = None,
-    retry_strategy: Optional[RetryStrategy] = None,
-    retry_base_delay: Optional[float] = None,
-    retry_max_delay: Optional[float] = None,
-    circuit_breaker_failure_threshold: Optional[int] = None,
-    circuit_breaker_recovery_timeout: Optional[float] = None,
-    circuit_breaker_success_threshold: Optional[int] = None,
-    operation_timeout: Optional[float] = None,
+    retry_max_attempts: int | None = None,
+    retry_strategy: RetryStrategy | None = None,
+    retry_base_delay: float | None = None,
+    retry_max_delay: float | None = None,
+    circuit_breaker_failure_threshold: int | None = None,
+    circuit_breaker_recovery_timeout: float | None = None,
+    circuit_breaker_success_threshold: int | None = None,
+    operation_timeout: float | None = None,
     enable_circuit_breaker: bool = True,
-    circuit_breaker_name: Optional[str] = None,
-) -> Optional[ResilienceConfig]:
+    circuit_breaker_name: str | None = None,
+) -> ResilienceConfig | None:
     """
     Create resilience configuration based on CLI parameters.
 
@@ -172,7 +172,7 @@ def _start_rest_server(
     rest_prefix: str,
     flight_location: str,
     modules: list[str],
-    resilience_config: Optional[ResilienceConfig] = None,
+    resilience_config: ResilienceConfig | None = None,
 ):
     """Start REST server in a separate process."""
     import uvicorn
@@ -204,7 +204,8 @@ def start_flight_server(
 
     Args:
         flight_location (str): The gRPC location of the Flight server (default: "grpc://0.0.0.0:8815").
-        modules (list[str, ...]): Module paths to scan for parameter classes (default: ("fastflight.demo_services",)).
+        modules (list[str, ...]): Module paths to scan for parameter classes
+            (default: ("fastflight.demo_services",)).
 
     Note:
         For resilience features (retry, circuit breaker), configure your FastFlightBouncer
@@ -229,30 +230,30 @@ def start_rest_server(
         ResiliencePreset, typer.Option(help="Resilience configuration preset")
     ] = ResiliencePreset.DEFAULT,
     retry_max_attempts: Annotated[
-        Optional[int], typer.Option(help="Maximum retry attempts (1-100)", min=1, max=100)
+        int | None, typer.Option(help="Maximum retry attempts (1-100)", min=1, max=100)
     ] = None,
-    retry_strategy: Annotated[Optional[RetryStrategy], typer.Option(help="Retry strategy")] = None,
+    retry_strategy: Annotated[RetryStrategy | None, typer.Option(help="Retry strategy")] = None,
     retry_base_delay: Annotated[
-        Optional[float], typer.Option(help="Base delay for retries in seconds", min=0.1, max=300.0)
+        float | None, typer.Option(help="Base delay for retries in seconds", min=0.1, max=300.0)
     ] = None,
     retry_max_delay: Annotated[
-        Optional[float], typer.Option(help="Maximum delay for retries in seconds", min=0.1, max=3600.0)
+        float | None, typer.Option(help="Maximum delay for retries in seconds", min=0.1, max=3600.0)
     ] = None,
     circuit_breaker_failure_threshold: Annotated[
-        Optional[int], typer.Option(help="Circuit breaker failure threshold (1-1000)", min=1, max=1000)
+        int | None, typer.Option(help="Circuit breaker failure threshold (1-1000)", min=1, max=1000)
     ] = None,
     circuit_breaker_recovery_timeout: Annotated[
-        Optional[float], typer.Option(help="Circuit breaker recovery timeout in seconds", min=1.0, max=3600.0)
+        float | None, typer.Option(help="Circuit breaker recovery timeout in seconds", min=1.0, max=3600.0)
     ] = None,
     circuit_breaker_success_threshold: Annotated[
-        Optional[int], typer.Option(help="Circuit breaker success threshold (1-100)", min=1, max=100)
+        int | None, typer.Option(help="Circuit breaker success threshold (1-100)", min=1, max=100)
     ] = None,
     operation_timeout: Annotated[
-        Optional[float], typer.Option(help="Operation timeout in seconds", min=1.0, max=3600.0)
+        float | None, typer.Option(help="Operation timeout in seconds", min=1.0, max=3600.0)
     ] = None,
     enable_circuit_breaker: Annotated[bool, typer.Option(help="Enable circuit breaker functionality")] = True,
     circuit_breaker_name: Annotated[
-        Optional[str], typer.Option(help="Circuit breaker name (alphanumeric, underscore, dash only)")
+        str | None, typer.Option(help="Circuit breaker name (alphanumeric, underscore, dash only)")
     ] = None,
 ):
     """
@@ -266,9 +267,12 @@ def start_rest_server(
         rest_host (str): Host address for the REST API server (default: "0.0.0.0").
         rest_port (int): Port for the REST API server (default: 8000).
         rest_prefix (str): Route prefix for REST API integration (default: "/fastflight").
-        flight_location (str): The gRPC location of the Flight server that REST API will connect to (default: "grpc://0.0.0.0:8815").
-        modules (list[str, ...]): Module paths to scan for parameter classes (default: ("fastflight.demo_services",)).
-        resilience_preset (ResiliencePreset): Resilience configuration preset - controls the internal bouncer's behavior.
+        flight_location (str): The gRPC location of the Flight server that REST API will
+            connect to (default: "grpc://0.0.0.0:8815").
+        modules (list[str, ...]): Module paths to scan for parameter classes
+            (default: ("fastflight.demo_services",)).
+        resilience_preset (ResiliencePreset): Resilience configuration preset -
+            controls the internal bouncer's behavior.
         retry_max_attempts (int, optional): Override maximum retry attempts.
         retry_strategy (RetryStrategy, optional): Override retry strategy.
         retry_base_delay (float, optional): Override base delay for retries.
@@ -317,30 +321,30 @@ def start_all(
         ResiliencePreset, typer.Option(help="Resilience configuration preset for REST server's internal bouncer")
     ] = ResiliencePreset.DEFAULT,
     retry_max_attempts: Annotated[
-        Optional[int], typer.Option(help="Maximum retry attempts (1-100)", min=1, max=100)
+        int | None, typer.Option(help="Maximum retry attempts (1-100)", min=1, max=100)
     ] = None,
-    retry_strategy: Annotated[Optional[RetryStrategy], typer.Option(help="Retry strategy")] = None,
+    retry_strategy: Annotated[RetryStrategy | None, typer.Option(help="Retry strategy")] = None,
     retry_base_delay: Annotated[
-        Optional[float], typer.Option(help="Base delay for retries in seconds", min=0.1, max=300.0)
+        float | None, typer.Option(help="Base delay for retries in seconds", min=0.1, max=300.0)
     ] = None,
     retry_max_delay: Annotated[
-        Optional[float], typer.Option(help="Maximum delay for retries in seconds", min=0.1, max=3600.0)
+        float | None, typer.Option(help="Maximum delay for retries in seconds", min=0.1, max=3600.0)
     ] = None,
     circuit_breaker_failure_threshold: Annotated[
-        Optional[int], typer.Option(help="Circuit breaker failure threshold (1-1000)", min=1, max=1000)
+        int | None, typer.Option(help="Circuit breaker failure threshold (1-1000)", min=1, max=1000)
     ] = None,
     circuit_breaker_recovery_timeout: Annotated[
-        Optional[float], typer.Option(help="Circuit breaker recovery timeout in seconds", min=1.0, max=3600.0)
+        float | None, typer.Option(help="Circuit breaker recovery timeout in seconds", min=1.0, max=3600.0)
     ] = None,
     circuit_breaker_success_threshold: Annotated[
-        Optional[int], typer.Option(help="Circuit breaker success threshold (1-100)", min=1, max=100)
+        int | None, typer.Option(help="Circuit breaker success threshold (1-100)", min=1, max=100)
     ] = None,
     operation_timeout: Annotated[
-        Optional[float], typer.Option(help="Operation timeout in seconds", min=1.0, max=3600.0)
+        float | None, typer.Option(help="Operation timeout in seconds", min=1.0, max=3600.0)
     ] = None,
     enable_circuit_breaker: Annotated[bool, typer.Option(help="Enable circuit breaker functionality")] = True,
     circuit_breaker_name: Annotated[
-        Optional[str], typer.Option(help="Circuit breaker name (alphanumeric, underscore, dash only)")
+        str | None, typer.Option(help="Circuit breaker name (alphanumeric, underscore, dash only)")
     ] = None,
 ):
     """
@@ -356,14 +360,18 @@ def start_all(
         rest_port (int): Port for the REST API server (default: 8000).
         rest_prefix (str): Route prefix for REST API integration (default: "/fastflight").
         modules (list[str]): Module paths to scan for parameter classes (default: ("fastflight.demo_services",)).
-        resilience_preset (ResiliencePreset): Resilience configuration preset - affects REST server's internal bouncer only.
+        resilience_preset (ResiliencePreset): Resilience configuration preset -
+            affects REST server's internal bouncer only.
         retry_max_attempts (int, optional): Override maximum retry attempts (REST server only).
         retry_strategy (RetryStrategy, optional): Override retry strategy (REST server only).
         retry_base_delay (float, optional): Override base delay for retries (REST server only).
         retry_max_delay (float, optional): Override maximum delay for retries (REST server only).
-        circuit_breaker_failure_threshold (int, optional): Override circuit breaker failure threshold (REST server only).
-        circuit_breaker_recovery_timeout (float, optional): Override circuit breaker recovery timeout (REST server only).
-        circuit_breaker_success_threshold (int, optional): Override circuit breaker success threshold (REST server only).
+        circuit_breaker_failure_threshold (int, optional): Override circuit breaker
+            failure threshold (REST server only).
+        circuit_breaker_recovery_timeout (float, optional): Override circuit breaker
+            recovery timeout (REST server only).
+        circuit_breaker_success_threshold (int, optional): Override circuit breaker
+            success threshold (REST server only).
         operation_timeout (float, optional): Override operation timeout (REST server only).
         enable_circuit_breaker (bool): Enable or disable circuit breaker functionality (REST server only).
         circuit_breaker_name (str, optional): Custom circuit breaker name (REST server only).
@@ -403,7 +411,7 @@ def start_all(
         args=(rest_host, rest_port, rest_prefix, flight_location, list(modules), resilience_config),
     )
 
-    def shutdown_handler(signum, frame):  # noqa: ARG001
+    def shutdown_handler(signum, frame):
         """Handle shutdown signals gracefully."""
         typer.echo("Received termination signal. Shutting down servers...")
         flight_process.terminate()
@@ -553,9 +561,12 @@ fastflight start-all --resilience-preset {preset.value} --enable-circuit-breaker
 
     # Add preset descriptions
     descriptions = {
-        ResiliencePreset.DEFAULT: "Balanced settings suitable for most production environments. Provides reasonable fault tolerance without being overly aggressive.",
-        ResiliencePreset.HIGH_AVAILABILITY: "Optimized for high-availability scenarios where quick recovery and aggressive retries are prioritized over resource conservation.",
-        ResiliencePreset.BATCH_PROCESSING: "Conservative settings designed for batch processing where tolerance for failures is higher and resource efficiency is important.",
+        ResiliencePreset.DEFAULT: "Balanced settings suitable for most production "
+        "environments. Provides reasonable fault tolerance without being overly aggressive.",
+        ResiliencePreset.HIGH_AVAILABILITY: "Optimized for high-availability "
+        "scenarios where quick recovery and aggressive retries are prioritized over resource conservation.",
+        ResiliencePreset.BATCH_PROCESSING: "Conservative settings designed for "
+        "batch processing where tolerance for failures is higher and resource efficiency is important.",
     }
 
     if preset in descriptions:
@@ -600,7 +611,8 @@ def list_resilience_presets():
     # Add explanatory panel about scope of resilience configuration
     console.print(
         Panel.fit(
-            "[bold yellow]Note:[/bold yellow] Resilience configuration applies only to the [cyan]client-side[/cyan] FastFlightBouncer,\n"
+            "[bold yellow]Note:[/bold yellow] Resilience configuration applies only to the [cyan]client-side[/cyan] "
+            "FastFlightBouncer,\n"
             "such as within the REST API server. The [red]Flight server[/red] does not use resilience logic.",
             title="Resilience Scope",
             style="bold white",
@@ -613,7 +625,8 @@ def list_resilience_presets():
     )
     console.print("• Use [cyan]fastflight start-all --resilience-preset PRESET_NAME[/cyan] to apply a preset")
     console.print(
-        "• Override individual settings with specific options (e.g., --retry-max-attempts, --circuit-breaker-failure-threshold)"
+        "• Override individual settings with specific options "
+        "(e.g., --retry-max-attempts, --circuit-breaker-failure-threshold)"
     )
 
 

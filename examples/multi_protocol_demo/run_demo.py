@@ -10,8 +10,9 @@ import asyncio
 import sys
 import tempfile
 import time
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Callable, Iterable, TypeVar
+from typing import TypeVar
 
 import httpx
 import pandas as pd

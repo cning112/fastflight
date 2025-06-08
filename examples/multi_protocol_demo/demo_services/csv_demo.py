@@ -1,6 +1,6 @@
 import asyncio
+from collections.abc import AsyncGenerator, Iterable
 from pathlib import Path
-from typing import AsyncGenerator, Iterable
 
 import pyarrow as pa
 import pyarrow.csv as csv
@@ -52,7 +52,10 @@ class CsvFileServiceAsync(BaseDataService[CsvFileParamsAsync]):
                 await queue.put(batch)
             await queue.put(None)
 
-        asyncio.create_task(produce())
+        # Store task reference to prevent garbage collection
+        _task = asyncio.create_task(produce())
+        # Reference kept to prevent garbage collection during execution
+        _ = _task
 
         while True:
             batch = await queue.get()
