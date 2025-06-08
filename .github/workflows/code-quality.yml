@@ -52,13 +52,13 @@ jobs:
 
       - name: Dependency vulnerability scan
         run: |
-          uv run safety check --json --output safety-report.json
-          uv run safety check --short-report
+          uv run safety scan --output json > safety-report.json
+          uv run safety scan --output screen
         continue-on-error: true
 
       - name: Dead code detection
         run: |
-          uv run vulture src/ --min-confidence 70 --json > vulture-report.json
+          uv run vulture src/ --min-confidence 70 > vulture-report.txt
           uv run vulture src/ --min-confidence 70
         continue-on-error: true
 
@@ -75,6 +75,7 @@ jobs:
           name: code-quality-reports
           path: |
             *-report.json
+            *-report.txt
             coverage.xml
           retention-days: 30
 
