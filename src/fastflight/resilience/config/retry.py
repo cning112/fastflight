@@ -4,7 +4,7 @@ Retry configuration model for defining retry strategies and limits.
 Provides validation and delay calculation for various retry backoff strategies.
 """
 
-import random
+import secrets
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
@@ -129,7 +129,7 @@ class RetryConfig(BaseModel):
             delay = self.base_delay * (self.exponential_base ** (attempt - 1))
         elif self.strategy == RetryStrategy.JITTERED_EXPONENTIAL:
             base_delay = self.base_delay * (self.exponential_base ** (attempt - 1))
-            jitter = base_delay * self.jitter_factor * (random.random() * 2 - 1)
+            jitter = base_delay * self.jitter_factor * (secrets.SystemRandom().random() * 2 - 1)
             delay = base_delay + jitter
         else:
             delay = self.base_delay

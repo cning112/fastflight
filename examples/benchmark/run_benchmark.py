@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 class BenchmarkConfig:
     """Benchmark configuration"""
 
-    server_location: str = "grpc://0.0.0.0:8815"
+    server_location: str = "grpc://0.0.0.0:8815"  # nosec B104
 
     # Test parameter ranges
     delay_per_row_values: list[float] = dataclasses.field(
@@ -370,7 +370,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="FastFlight Benchmark Runner")
     parser.add_argument("--quick", action="store_true", help="Run quick test")
-    parser.add_argument("--server", default="grpc://0.0.0.0:8815", help="Server address")
+    parser.add_argument("--server", default="grpc://127.0.0.1:8815", help="Server address")
     parser.add_argument("--output", default="benchmark_results.csv", help="Output filename")
     parser.add_argument("--runs", type=int, default=3, help="Number of runs per scenario")
 

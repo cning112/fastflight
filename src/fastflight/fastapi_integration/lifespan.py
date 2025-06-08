@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 async def fast_flight_bouncer_lifespan(
     app: FastAPI,
     registered_data_types: dict[str, str],
-    flight_location: str = "grpc://0.0.0.0:8815",
+    flight_location: str = "grpc://0.0.0.0:8815",  # nosec B104
     resilience_config: ResilienceConfig | None = None,
 ):
     """
@@ -45,7 +45,7 @@ async def fast_flight_bouncer_lifespan(
 async def combine_lifespans(
     app: FastAPI,
     registered_data_types: dict[str, str],
-    flight_location: str = "grpc://0.0.0.0:8815",
+    flight_location: str = "grpc://0.0.0.0:8815",  # nosec B104
     resilience_config: ResilienceConfig | None = None,
     *other: Callable[[FastAPI], AbstractAsyncContextManager],
 ):

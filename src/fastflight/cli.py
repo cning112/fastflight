@@ -190,7 +190,9 @@ def _start_rest_server(
 
 @cli.command()
 def start_flight_server(
-    flight_location: Annotated[str, typer.Option(help="Flight server location")] = "grpc://0.0.0.0:8815",
+    flight_location: Annotated[
+        str, typer.Option(help="Flight server location (grpc://host:port format)")
+    ] = "grpc://0.0.0.0:8815",  # nosec B104
     modules: Annotated[
         list[str], typer.Option(help="Module paths to scan for parameter classes", show_default=True)
     ] = ("fastflight.demo_services",),  # type: ignore
@@ -216,12 +218,15 @@ def start_flight_server(
 
 @cli.command()
 def start_rest_server(
-    rest_host: Annotated[str, typer.Option(help="Host for REST API server")] = "0.0.0.0",
+    rest_host: Annotated[
+        str,
+        typer.Option(help="Host for REST API server (use 127.0.0.1 for localhost only, 0.0.0.0 for all interfaces)"),
+    ] = "0.0.0.0",  # nosec B104
     rest_port: Annotated[int, typer.Option(help="Port for REST API server")] = 8000,
     rest_prefix: Annotated[str, typer.Option(help="Route prefix for REST API")] = "/fastflight",
     flight_location: Annotated[
         str, typer.Option(help="Flight server location that REST API will connect to")
-    ] = "grpc://0.0.0.0:8815",
+    ] = "grpc://0.0.0.0:8815",  # nosec B104
     modules: Annotated[
         list[str], typer.Option(help="Module paths to scan for parameter classes", show_default=True)
     ] = ("fastflight.demo_services",),  # type: ignore
@@ -309,8 +314,13 @@ def start_rest_server(
 
 @cli.command()
 def start_all(
-    flight_location: Annotated[str, typer.Option(help="Flight server location")] = "grpc://0.0.0.0:8815",
-    rest_host: Annotated[str, typer.Option(help="Host for REST API server")] = "0.0.0.0",
+    flight_location: Annotated[
+        str, typer.Option(help="Flight server location (grpc://host:port format)")
+    ] = "grpc://0.0.0.0:8815",  # nosec B104
+    rest_host: Annotated[
+        str,
+        typer.Option(help="Host for REST API server (use 127.0.0.1 for localhost only, 0.0.0.0 for all interfaces)"),
+    ] = "0.0.0.0",  # nosec B104
     rest_port: Annotated[int, typer.Option(help="Port for REST API server")] = 8000,
     rest_prefix: Annotated[str, typer.Option(help="Route prefix for REST API")] = "/fastflight",
     modules: Annotated[

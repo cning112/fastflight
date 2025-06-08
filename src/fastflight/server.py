@@ -250,7 +250,7 @@ def main():
     from fastflight.utils.custom_logging import setup_logging
 
     setup_logging()
-    FastFlightServer.start_instance("grpc://0.0.0.0:8815", True)
+    FastFlightServer.start_instance("grpc://0.0.0.0:8815", True)  # nosec B104
 
 
 if __name__ == "__main__":

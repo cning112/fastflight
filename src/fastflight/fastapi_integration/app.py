@@ -12,7 +12,7 @@ from .router import fast_flight_router
 def create_app(
     module_paths: list[str],
     route_prefix: str = "/fastflight",
-    flight_location: str = "grpc://0.0.0.0:8815",
+    flight_location: str = "grpc://0.0.0.0:8815",  # nosec B104
     resilience_config: ResilienceConfig | None = None,
     *lifespans: Callable[[FastAPI], AbstractAsyncContextManager],
 ) -> FastAPI:
