@@ -8,124 +8,20 @@ with proper multiprocessing support and consistent parameter naming.
 import multiprocessing
 import signal
 import time
-from enum import Enum
 from functools import wraps
-from typing import Annotated, Any
+from typing import Annotated
 
 import typer
 
-from fastflight.resilience.config.circuit_breaker import CircuitBreakerConfig
 from fastflight.resilience.config.resilience import ResilienceConfig
-from fastflight.resilience.config.retry import RetryConfig
+from fastflight.resilience.config_builder.factory import ResilienceConfigFactory
+from fastflight.resilience.config_builder.types import ResiliencePreset
 from fastflight.resilience.types import RetryStrategy
 from fastflight.utils.custom_logging import setup_logging
-
-
-class ResiliencePreset(str, Enum):
-    """Available resilience configuration presets."""
-
-    DISABLED = "disabled"
-    DEFAULT = "default"
-    HIGH_AVAILABILITY = "high_availability"
-    BATCH_PROCESSING = "batch_processing"
-
 
 setup_logging(log_file=None)
 
 cli = typer.Typer(help="FastFlight CLI - Manage FastFlight and REST API Servers")
-
-
-def create_resilience_config(
-    resilience_preset: ResiliencePreset,
-    retry_max_attempts: int | None = None,
-    retry_strategy: RetryStrategy | None = None,
-    retry_base_delay: float | None = None,
-    retry_max_delay: float | None = None,
-    circuit_breaker_failure_threshold: int | None = None,
-    circuit_breaker_recovery_timeout: float | None = None,
-    circuit_breaker_success_threshold: int | None = None,
-    operation_timeout: float | None = None,
-    enable_circuit_breaker: bool = True,
-    circuit_breaker_name: str | None = None,
-) -> ResilienceConfig | None:
-    """
-    Create resilience configuration based on CLI parameters.
-
-    Args:
-        resilience_preset: Preset configuration type
-        retry_max_attempts: Maximum retry attempts
-        retry_strategy: Retry strategy enum
-        retry_base_delay: Base delay for retries
-        retry_max_delay: Maximum delay for retries
-        circuit_breaker_failure_threshold: Circuit breaker failure threshold
-        circuit_breaker_recovery_timeout: Circuit breaker recovery timeout
-        circuit_breaker_success_threshold: Circuit breaker success threshold
-        operation_timeout: Operation timeout
-        enable_circuit_breaker: Whether to enable circuit breaker
-        circuit_breaker_name: Circuit breaker name
-
-    Returns:
-        ResilienceConfig instance or None if disabled
-    """
-    if resilience_preset == ResiliencePreset.DISABLED:
-        return None
-
-    # Create base configuration from preset
-    if resilience_preset == ResiliencePreset.DEFAULT:
-        config = ResilienceConfig.create_default()
-    elif resilience_preset == ResiliencePreset.HIGH_AVAILABILITY:
-        config = ResilienceConfig.create_for_high_availability()
-    elif resilience_preset == ResiliencePreset.BATCH_PROCESSING:
-        config = ResilienceConfig.create_for_batch_processing()
-    else:
-        config = ResilienceConfig.create_default()
-
-    # Override with custom parameters if provided
-    updates: dict[str, Any] = {}
-
-    # Handle retry configuration overrides
-    if any([retry_max_attempts, retry_strategy, retry_base_delay, retry_max_delay]):
-        retry_config = config.retry_config or RetryConfig()
-        retry_updates: dict[str, Any] = {}
-
-        if retry_max_attempts is not None:
-            retry_updates["max_attempts"] = retry_max_attempts
-        if retry_strategy is not None:
-            retry_updates["strategy"] = retry_strategy
-        if retry_base_delay is not None:
-            retry_updates["base_delay"] = retry_base_delay
-        if retry_max_delay is not None:
-            retry_updates["max_delay"] = retry_max_delay
-
-        updates["retry_config"] = retry_config.model_copy(update=retry_updates)
-
-    # Handle circuit breaker configuration overrides
-    if any([circuit_breaker_failure_threshold, circuit_breaker_recovery_timeout, circuit_breaker_success_threshold]):
-        circuit_config = config.circuit_breaker_config or CircuitBreakerConfig()
-        circuit_updates: dict[str, Any] = {}
-
-        if circuit_breaker_failure_threshold is not None:
-            circuit_updates["failure_threshold"] = circuit_breaker_failure_threshold
-        if circuit_breaker_recovery_timeout is not None:
-            circuit_updates["recovery_timeout"] = circuit_breaker_recovery_timeout
-        if circuit_breaker_success_threshold is not None:
-            circuit_updates["success_threshold"] = circuit_breaker_success_threshold
-
-        updates["circuit_breaker_config"] = circuit_config.model_copy(update=circuit_updates)
-
-    # Handle other overrides
-    if operation_timeout is not None:
-        updates["operation_timeout"] = operation_timeout
-    if circuit_breaker_name is not None:
-        updates["circuit_breaker_name"] = circuit_breaker_name
-
-    updates["enable_circuit_breaker"] = enable_circuit_breaker
-
-    # Apply updates if any
-    if updates:
-        config = config.model_copy(update=updates)
-
-    return config
 
 
 def apply_paths(func):
@@ -295,8 +191,9 @@ def start_rest_server(
         - high_availability: Aggressive retries with fast circuit breaker for HA scenarios
         - batch_processing: Conservative retries with tolerant circuit breaker for batch jobs
     """
-    resilience_config = create_resilience_config(
-        resilience_preset=resilience_preset,
+    # Create resilience configuration using the modern factory
+    resilience_config = ResilienceConfigFactory.create_for_cli(
+        preset=resilience_preset,
         retry_max_attempts=retry_max_attempts,
         retry_strategy=retry_strategy,
         retry_base_delay=retry_base_delay,
@@ -400,8 +297,9 @@ def start_all(
         - high_availability: Aggressive retries with fast circuit breaker for HA scenarios
         - batch_processing: Conservative retries with tolerant circuit breaker for batch jobs
     """
-    resilience_config = create_resilience_config(
-        resilience_preset=resilience_preset,
+    # Create resilience configuration using the modern factory
+    resilience_config = ResilienceConfigFactory.create_for_cli(
+        preset=resilience_preset,
         retry_max_attempts=retry_max_attempts,
         retry_strategy=retry_strategy,
         retry_base_delay=retry_base_delay,
@@ -481,8 +379,8 @@ def show_resilience_config(
         console.print(Panel.fit("Resilience features are disabled", style="red"))
         return
 
-    # Create the configuration
-    config = create_resilience_config(resilience_preset=preset)
+    # Create the configuration using the modern factory
+    config = ResilienceConfigFactory.create_preset(preset)
 
     if config is None:
         console.print(Panel.fit("No resilience configuration", style="red"))
