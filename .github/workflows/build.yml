@@ -94,7 +94,7 @@ jobs:
           --cov=fastflight \
           --cov-report=xml \
           --cov-report=term \
-          #--cov-fail-under=80 \
+          --cov-fail-under=50 \
           --junit-xml=pytest.xml \
           -v
 
