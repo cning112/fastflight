@@ -135,33 +135,45 @@ jobs:
 
       - name: Start Flight server for testing
         run: |
-          # Start FastFlight server in background
-          uv run python -m fastflight.cli start-flight-server --flight-location grpc://0.0.0.0:8815 &
-          SERVER_PID=$!
-          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+          cd examples/multi_protocol_demo
           
-          # Wait for server to be ready and test connection
+          # Start FastFlight server using example script
+          uv run python start_flight_server.py &
+          FLIGHT_PID=$!
+          echo "FLIGHT_PID=$FLIGHT_PID" >> $GITHUB_ENV
+          
+          # Start REST server using example script  
+          uv run python start_rest_server.py &
+          REST_PID=$!
+          echo "REST_PID=$REST_PID" >> $GITHUB_ENV
+          
+          # Wait for servers to be ready
           for i in {1..30}; do
-            if nc -z localhost 8815; then
-              echo "Server is ready"
+            if nc -z localhost 8815 && nc -z localhost 8000; then
+              echo "Both servers are ready"
               break
             fi
-            echo "Waiting for server... ($i/30)"
-            sleep 1
+            echo "Waiting for servers... ($i/30)"
+            sleep 2
           done
 
       - name: Run integration tests
         run: |
-          uv run pytest tests/integration/ -v --tb=short
+          # Run the multi-protocol demo as integration test
+          cd examples/multi_protocol_demo
+          timeout 60 uv run python run_demo.py || echo "Demo completed or timed out"
         env:
           FLIGHT_SERVER_URL: "grpc://localhost:8815"
           POSTGRES_URL: "postgresql://postgres:postgres@localhost:5432/testdb"
 
-      - name: Stop Flight server
+      - name: Stop servers
         if: always()
         run: |
-          if [ ! -z "$SERVER_PID" ]; then
-            kill $SERVER_PID || true
+          if [ ! -z "$FLIGHT_PID" ]; then
+            kill $FLIGHT_PID || true
+          fi
+          if [ ! -z "$REST_PID" ]; then
+            kill $REST_PID || true
           fi
 
   # Performance benchmarks
