@@ -136,21 +136,25 @@ jobs:
       - name: Start Flight server for testing
         run: |
           # Start FastFlight server in background
-          uv run python -m fastflight.cli flight-server --port 8001 &
+          uv run python -m fastflight.cli start-flight-server --flight-location grpc://0.0.0.0:8815 &
           SERVER_PID=$!
           echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
           
-          # Wait for server to be ready
-          sleep 5
-          
-          # Test if server is responding
-          curl -f http://localhost:8001/health || exit 1
+          # Wait for server to be ready and test connection
+          for i in {1..30}; do
+            if nc -z localhost 8815; then
+              echo "Server is ready"
+              break
+            fi
+            echo "Waiting for server... ($i/30)"
+            sleep 1
+          done
 
       - name: Run integration tests
         run: |
           uv run pytest tests/integration/ -v --tb=short
         env:
-          FLIGHT_SERVER_URL: "grpc://localhost:8001"
+          FLIGHT_SERVER_URL: "grpc://localhost:8815"
           POSTGRES_URL: "postgresql://postgres:postgres@localhost:5432/testdb"
 
       - name: Stop Flight server
