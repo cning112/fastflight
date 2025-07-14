@@ -16,9 +16,15 @@ repos:
       - id: uv-lock
         files: pyproject.toml
 
-      - id: pip-compile
-        args: [ pyproject.toml, --all-extras, -o, requirements.txt ]
-        files: pyproject.toml
+      - id: uv-export
+        name: export-requirements-all
+        args: [ --all-extras, --all-groups, --frozen, --no-hashes, --no-emit-project, --output-file, requirements.txt ]
+        files: ^(pyproject\.toml|uv\.lock)$
+
+      - id: uv-export
+        name: export-requirements-extras
+        args: [ --all-extras, --frozen, --no-hashes, --no-emit-project, --output-file, requirements-extras.txt ]
+        files: ^(pyproject\.toml|uv\.lock)$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.15.0
