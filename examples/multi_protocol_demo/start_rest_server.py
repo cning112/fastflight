@@ -12,6 +12,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import uvicorn
 
 from fastflight.fastapi_integration import create_app
+from fastflight.utils.custom_logging import setup_logging
+
+setup_logging(log_file=None)
 
 if __name__ == "__main__":
     print("Starting REST server at http://localhost:8000")
