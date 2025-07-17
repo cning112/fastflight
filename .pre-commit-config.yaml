@@ -17,13 +17,13 @@ repos:
         files: pyproject.toml
 
       - id: uv-export
-        name: export-requirements-all
-        args: [ --all-extras, --all-groups, --frozen, --no-hashes, --no-emit-project, --output-file, requirements.txt ]
+        name: export-requirements-dev
+        args: [ --all-extras, --all-groups, --locked, --no-hashes, --no-emit-project, --output-file, requirements.txt ]
         files: ^(pyproject\.toml|uv\.lock)$
 
       - id: uv-export
-        name: export-requirements-extras
-        args: [ --all-extras, --frozen, --no-hashes, --no-emit-project, --output-file, requirements-extras.txt ]
+        name: export-requirements-all
+        args: [ --all-extras,               --locked, --no-hashes, --no-emit-project, --output-file, requirements-all.txt ]
         files: ^(pyproject\.toml|uv\.lock)$
 
   - repo: https://github.com/pre-commit/mirrors-mypy
