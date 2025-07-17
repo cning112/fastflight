@@ -1,7 +1,7 @@
 import json
 import logging
 from abc import ABC
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import AsyncIterator, Iterable
 from functools import partial
 from typing import ClassVar, Generic, TypeVar, get_args, get_origin
 
@@ -283,7 +283,7 @@ class BaseDataService(Generic[T], ABC):
     def fqn(cls):
         return f"{cls.__module__}.{cls.__qualname__}"
 
-    async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncGenerator[pa.RecordBatch, None]:
+    async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterator[pa.RecordBatch]:
         """
         Fetch data in batches asynchronously based on the given parameters.
 
