@@ -37,12 +37,15 @@ jobs:
 
       - name: Run Ruff (linting & formatting)
         run: |
+          # Check for linting issues without fixing (fail on any issues)
           uv run ruff check --output-format=github .
+          # Check formatting without auto-formatting (fail if not formatted)
           uv run ruff format --check --diff .
 
       - name: Run MyPy (type checking)
         run: |
-          uv run mypy src/ tests/ examples/ --ignore-missing-imports --show-error-codes --pretty
+          # Use same configuration as other workflows for consistency
+          uv run mypy --config-file=pyproject.toml
 
       - name: Security scan with Bandit
         run: |

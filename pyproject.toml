@@ -78,7 +78,7 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.ruff.lint]
-# Start simple and expand gradually
+# Unified linting configuration for consistency across pre-commit and CI
 select = [
     "E", # pycodestyle errors
     "W", # pycodestyle warnings
@@ -89,11 +89,10 @@ select = [
     "UP", # pyupgrade (modernize syntax)
     "SIM", # flake8-simplify (code simplification)
     "RUF", # Ruff-specific rules
+    "T20", # flake8-print (detect print statements)
 ]
 
 ignore = [
-    # Allow print statements (useful for CLI applications)
-    "T201",
     # Allow TODO comments during development
     "FIX002",
     # Allow function calls in argument defaults (common in FastAPI/Pydantic)
@@ -111,17 +110,50 @@ known-first-party = ["fastflight"]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests can be more relaxed
-"tests/**/*" = ["B011"]  # Allow assert False
-# Examples can use print statements  
-"examples/**/*" = ["T201"]
+"tests/**/*" = [
+    "B011", # Allow assert False
+    "T201", # Allow print statements in tests
+    "T203", # Allow pprint in tests
+]
+# Examples can use print statements and be more flexible  
+"examples/**/*" = [
+    "T201", # Allow print statements
+    "T203", # Allow pprint
+    "B008", # Allow function calls in defaults (demo code)
+]
 # CLI modules can use print
-"src/fastflight/cli.py" = ["T201"]
+"src/fastflight/cli.py" = [
+    "T201", # Allow print statements in CLI
+    "T203", # Allow pprint in CLI
+]
 
 [tool.mypy]
 python_version = "3.10"
 ignore_missing_imports = true
 show_error_codes = true
-files = ["src"]
+pretty = true
+# Check all project code consistently across pre-commit and CI
+files = ["src", "tests", "examples"]
+
+# Enable strict optional checking
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+warn_unreachable = true
+
+# Per-module configuration
+[[tool.mypy.overrides]]
+module = "tests.*"
+# Tests can be more relaxed
+ignore_errors = false
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+module = "examples.*"
+# Examples can be more relaxed
+ignore_errors = false
+disable_error_code = ["import-untyped"]
 
 [tool.bandit]
 # Paths to exclude from scanning

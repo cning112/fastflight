@@ -43,13 +43,19 @@ jobs:
           echo "versions=[\"3.10\", \"3.11\", \"3.12\", \"3.13\"]" >> $GITHUB_OUTPUT
 
       - name: Lint with Ruff
-        run: uv run ruff check --output-format=github .
-
-      - name: Format check with Ruff
-        run: uv run ruff format --check .
+        run: |
+          # Fail if there are any linting issues (no --fix in CI)
+          uv run ruff check --output-format=github .
+          
+      - name: Format check with Ruff  
+        run: |
+          # Fail if files are not properly formatted (no auto-format in CI)
+          uv run ruff format --check --diff .
 
       - name: Type check with MyPy
-        run: uv run mypy src/ --ignore-missing-imports
+        run: |
+          # Use same configuration as pre-commit for consistency
+          uv run mypy --config-file=pyproject.toml
 
       - name: Security check
         run: |

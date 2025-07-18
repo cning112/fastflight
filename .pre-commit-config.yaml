@@ -5,7 +5,7 @@ repos:
     rev: v0.11.11
     hooks:
       - id: ruff-check
-        args: [ --fix ]
+        args: [ --fix ]  # Pre-commit should fix issues automatically
         types_or: [ python, pyi, jupyter ]
       - id: ruff-format
         types_or: [ python, pyi, jupyter ]
@@ -30,9 +30,12 @@ repos:
     rev: v1.15.0
     hooks:
       - id: mypy
+        # Use same file patterns as defined in pyproject.toml for consistency
         files: ^(src|tests|examples)/.*\.py$
         additional_dependencies: [
           pandas-stubs>=2.2.3.241126,
           pyarrow-stubs>=17.17,
           types-requests,
         ]
+        # Use consistent args with CI - let pyproject.toml handle most config
+        args: ["--config-file=pyproject.toml"]
