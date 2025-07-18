@@ -132,7 +132,7 @@ class RetryConfig(BaseModel):
             jitter = base_delay * self.jitter_factor * (secrets.SystemRandom().random() * 2 - 1)
             delay = base_delay + jitter
         else:
-            delay = self.base_delay
+            delay = self.base_delay  # type: ignore[unreachable]
 
         return min(delay, self.max_delay)
 

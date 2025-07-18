@@ -3,7 +3,7 @@ import logging
 from abc import ABC
 from collections.abc import AsyncIterator, Iterable
 from functools import partial
-from typing import ClassVar, Generic, TypeVar, get_args, get_origin
+from typing import Any, ClassVar, Generic, TypeVar, get_args, get_origin
 
 import pyarrow as pa
 from pydantic import BaseModel
@@ -174,7 +174,7 @@ class BaseParams(BaseModel, ABC):
             logger.error(f"Error deserializing params: {e}")
             raise
 
-    def to_json(self) -> dict:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize the params to json, including the fully qualified name.
 

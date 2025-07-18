@@ -610,6 +610,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pydantic" },
+    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -684,6 +685,7 @@ requires-dist = [
     { name = "structlog", marker = "extra == 'structlog'" },
     { name = "typer", marker = "extra == 'all'", specifier = ">=0.15.2" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.15.2" },
+    { name = "typing-extensions", specifier = ">=4.5.0" },
 ]
 provides-extras = ["cli", "duckdb", "fastapi", "structlog", "examples", "all"]
 

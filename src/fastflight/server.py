@@ -2,7 +2,6 @@ import itertools
 import logging
 import multiprocessing
 import sys
-from typing import cast
 
 import pyarrow as pa
 from pyarrow import RecordBatchReader, flight
@@ -206,7 +205,7 @@ class FastFlightServer(flight.FlightServerBase):
         try:
             req_params = BaseParams.from_bytes(ticket.ticket)
             service_cls = BaseDataService.lookup(req_params.fqn())
-            return req_params, cast(BaseDataService, service_cls())
+            return req_params, service_cls()
         except KeyError as e:
             raise flight.FlightInternalError(f"Missing required field in ticket: {e}") from e
         except ValueError as e:

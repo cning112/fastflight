@@ -4,7 +4,13 @@ ResilienceConfig: Unified configuration for retry and circuit breaker behavior.
 Includes factory methods for common usage patterns like high availability or batch processing.
 """
 
+import sys
 from typing import Any, cast
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
@@ -162,18 +168,18 @@ class ResilienceConfig(BaseModel):
             enable_circuit_breaker=True,
         )
 
-    def with_retry_config(self, retry_config: RetryConfig) -> "ResilienceConfig":
+    def with_retry_config(self, retry_config: RetryConfig) -> Self:
         """Return a new ResilienceConfig with updated retry configuration."""
         return self.model_copy(update={"retry_config": retry_config})
 
-    def with_circuit_breaker_config(self, circuit_config: CircuitBreakerConfig) -> "ResilienceConfig":
+    def with_circuit_breaker_config(self, circuit_config: CircuitBreakerConfig) -> Self:
         """Return a new ResilienceConfig with updated circuit breaker configuration."""
         return self.model_copy(update={"circuit_breaker_config": circuit_config})
 
-    def with_circuit_breaker_name(self, name: str) -> "ResilienceConfig":
+    def with_circuit_breaker_name(self, name: str) -> Self:
         """Return a new ResilienceConfig with updated circuit breaker name."""
         return self.model_copy(update={"circuit_breaker_name": name})
 
-    def disable_circuit_breaker(self) -> "ResilienceConfig":
+    def disable_circuit_breaker(self) -> Self:
         """Return a new ResilienceConfig with circuit breaker functionality disabled."""
         return self.model_copy(update={"enable_circuit_breaker": False})

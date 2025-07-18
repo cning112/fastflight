@@ -6,6 +6,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
+from typing import cast
 
 from fastflight.exceptions import FastFlightCircuitOpenError
 
@@ -66,7 +67,7 @@ class CircuitBreaker:
                 result = func(*args, **kwargs)
 
             await self._on_success()
-            return result
+            return cast(T, result)
 
         except Exception as e:
             await self._on_failure(e)

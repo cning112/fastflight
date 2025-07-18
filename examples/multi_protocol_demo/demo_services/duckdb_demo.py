@@ -42,7 +42,7 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
             logger.debug(f"Executing query: {params.query}")
 
             # Execute query and get Arrow table
-            arrow_table = conn.execute(params.query, query_parameters).arrow()
+            arrow_table: pa.Table = conn.execute(params.query, query_parameters).arrow()
             logger.debug(f"Got query data of {arrow_table.num_rows} rows in arrow format")
             return arrow_table
 

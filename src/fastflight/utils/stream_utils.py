@@ -4,7 +4,7 @@ import contextlib
 import io
 import logging
 import threading
-from collections.abc import AsyncIterable, Awaitable, Iterable, Iterator
+from collections.abc import AsyncIterable, Awaitable, Coroutine, Iterable, Iterator
 from typing import Any, TypeVar
 
 import pandas as pd
@@ -91,7 +91,7 @@ class AsyncToSyncConverter:
             logger.info("Event loop stopped, and thread joined.")
         self._closed = True
 
-    def run_coroutine(self, coro: Awaitable[T]) -> T:
+    def run_coroutine(self, coro: Coroutine[Any, Any, T]) -> T:
         """
         Runs a coroutine in the converter's event loop and returns its result synchronously.
 
@@ -273,7 +273,7 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
                 await queue.put(buffer_value.to_pybytes())
         except Exception as e:
             logger.error("Error during producing Arrow IPC bytes", exc_info=True)
-            await queue.put(e)  # type: ignore[arg-type]
+            await queue.put(e)
         finally:
             # Signal the consumer that production is complete.
             await queue.put(end_of_stream)  # type: ignore[arg-type]

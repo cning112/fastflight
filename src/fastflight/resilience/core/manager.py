@@ -13,6 +13,7 @@ Usage:
 import asyncio
 import logging
 from collections.abc import Callable
+from typing import cast
 
 from fastflight.exceptions import FastFlightRetryExhaustedError
 
@@ -120,7 +121,7 @@ class ResilienceManager:
         else:
             # Execute without retry if no retry config provided
             if asyncio.iscoroutinefunction(wrapped_func):
-                return await wrapped_func(*args, **kwargs)
+                return cast(T, await wrapped_func(*args, **kwargs))
             else:
                 return wrapped_func(*args, **kwargs)
 
@@ -140,7 +141,7 @@ class ResilienceManager:
         for attempt in range(1, retry_config.max_attempts + 1):
             try:
                 if asyncio.iscoroutinefunction(func):
-                    return await func(*args, **kwargs)
+                    return cast(T, await func(*args, **kwargs))
                 else:
                     return func(*args, **kwargs)
 

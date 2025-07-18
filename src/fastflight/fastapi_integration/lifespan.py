@@ -91,4 +91,4 @@ def get_fast_flight_bouncer(app: FastAPI) -> FastFlightBouncer:
     helper = getattr(app.state, "_flight_client", None)
     if helper is None:
         raise ValueError("FastFlightBouncer not initialized. Use fast_flight_bouncer_lifespan in your FastAPI app.")
-    return helper
+    return helper  # type: ignore[no-any-return]
