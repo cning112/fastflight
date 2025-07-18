@@ -20,12 +20,12 @@ from rich.console import Console
 from rich.table import Table
 
 from fastflight import BaseParams
+from fastflight.utils.stream_utils import read_dataframe_from_arrow_stream
 
 # Add the examples directory to path so we can import demo_services
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from fastflight.client import FastFlightBouncer
-from fastflight.utils.stream_utils import read_dataframe_from_arrow_stream
 from multi_protocol_demo.demo_services.csv_demo import CsvFileParams
 from multi_protocol_demo.demo_services.duckdb_demo import DuckDBParams
 from multi_protocol_demo.demo_services.sqllite_demo import SQLParams
@@ -86,6 +86,7 @@ class ServiceComparison:
             console.print(f"✅ gRPC Sync: {len(df)} rows in {timings['grpc_sync']:.3f}s")
         except Exception as e:
             console.print(f"❌ gRPC Sync failed: {e}")
+            raise
 
         # Test gRPC Async
         try:
@@ -101,6 +102,7 @@ class ServiceComparison:
             console.print(f"✅ gRPC Async: {len(df)} rows in {timings['grpc_async']:.3f}s")
         except Exception as e:
             console.print(f"❌ gRPC Async failed: {e}")
+            raise
 
         # Test REST
         try:
@@ -111,6 +113,7 @@ class ServiceComparison:
             console.print(f"✅ REST API: {len(df)} rows in {timings['rest']:.3f}s")
         except Exception as e:
             console.print(f"❌ REST API failed: {e}")
+            raise
 
         # Display comparison
         self._display_comparison_table(service_name, results, timings)
@@ -174,15 +177,29 @@ def main():
     )
     comparison.compare_service("SQLite", sql_params, "Basic SQLite query")
 
-    # Test 2: DuckDB Example
+    # Test 2: CSV File (if we can create a temp file)
     console.print("\n" + "=" * 80)
-    duckdb_params = DuckDBParams(
-        database_path=":memory:",
-        query="SELECT generate_series as id, 'Row ' || generate_series as message FROM generate_series(1, 100)",
-    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create sample CSV for direct CSV reading
+        csv_data = pd.DataFrame(
+            {
+                "timestamp": pd.date_range("2024-01-01", periods=200, freq="1h"),
+                "temperature": [20 + (i % 30) + (i * 0.1 % 10) for i in range(200)],
+                "humidity": [50 + (i % 40) + (i * 0.05 % 15) for i in range(200)],
+            }
+        )
+        csv_file_path = Path(tmpdir) / "sensor_data.csv"
+        csv_data.to_csv(csv_file_path, index=False)
+
+        csv_params = CsvFileParams(path=csv_file_path)
+        comparison.compare_service("CSV File", csv_params, "Direct CSV file reading (200 rows)")
+
+    # Test 3: DuckDB Example
+    console.print("\n" + "=" * 80)
+    duckdb_params = DuckDBParams(query="SELECT range as id, 'Row ' || range as message FROM range(1, 101)")
     comparison.compare_service("DuckDB", duckdb_params, "In-memory DuckDB with 100 rows")
 
-    # Test 3: DuckDB with CSV
+    # Test 4: DuckDB with CSV
     console.print("\n" + "=" * 80)
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create sample CSV
@@ -202,23 +219,6 @@ def main():
             parameters=[100.0],
         )
         comparison.compare_service("DuckDB+CSV", duckdb_csv_params, "DuckDB querying CSV file (500 rows)")
-
-    # Test 4: CSV File (if we can create a temp file)
-    console.print("\n" + "=" * 80)
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Create sample CSV for direct CSV reading
-        csv_data = pd.DataFrame(
-            {
-                "timestamp": pd.date_range("2024-01-01", periods=200, freq="1h"),
-                "temperature": [20 + (i % 30) + (i * 0.1 % 10) for i in range(200)],
-                "humidity": [50 + (i % 40) + (i * 0.05 % 15) for i in range(200)],
-            }
-        )
-        csv_file_path = Path(tmpdir) / "sensor_data.csv"
-        csv_data.to_csv(csv_file_path, index=False)
-
-        csv_params = CsvFileParams(path=csv_file_path)
-        comparison.compare_service("CSV File", csv_params, "Direct CSV file reading (200 rows)")
 
     # Summary
     console.print("\n" + "=" * 80)

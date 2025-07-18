@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Start FastFlight server for demo
-"""
-
 import sys
 from pathlib import Path
 
