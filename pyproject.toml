@@ -169,3 +169,66 @@ markers = [
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
 ]
+
+# ============================================================================
+# Code Quality Tool Configurations
+# ============================================================================
+
+[tool.bandit]
+# Security scanning configuration for FastFlight
+exclude_dirs = ["tests", "examples", ".venv", "venv", ".mypy_cache", ".pytest_cache"]
+skips = [
+    "B101",  # Skip assert statements (common in tests and examples)
+    "B601",  # Skip shell injection warnings for subprocess with shell=False
+]
+confidence = "medium"  # Low, Medium, High
+severity = "medium"    # Low, Medium, High
+
+# Specific configurations for Arrow Flight project
+[tool.bandit.assert_used]
+skips = ["**/tests/**", "**/test_*.py", "**/examples/**"]
+
+[tool.vulture]
+# Dead code detection configuration
+min_confidence = 80  # Higher confidence to reduce false positives
+paths = ["src"]
+exclude = ["tests/", "examples/", "venv/", ".venv/"]
+ignore_decorators = [
+    "@pytest.fixture", 
+    "@property", 
+    "@classmethod", 
+    "@staticmethod",
+    "@abstractmethod",
+    "@cached_property",
+    "@lru_cache",
+    "@dataclass",
+    # FastAPI/Pydantic decorators
+    "@validator",
+    "@root_validator", 
+    "@field_validator",
+]
+ignore_names = [
+    "setUp", 
+    "tearDown", 
+    "__*__",  # Magic methods
+    "test_*", # Test methods
+    "*_test",
+    # Common FastAPI/Arrow Flight patterns
+    "get_*",
+    "create_*", 
+    "delete_*",
+    "update_*",
+    "*_handler",
+    "*_endpoint",
+]
+
+# Note: Radon configuration requires Python 3.11+ or installing 'radon[toml]'
+# However, Radon does NOT support [tool.radon] format - it only supports [radon] in INI format
+# For explicit configuration, we use command line arguments in GitHub Actions instead
+# If you want to use Radon config files, create a setup.cfg with:
+# [radon]
+# exclude = tests/*,examples/*,venv/*,.venv/*
+# cc_min = C
+
+# Note: Xenon does NOT support any configuration files
+# Use command line arguments instead: xenon --max-absolute C --max-modules B --max-average B src/

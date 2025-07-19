@@ -42,26 +42,29 @@ jobs:
         run: |
           echo "versions=[\"3.10\", \"3.11\", \"3.12\", \"3.13\"]" >> $GITHUB_OUTPUT
 
+      # ============================================================================
+      # Core Development Checks (Essential for CI)
+      # ============================================================================
       - name: Lint with Ruff
         run: |
+          echo "🔍 Checking code style and linting..."
           # Fail if there are any linting issues (no --fix in CI)
           uv run ruff check --output-format=github .
           
       - name: Format check with Ruff  
         run: |
+          echo "✨ Checking code formatting..."
           # Fail if files are not properly formatted (no auto-format in CI)
           uv run ruff format --check --diff .
 
       - name: Type check with MyPy
         run: |
+          echo "🔎 Running type checking..."
           # Use same configuration as pre-commit for consistency
           uv run mypy --config-file=pyproject.toml
 
-      - name: Security check
-        run: |
-          uv add --dev bandit[toml] safety
-          uv run bandit -r src/ -f json
-          uv run safety check --json
+      # Note: Detailed security and quality analysis is handled by code-quality.yml
+      # This workflow focuses on core functionality: linting, formatting, type checking, and testing
 
   # Core testing matrix
   test:
