@@ -232,3 +232,18 @@ ignore_names = [
 
 # Note: Xenon does NOT support any configuration files
 # Use command line arguments instead: xenon --max-absolute C --max-modules B --max-average B src/
+
+[tool.pip-audit]
+# Vulnerability scanning configuration
+format = "columns"
+desc = true
+resolve-dependencies = true
+vulnerability-service = "osv"
+progress-spinner = false
+timeout = 30
+
+# Cache configuration
+cache-dir = ".pip-audit-cache"
+
+# Skip specific packages if they are false positives (use with caution)
+# skip = ["package-name"]

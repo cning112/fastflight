@@ -184,17 +184,17 @@ jobs:
       - name: Install UV
         uses: astral-sh/setup-uv@v6
 
-      - name: Security scan with Safety
+      - name: Security scan with pip-audit
         run: |
-          uv tool install safety
-          uv tool run safety check --json --output security-report.json || true
-          uv tool run safety check  # Also output to console
+          echo "🛡️ Scanning dependencies for vulnerabilities..."
+          uv run --with pip-audit pip-audit --config pyproject.toml --format=json --output=security-report.json || true
+          uv run --with pip-audit pip-audit --config pyproject.toml  # Console output
 
       - name: Scan wheel for known vulnerabilities
         run: |
-          uv tool install pip-audit
-          uv tool run pip-audit --desc --format=json --output=audit-report.json dist/*.whl || true
-          uv tool run pip-audit --desc dist/*.whl  # Also output to console
+          echo "🎯 Scanning built wheel for vulnerabilities..."
+          uv run --with pip-audit pip-audit --config pyproject.toml --format=json --output=audit-report.json dist/*.whl || true
+          uv run --with pip-audit pip-audit --config pyproject.toml dist/*.whl  # Console output
 
       - name: Upload security reports
         uses: actions/upload-artifact@v4

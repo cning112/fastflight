@@ -60,7 +60,7 @@ jobs:
       - name: Type check with MyPy
         run: |
           echo "🔎 Running type checking..."
-          # Use same configuration as pre-commit for consistency
+          # Use explicit configuration file path for consistency
           uv run mypy --config-file=pyproject.toml
 
       # Note: Detailed security and quality analysis is handled by code-quality.yml

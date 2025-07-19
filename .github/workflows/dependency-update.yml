@@ -43,31 +43,38 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Check for outdated packages
+      - name: Check for security vulnerabilities
         id: check
         run: |
-          # Check for security vulnerabilities
-          uv tool install safety
-          SECURITY_ISSUES=$(uv tool run safety check --json --output security.json || echo "[]")
+          echo "🔍 Scanning for security vulnerabilities..."
           
-          if [[ "$SECURITY_ISSUES" != "[]" && $(echo "$SECURITY_ISSUES" | jq length) -gt 0 ]]; then
-            echo "security-updates=true" >> $GITHUB_OUTPUT
-            echo "🚨 Security vulnerabilities found!"
-          else
+          # Use pip-audit for security scanning
+          if uv run --with pip-audit pip-audit --config pyproject.toml --format=json --output=security.json; then
             echo "security-updates=false" >> $GITHUB_OUTPUT
             echo "✅ No security vulnerabilities found"
+          else
+            # Check if there are actual vulnerabilities (not just tool errors)
+            if [ -f security.json ] && [ $(jq length security.json 2>/dev/null || echo "0") -gt 0 ]; then
+              echo "security-updates=true" >> $GITHUB_OUTPUT
+              echo "🚨 Security vulnerabilities found!"
+              
+              # Show summary in console
+              echo "Vulnerability summary:"
+              jq -r '.[] | "- \(.package): \(.fixed_versions[0] // "No fix available")"' security.json || true
+            else
+              echo "security-updates=false" >> $GITHUB_OUTPUT
+              echo "✅ No security vulnerabilities found"
+            fi
           fi
           
           # Check for general updates using pip-check-updates equivalent
-          uv tool install pur
-          OUTDATED=$(uv tool run pur --dry-run --nonzero-exit-code pyproject.toml || echo "updates-available")
-          
-          if [[ "$OUTDATED" == "updates-available" ]]; then
-            echo "has-updates=true" >> $GITHUB_OUTPUT
-            echo "📦 Package updates available"
-          else
+          uv run --with pur pur --dry-run --nonzero-exit-code pyproject.toml
+          if [ $? -eq 0 ]; then
             echo "has-updates=false" >> $GITHUB_OUTPUT
             echo "✅ All packages are up to date"
+          else
+            echo "has-updates=true" >> $GITHUB_OUTPUT
+            echo "📦 Package updates available"
           fi
 
       - name: Upload security report
@@ -114,9 +121,30 @@ jobs:
           
           case $UPDATE_TYPE in
             "security-only")
-              echo "Updating only security-related packages..."
-              # This would require more sophisticated logic to update only vulnerable packages
-              uv lock --upgrade-package $(uv tool run safety check --json | jq -r '.[].package_name' | tr '\n' ' ')
+              echo "🔒 Updating only security-related packages..."
+              
+              # Use pip-audit to get vulnerable packages and their fixed versions
+              if uv run --with pip-audit pip-audit --config pyproject.toml --format=json --output=vulns.json --fix-dry-run; then
+                echo "No vulnerabilities to fix"
+              else
+                # Extract packages that need updates
+                VULNERABLE_PACKAGES=$(jq -r '.[].package' vulns.json 2>/dev/null | sort -u | tr '\n' ' ' || echo "")
+                
+                if [ -n "$VULNERABLE_PACKAGES" ]; then
+                  echo "Updating vulnerable packages: $VULNERABLE_PACKAGES"
+                  
+                  # Update only the vulnerable packages
+                  for pkg in $VULNERABLE_PACKAGES; do
+                    echo "Updating $pkg..."
+                    uv lock --upgrade-package "$pkg" || echo "Failed to update $pkg"
+                  done
+                else
+                  echo "No specific packages to update"
+                fi
+              fi
+              
+              # Clean up temporary file
+              rm -f vulns.json
               ;;
             "dev-dependencies")
               echo "Updating development dependencies..."
