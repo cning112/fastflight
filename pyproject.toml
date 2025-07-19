@@ -61,11 +61,6 @@ dev = [
     "pytest-asyncio>=0.25.3",
     "pytest-cov",
     "ruff",
-    "bandit[toml]>=1.8.3",
-    "safety",
-    "vulture",
-    "radon",
-    "xenon",
 ]
 
 [tool.ruff]
@@ -155,30 +150,6 @@ module = "examples.*"
 # Examples can be more relaxed
 ignore_errors = false
 disable_error_code = ["import-untyped"]
-
-[tool.bandit]
-# Paths to exclude from scanning
-exclude_dirs = ["tests", "examples"]
-
-# Test IDs to skip
-skips = [
-    "B104", # hardcoded_bind_all_interfaces - CLI defaults are acceptable for development
-    "B110", # try_except_pass - Some cleanup code legitimately needs silent error handling
-    "B311", # Standard pseudo-random generators - acceptable for non-cryptographic jitter in retry logic
-]
-
-# Only report medium and high severity issues in CI
-severity = "medium"
-
-[tool.bandit.assert_used]
-# Allow asserts in test files (if we scan them)
-skips = ["*test*.py", "*tests*.py"]
-
-[tool.vulture]
-paths = ["src"]
-min_confidence = 70
-ignore_names = ["_*", "test_*"]
-exclude = ["tests/", "examples/"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

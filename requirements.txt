@@ -7,54 +7,33 @@ anyio==4.9.0
     #   httpx
     #   starlette
     #   watchfiles
-authlib==1.6.0
-    # via safety
-backports-datetime-fromisoformat==2.0.3 ; python_full_version < '3.11'
-    # via marshmallow
-bandit==1.8.6
 certifi==2025.7.14
     # via
     #   httpcore
     #   httpx
-    #   requests
     #   sentry-sdk
-cffi==1.17.1 ; platform_python_implementation != 'PyPy'
-    # via cryptography
 cfgv==3.4.0
     # via pre-commit
-charset-normalizer==3.4.2
-    # via requests
 click==8.2.1
     # via
-    #   nltk
     #   rich-toolkit
-    #   safety
     #   typer
     #   uvicorn
-colorama==0.4.6
+colorama==0.4.6 ; sys_platform == 'win32'
     # via
-    #   bandit
     #   click
     #   pytest
-    #   radon
-    #   tqdm
     #   uvicorn
 contourpy==1.3.2
     # via matplotlib
 coverage==7.9.2
     # via pytest-cov
-cryptography==45.0.5
-    # via authlib
 cycler==0.12.1
     # via matplotlib
 distlib==0.3.9
     # via virtualenv
 dnspython==2.7.0
     # via email-validator
-dparse==0.6.4
-    # via
-    #   safety
-    #   safety-schemas
 duckdb==1.3.2
     # via fastflight
 email-validator==2.2.0
@@ -72,9 +51,7 @@ fastapi-cli==0.0.8
 fastapi-cloud-cli==0.1.4
     # via fastapi-cli
 filelock==3.16.1
-    # via
-    #   safety
-    #   virtualenv
+    # via virtualenv
 fonttools==4.58.5
     # via matplotlib
 greenlet==3.2.3 ; (python_full_version < '3.14' and platform_machine == 'AMD64') or (python_full_version < '3.14' and platform_machine == 'WIN32') or (python_full_version < '3.14' and platform_machine == 'aarch64') or (python_full_version < '3.14' and platform_machine == 'amd64') or (python_full_version < '3.14' and platform_machine == 'ppc64le') or (python_full_version < '3.14' and platform_machine == 'win32') or (python_full_version < '3.14' and platform_machine == 'x86_64')
@@ -92,7 +69,6 @@ httpx==0.28.1
     #   fastapi
     #   fastapi-cloud-cli
     #   fastflight
-    #   safety
 identify==2.6.12
     # via pre-commit
 idna==3.10
@@ -100,25 +76,16 @@ idna==3.10
     #   anyio
     #   email-validator
     #   httpx
-    #   requests
 iniconfig==2.1.0
     # via pytest
 jinja2==3.1.6
-    # via
-    #   fastapi
-    #   safety
-joblib==1.5.1
-    # via nltk
+    # via fastapi
 kiwisolver==1.4.8
     # via matplotlib
-mando==0.7.1
-    # via radon
 markdown-it-py==3.0.0
     # via rich
 markupsafe==3.0.2
     # via jinja2
-marshmallow==4.0.0
-    # via safety
 matplotlib==3.10.3
     # via
     #   fastflight
@@ -128,8 +95,6 @@ mdurl==0.1.2
 mypy==1.17.0
 mypy-extensions==1.1.0
     # via mypy
-nltk==3.9.1
-    # via safety
 nodeenv==1.9.1
     # via pre-commit
 numpy==2.2.6 ; python_full_version < '3.11'
@@ -148,11 +113,8 @@ numpy==2.3.1 ; python_full_version >= '3.11'
     #   seaborn
 packaging==25.0
     # via
-    #   dparse
     #   matplotlib
     #   pytest
-    #   safety
-    #   safety-schemas
 pandas==2.3.1
     # via
     #   fastflight
@@ -160,8 +122,6 @@ pandas==2.3.1
 pandas-stubs==2.3.0.250703
 pathspec==0.12.1
     # via mypy
-pbr==6.1.1
-    # via stevedore
 pillow==11.3.0
     # via matplotlib
 platformdirs==4.3.8
@@ -171,22 +131,16 @@ pluggy==1.6.0
     #   pytest
     #   pytest-cov
 pre-commit==4.2.0
-psutil==6.1.1
-    # via safety
 pyarrow==20.0.0
     # via
     #   fastflight
     #   pyarrow-stubs
 pyarrow-stubs==20.0.0.20250627
-pycparser==2.22 ; platform_python_implementation != 'PyPy'
-    # via cffi
 pydantic==2.9.2
     # via
     #   fastapi
     #   fastapi-cloud-cli
     #   fastflight
-    #   safety
-    #   safety-schemas
 pydantic-core==2.23.4
     # via pydantic
 pygments==2.19.2
@@ -213,21 +167,10 @@ pytz==2025.2
     # via pandas
 pyyaml==6.0.2
     # via
-    #   bandit
     #   pre-commit
     #   uvicorn
-    #   xenon
-radon==6.0.1
-    # via xenon
-regex==2024.11.6
-    # via nltk
-requests==2.32.4
-    # via
-    #   safety
-    #   xenon
 rich==14.0.0
     # via
-    #   bandit
     #   fastflight
     #   rich-toolkit
     #   typer
@@ -237,61 +180,33 @@ rich-toolkit==0.14.8
     #   fastapi-cloud-cli
 rignore==0.6.2
     # via fastapi-cloud-cli
-ruamel-yaml==0.18.14
-    # via
-    #   safety
-    #   safety-schemas
-ruamel-yaml-clib==0.2.12 ; python_full_version < '3.14' and platform_python_implementation == 'CPython'
-    # via ruamel-yaml
 ruff==0.12.3
-safety==3.6.0
-safety-schemas==0.0.14
-    # via safety
 seaborn==0.13.2
     # via fastflight
 sentry-sdk==2.32.0
     # via fastapi-cloud-cli
-setuptools==80.9.0
-    # via
-    #   pbr
-    #   safety
 shellingham==1.5.4
     # via typer
 six==1.17.0
-    # via
-    #   mando
-    #   python-dateutil
+    # via python-dateutil
 sniffio==1.3.1
     # via anyio
 sqlalchemy==2.0.41
     # via fastflight
 starlette==0.47.1
     # via fastapi
-stevedore==5.4.1
-    # via bandit
 structlog==25.4.0
     # via fastflight
-tenacity==9.1.2
-    # via safety
 tomli==2.2.1 ; python_full_version <= '3.11'
     # via
-    #   bandit
     #   coverage
-    #   dparse
     #   mypy
     #   pytest
-    #   safety
-    #   vulture
-tomlkit==0.13.3
-    # via safety
-tqdm==4.67.1
-    # via nltk
 typer==0.16.0
     # via
     #   fastapi-cli
     #   fastapi-cloud-cli
     #   fastflight
-    #   safety
 types-pytz==2025.2.0.20250516
     # via pandas-stubs
 typing-extensions==4.14.1
@@ -300,14 +215,11 @@ typing-extensions==4.14.1
     #   exceptiongroup
     #   fastapi
     #   fastflight
-    #   marshmallow
     #   mypy
     #   pydantic
     #   pydantic-core
     #   rich
     #   rich-toolkit
-    #   safety
-    #   safety-schemas
     #   sqlalchemy
     #   starlette
     #   structlog
@@ -316,9 +228,7 @@ typing-extensions==4.14.1
 tzdata==2025.2
     # via pandas
 urllib3==2.5.0
-    # via
-    #   requests
-    #   sentry-sdk
+    # via sentry-sdk
 uvicorn==0.35.0
     # via
     #   fastapi
@@ -328,9 +238,7 @@ uvloop==0.21.0 ; platform_python_implementation != 'PyPy' and sys_platform != 'c
     # via uvicorn
 virtualenv==20.31.2
     # via pre-commit
-vulture==2.14
 watchfiles==1.1.0
     # via uvicorn
 websockets==15.0.1
     # via uvicorn
-xenon==0.9.3
