@@ -167,17 +167,12 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync --all-extras --dev
-          # Install specific PyArrow version if specified
-          if [ "${{ matrix.pyarrow-version }}" != "null" ]; then
-            echo "Installing PyArrow version ${{ matrix.pyarrow-version }}"
-            uv add pyarrow==${{ matrix.pyarrow-version }}
-          fi
 
       - name: Run compatibility tests
         if: ${{ matrix.pyarrow-version != null }}
         run: |
           echo "🧪 Running compatibility tests (no coverage)"
-          uv run pytest --tb=short -v --disable-warnings
+          uv run --with pyarrow==${{ matrix.pyarrow-version}} pytest --tb=short -v --disable-warnings
 
       - name: Run tests with coverage
         if: ${{ matrix.pyarrow-version == null }}
@@ -202,14 +197,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11"]  # Use default version for most integration tests
-        pyarrow-version: [null]  # null means use default from uv.lock
+        python-version: [ "3.11" ]  # Use default version for most integration tests
+        pyarrow-version: [ null ]  # null means use default from uv.lock
         include:
           # Add PyArrow compatibility testing for integration tests
           # Test key versions across different Python versions
           - python-version: "3.10"
             pyarrow-version: "6.0.1"
-          - python-version: "3.11" 
+          - python-version: "3.11"
             pyarrow-version: "12.0.1"
           - python-version: "3.12"
             pyarrow-version: "16.1.0"
@@ -230,7 +225,7 @@ jobs:
         run: |
           uv sync --all-extras --dev
           # Install specific PyArrow version if specified
-          if [ "${{ matrix.pyarrow-version }}" != "null" ]; then
+          if [ -n "${{ matrix.pyarrow-version }}" ]; then
             echo "Installing PyArrow version ${{ matrix.pyarrow-version }}"
             uv add pyarrow==${{ matrix.pyarrow-version }}
           fi
