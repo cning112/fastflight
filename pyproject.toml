@@ -11,7 +11,7 @@ readme = "README.md"
 requires-python = ">= 3.10"
 dependencies = [
     "pandas",
-    "pyarrow>=14.0.0",
+    "pyarrow>=14.0.0,<22.0.0",
     "pydantic>=2.0",
     "typing-extensions>=4.5.0",
 ]
@@ -178,8 +178,8 @@ markers = [
 # Security scanning configuration for FastFlight
 exclude_dirs = ["tests", "examples", ".venv", "venv", ".mypy_cache", ".pytest_cache"]
 skips = [
-    "B101",  # Skip assert statements (common in tests and examples)
-    "B601",  # Skip shell injection warnings for subprocess with shell=False
+    "B101", # Skip assert statements (common in tests and examples)
+    "B601", # Skip shell injection warnings for subprocess with shell=False
 ]
 confidence = "medium"  # Low, Medium, High
 severity = "medium"    # Low, Medium, High
@@ -194,9 +194,9 @@ min_confidence = 80  # Higher confidence to reduce false positives
 paths = ["src"]
 exclude = ["tests/", "examples/", "venv/", ".venv/"]
 ignore_decorators = [
-    "@pytest.fixture", 
-    "@property", 
-    "@classmethod", 
+    "@pytest.fixture",
+    "@property",
+    "@classmethod",
     "@staticmethod",
     "@abstractmethod",
     "@cached_property",
@@ -204,18 +204,18 @@ ignore_decorators = [
     "@dataclass",
     # FastAPI/Pydantic decorators
     "@validator",
-    "@root_validator", 
+    "@root_validator",
     "@field_validator",
 ]
 ignore_names = [
-    "setUp", 
-    "tearDown", 
-    "__*__",  # Magic methods
+    "setUp",
+    "tearDown",
+    "__*__", # Magic methods
     "test_*", # Test methods
     "*_test",
     # Common FastAPI/Arrow Flight patterns
     "get_*",
-    "create_*", 
+    "create_*",
     "delete_*",
     "update_*",
     "*_handler",
