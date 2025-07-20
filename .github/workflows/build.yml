@@ -255,6 +255,7 @@ jobs:
       - name: Stop servers
         if: always()
         run: |
+          set +e
           if [ ! -z "$FLIGHT_PID" ]; then
             kill $FLIGHT_PID || true
           fi
