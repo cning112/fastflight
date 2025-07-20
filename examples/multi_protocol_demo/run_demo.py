@@ -7,6 +7,7 @@ allowing direct performance and usability comparison.
 """
 
 import asyncio
+import os
 import sys
 import tempfile
 import time
@@ -45,17 +46,24 @@ class ServiceComparison:
     """Class to handle comparison between gRPC and REST for each service type"""
 
     def __init__(self):
+        # Get ports from environment variables with defaults
+        self.flight_port = os.getenv("FLIGHT_PORT", "8815")
+        self.rest_port = os.getenv("REST_PORT", "8000")
+
         self.grpc_client = None
-        self.rest_base_url = "http://127.0.0.1:8000/fastflight"
+        self.grpc_url = f"grpc://localhost:{self.flight_port}"
+        self.rest_base_url = f"http://127.0.0.1:{self.rest_port}/fastflight"
 
     def setup_grpc_client(self):
         """Setup gRPC client"""
         try:
-            self.grpc_client = FastFlightBouncer("grpc://localhost:8815")
+            self.grpc_client = FastFlightBouncer(self.grpc_url)
+            # Test the connection
+            self.grpc_client.list_data_types()
             return True
         except Exception as e:
             console.print(f"❌ Failed to connect to gRPC server: {e}")
-            return False
+        return False
 
     def test_rest_connection(self):
         """Test REST API connection"""
