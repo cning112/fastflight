@@ -8,7 +8,7 @@ allowing direct performance and usability comparison.
 
 import asyncio
 import os
-import sys
+import site
 import tempfile
 import time
 from collections.abc import Callable, Iterable
@@ -20,13 +20,12 @@ import pandas as pd
 from rich.console import Console
 from rich.table import Table
 
+# Add examples folder
+site.addsitedir(str(Path(__file__).parent.parent))
+
 from fastflight import BaseParams
-from fastflight.utils.stream_utils import read_dataframe_from_arrow_stream
-
-# Add the examples directory to path so we can import demo_services
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from fastflight.client import FastFlightBouncer
+from fastflight.utils.stream_utils import read_dataframe_from_arrow_stream
 from multi_protocol_demo.demo_services.csv_demo import CsvFileParams
 from multi_protocol_demo.demo_services.duckdb_demo import DuckDBParams
 from multi_protocol_demo.demo_services.sqllite_demo import SQLParams

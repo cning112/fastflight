@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 import os
+import site
 import socket
 import sys
 from pathlib import Path
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from fastflight.server import FastFlightServer
 from fastflight.utils.custom_logging import setup_logging
 from fastflight.utils.registry_check import import_all_modules_in_package
+
+# Set up environment like PyCharm
+os.environ.setdefault("PYTHONIOENCODING", "UTF-8")
+os.environ.setdefault("PYTHONUNBUFFERED", "1")
+print(os.environ)
+
+# Add examples folder
+site.addsitedir(str(Path(__file__).parent.parent))
 
 setup_logging(log_file=None)
 
