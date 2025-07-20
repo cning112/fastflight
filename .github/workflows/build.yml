@@ -189,16 +189,17 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
-      - name: Run tests with coverage
-        if: ${{ env.SHOULD_RUN == 'true' }}
+      - name: Run compatibility tests
+        if: ${{ env.SHOULD_RUN == 'true' && matrix.compatibility-test == true }}
         run: |
-          if [ "${{ matrix.compatibility-test }}" = "true" ]; then
-            echo "🧪 Running compatibility tests (no coverage)"
-            uv run pytest --tb=short -v --disable-warnings
-          else
-            echo "🧪 Running standard tests with coverage"
-            uv run pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 --junit-xml=pytest.xml -v
-          fi
+          echo "🧪 Running compatibility tests (no coverage)"
+          uv run pytest --tb=short -v --disable-warnings
+
+      - name: Run tests with coverage
+        if: ${{ env.SHOULD_RUN == 'true' && matrix.compatibility-test != true }}
+        run: |
+          echo "🧪 Running standard tests with coverage"
+          uv run pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 --junit-xml=pytest.xml -v
 
       - name: Upload coverage to Codecov
         if: ${{ env.SHOULD_RUN == 'true' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' && matrix.pyarrow-version == null }}
