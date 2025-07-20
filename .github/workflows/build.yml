@@ -86,8 +86,8 @@ jobs:
           - os: macos-latest
             python-version: "3.10"
         include:
-          # PyArrow compatibility testing (only on Ubuntu, only for PR/main)
-          # Only add these combinations if we're in PR or main branch
+          # PyArrow compatibility testing (only on Ubuntu)
+          # Only add these combinations for thorough compatibility testing
           # Pyarrow <=6.0.0 only support up to Python 3.9
           # PyArrow 6.0.1-8.x: Python <=3.10.x
           # PyArrow 10.x-13.x: Python 3.8-3.11
@@ -96,85 +96,63 @@ jobs:
           - os: ubuntu-latest
             python-version: "3.10"
             pyarrow-version: "6.0.1"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.10"
             pyarrow-version: "8.0.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.10"
             pyarrow-version: "10.0.1"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.11"
             pyarrow-version: "10.0.1"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.10"
             pyarrow-version: "12.0.1"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.11"
             pyarrow-version: "12.0.1"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.10"
             pyarrow-version: "14.0.2"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.11"
             pyarrow-version: "14.0.2"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.12"
             pyarrow-version: "14.0.2"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.10"
             pyarrow-version: "16.1.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.11"
             pyarrow-version: "16.1.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.12"
             pyarrow-version: "16.1.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.10"
             pyarrow-version: "18.1.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.11"
             pyarrow-version: "18.1.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.12"
             pyarrow-version: "18.1.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.13"
             pyarrow-version: "18.1.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.10"
             pyarrow-version: "20.0.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.11"
             pyarrow-version: "20.0.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.12"
             pyarrow-version: "20.0.0"
-            compatibility-test: true
           - os: ubuntu-latest
             python-version: "3.13"
             pyarrow-version: "20.0.0"
-            compatibility-test: true
-    env:
-      SHOULD_RUN: ${{ matrix.compatibility-test != true || github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
 
     steps:
       - name: Checkout
@@ -187,22 +165,28 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: |
+          uv sync --all-extras --dev
+          # Install specific PyArrow version if specified
+          if [ "${{ matrix.pyarrow-version }}" != "null" ]; then
+            echo "Installing PyArrow version ${{ matrix.pyarrow-version }}"
+            uv add pyarrow==${{ matrix.pyarrow-version }}
+          fi
 
       - name: Run compatibility tests
-        if: ${{ env.SHOULD_RUN == 'true' && matrix.compatibility-test == true }}
+        if: ${{ matrix.pyarrow-version != null }}
         run: |
           echo "🧪 Running compatibility tests (no coverage)"
           uv run pytest --tb=short -v --disable-warnings
 
       - name: Run tests with coverage
-        if: ${{ env.SHOULD_RUN == 'true' && matrix.compatibility-test != true }}
+        if: ${{ matrix.pyarrow-version == null }}
         run: |
           echo "🧪 Running standard tests with coverage"
           uv run pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 --junit-xml=pytest.xml -v
 
       - name: Upload coverage to Codecov
-        if: ${{ env.SHOULD_RUN == 'true' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' && matrix.pyarrow-version == null }}
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' && matrix.pyarrow-version == null
         uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: false
@@ -211,37 +195,26 @@ jobs:
 
   # Arrow Flight specific tests
   integration-tests:
-    name: Integration Tests (Python ${{ matrix.python-version }}, ${{ matrix.os }}${{ matrix.pyarrow-version && format(', PyArrow {0}', matrix.pyarrow-version) || '' }})
-    runs-on: ${{ matrix.os }}
+    name: Integration Tests (Python ${{ matrix.python-version }}${{ matrix.pyarrow-version && format(', PyArrow {0}', matrix.pyarrow-version) || '' }})
+    runs-on: ubuntu-latest
     needs: pre-checks
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest ]  # Can expand to include windows-latest, macos-latest later
-        python-version: [ "3.11" ]  # Use default version for integration tests
-        pyarrow-version: [ null ]  # null means use default from uv.lock
+        python-version: ["3.11"]  # Use default version for most integration tests
+        pyarrow-version: [null]  # null means use default from uv.lock
         include:
           # Add PyArrow compatibility testing for integration tests
-          # Only test key versions to avoid excessive CI load
-          - os: ubuntu-latest
-            python-version: "3.10"
+          # Test key versions across different Python versions
+          - python-version: "3.10"
             pyarrow-version: "6.0.1"
-            compatibility-test: true
-          - os: ubuntu-latest
-            python-version: "3.11"
+          - python-version: "3.11" 
             pyarrow-version: "12.0.1"
-            compatibility-test: true
-          - os: ubuntu-latest
-            python-version: "3.12"
+          - python-version: "3.12"
             pyarrow-version: "16.1.0"
-            compatibility-test: true
-          - os: ubuntu-latest
-            python-version: "3.13"
+          - python-version: "3.13"
             pyarrow-version: "20.0.0"
-            compatibility-test: true
-    env:
-      SHOULD_RUN: ${{ matrix.compatibility-test != true || github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
 
     steps:
       - name: Checkout
@@ -254,10 +227,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: |
+          uv sync --all-extras --dev
+          # Install specific PyArrow version if specified
+          if [ "${{ matrix.pyarrow-version }}" != "null" ]; then
+            echo "Installing PyArrow version ${{ matrix.pyarrow-version }}"
+            uv add pyarrow==${{ matrix.pyarrow-version }}
+          fi
 
       - name: Start Flight server for testing
-        if: ${{ env.SHOULD_RUN == 'true' }}
         run: |
           cd examples/multi_protocol_demo
           
@@ -282,7 +260,6 @@ jobs:
           done
 
       - name: Run integration tests
-        if: ${{ env.SHOULD_RUN == 'true' }}
         run: |
           # Run the multi-protocol demo as integration test
           cd examples/multi_protocol_demo
