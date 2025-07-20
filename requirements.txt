@@ -7,6 +7,8 @@ anyio==4.9.0
     #   httpx
     #   starlette
     #   watchfiles
+backports-asyncio-runner==1.2.0 ; python_full_version < '3.11'
+    # via pytest-asyncio
 certifi==2025.7.14
     # via
     #   httpcore
@@ -30,7 +32,7 @@ coverage==7.9.2
     # via pytest-cov
 cycler==0.12.1
     # via matplotlib
-distlib==0.3.9
+distlib==0.4.0
     # via virtualenv
 dnspython==2.7.0
     # via email-validator
@@ -50,9 +52,9 @@ fastapi-cli==0.0.8
     # via fastapi
 fastapi-cloud-cli==0.1.4
     # via fastapi-cli
-filelock==3.16.1
+filelock==3.18.0
     # via virtualenv
-fonttools==4.58.5
+fonttools==4.59.0
     # via matplotlib
 greenlet==3.2.3 ; (python_full_version < '3.14' and platform_machine == 'AMD64') or (python_full_version < '3.14' and platform_machine == 'WIN32') or (python_full_version < '3.14' and platform_machine == 'aarch64') or (python_full_version < '3.14' and platform_machine == 'amd64') or (python_full_version < '3.14' and platform_machine == 'ppc64le') or (python_full_version < '3.14' and platform_machine == 'win32') or (python_full_version < '3.14' and platform_machine == 'x86_64')
     # via sqlalchemy
@@ -131,17 +133,17 @@ pluggy==1.6.0
     #   pytest
     #   pytest-cov
 pre-commit==4.2.0
-pyarrow==20.0.0
+pyarrow==21.0.0
     # via
     #   fastflight
     #   pyarrow-stubs
-pyarrow-stubs==20.0.0.20250627
-pydantic==2.9.2
+pyarrow-stubs==20.0.0.20250716
+pydantic==2.11.7
     # via
     #   fastapi
     #   fastapi-cloud-cli
     #   fastflight
-pydantic-core==2.23.4
+pydantic-core==2.33.2
     # via pydantic
 pygments==2.19.2
     # via
@@ -153,7 +155,7 @@ pytest==8.4.1
     # via
     #   pytest-asyncio
     #   pytest-cov
-pytest-asyncio==1.0.0
+pytest-asyncio==1.1.0
 pytest-cov==6.2.1
 python-dateutil==2.9.0.post0
     # via
@@ -178,12 +180,12 @@ rich-toolkit==0.14.8
     # via
     #   fastapi-cli
     #   fastapi-cloud-cli
-rignore==0.6.2
+rignore==0.6.4
     # via fastapi-cloud-cli
-ruff==0.12.3
+ruff==0.12.4
 seaborn==0.13.2
     # via fastflight
-sentry-sdk==2.32.0
+sentry-sdk==2.33.0
     # via fastapi-cloud-cli
 shellingham==1.5.4
     # via typer
@@ -224,7 +226,10 @@ typing-extensions==4.14.1
     #   starlette
     #   structlog
     #   typer
+    #   typing-inspection
     #   uvicorn
+typing-inspection==0.4.1
+    # via pydantic
 tzdata==2025.2
     # via pandas
 urllib3==2.5.0
