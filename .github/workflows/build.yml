@@ -46,22 +46,13 @@ jobs:
       # Core Development Checks (Essential for CI)
       # ============================================================================
       - name: Lint with Ruff
-        run: |
-          echo "🔍 Checking code style and linting..."
-          # Fail if there are any linting issues (no --fix in CI)
-          uv run --frozen ruff check --output-format=github .
+        run: uv run --frozen ruff check --output-format=github .
 
       - name: Format check with Ruff
-        run: |
-          echo "✨ Checking code formatting..."
-          # Fail if files are not properly formatted (no auto-format in CI)
-          uv run --frozen ruff format --check --diff .
+        run: uv run --frozen ruff format --check --diff .
 
       - name: Type check with MyPy
-        run: |
-          echo "🔎 Running type checking..."
-          # Use explicit configuration file path for consistency
-          uv run --frozen mypy --config-file=pyproject.toml
+        run: uv run --frozen mypy --config-file=pyproject.toml
 
       # Note: Detailed security and quality analysis is handled by code-quality.yml
       # This workflow focuses on core functionality: linting, formatting, type checking, and testing
@@ -170,15 +161,11 @@ jobs:
 
       - name: Run compatibility tests
         if: ${{ matrix.pyarrow-version != null }}
-        run: |
-          echo "🧪 Running compatibility tests (no coverage)"
-          uv run --frozen --with pyarrow==${{ matrix.pyarrow-version}} pytest --tb=short -v --disable-warnings
+        run: uv run --frozen --with pyarrow==${{ matrix.pyarrow-version}} pytest --tb=short -v --disable-warnings
 
       - name: Run tests with coverage
         if: ${{ matrix.pyarrow-version == null }}
-        run: |
-          echo "🧪 Running standard tests with coverage"
-          uv run --frozen pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 --junit-xml=pytest.xml -v
+        run: uv run --frozen pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 --junit-xml=pytest.xml -v
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' && matrix.pyarrow-version == null
@@ -234,80 +221,36 @@ jobs:
         run: |
           cd examples/multi_protocol_demo
           
-          # Use matrix job index to ensure unique ports across parallel jobs
-          # GitHub Actions automatically provides strategy.job-index starting from 0
+          # Use matrix job index for unique ports
           JOB_INDEX="${{ strategy.job-index }}"
-          
-          # Calculate unique ports using job index (each job gets 10 port numbers)
           PORT_OFFSET=$((JOB_INDEX * 10))
           export FLIGHT_PORT=$((8815 + PORT_OFFSET))
           export REST_PORT=$((8000 + PORT_OFFSET))
           
-          echo "Using FLIGHT_PORT=$FLIGHT_PORT and REST_PORT=$REST_PORT for job index $JOB_INDEX"
-          
-          # Export for other steps
           echo "FLIGHT_PORT=$FLIGHT_PORT" >> $GITHUB_ENV
           echo "REST_PORT=$REST_PORT" >> $GITHUB_ENV
           
-          # Start FastFlight server using example script
-          echo "Starting FastFlight server..."
+          # Start servers
           FLIGHT_PORT=$FLIGHT_PORT uv run --frozen python start_flight_server.py &
-          FLIGHT_PID=$!
-          echo "FLIGHT_PID=$FLIGHT_PID" >> $GITHUB_ENV
+          echo "FLIGHT_PID=$!" >> $GITHUB_ENV
           
-          # Give the Flight server a moment to start
           sleep 3
           
-          # Start REST server using example script  
-          echo "Starting REST server..."
           FLIGHT_PORT=$FLIGHT_PORT REST_PORT=$REST_PORT uv run --frozen python start_rest_server.py &
-          REST_PID=$!
-          echo "REST_PID=$REST_PID" >> $GITHUB_ENV
+          echo "REST_PID=$!" >> $GITHUB_ENV
           
-          # Wait for servers to be ready with better error checking
-          echo "Waiting for servers to be ready..."
-          FLIGHT_READY=false
-          REST_READY=false
-          
+          # Wait for servers
           for i in {1..30}; do
-            # Check Flight server
-            if ! $FLIGHT_READY && nc -z localhost $FLIGHT_PORT 2>/dev/null; then
-              echo "✅ FastFlight server is ready on port $FLIGHT_PORT"
-              FLIGHT_READY=true
-            fi
-          
-            # Check REST server
-            if ! $REST_READY && nc -z localhost $REST_PORT 2>/dev/null; then
-              echo "✅ REST server is ready on port $REST_PORT"
-              REST_READY=true
-            fi
-          
-            # Both servers ready?
-            if $FLIGHT_READY && $REST_READY; then
-              echo "🎉 Both servers are ready!"
+            if nc -z localhost $FLIGHT_PORT && nc -z localhost $REST_PORT; then
               break
             fi
-          
-            echo "⏳ Waiting for servers... ($i/30) [Flight: $FLIGHT_READY, REST: $REST_READY]"
             sleep 2
           done
-          
-          # Final check
-          if ! $FLIGHT_READY; then
-            echo "❌ FastFlight server failed to start on port $FLIGHT_PORT"
-            exit 1
-          fi
-          
-          if ! $REST_READY; then
-            echo "❌ REST server failed to start on port $REST_PORT"
-            exit 1
-          fi
 
       - name: Run integration tests
         run: |
-          # Run the multi-protocol demo as integration test
           cd examples/multi_protocol_demo
-          FLIGHT_PORT=$FLIGHT_PORT REST_PORT=$REST_PORT timeout 60 uv run --frozen python run_demo.py || echo "Demo completed or timed out"
+          FLIGHT_PORT=$FLIGHT_PORT REST_PORT=$REST_PORT timeout 60 uv run --frozen python run_demo.py
 
       - name: Stop servers
         if: always()
