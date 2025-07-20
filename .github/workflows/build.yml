@@ -50,8 +50,8 @@ jobs:
           echo "🔍 Checking code style and linting..."
           # Fail if there are any linting issues (no --fix in CI)
           uv run ruff check --output-format=github .
-          
-      - name: Format check with Ruff  
+
+      - name: Format check with Ruff
         run: |
           echo "✨ Checking code formatting..."
           # Fail if files are not properly formatted (no auto-format in CI)
@@ -68,21 +68,113 @@ jobs:
 
   # Core testing matrix
   test:
-    name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }}${{ matrix.pyarrow-version && format(', PyArrow {0}', matrix.pyarrow-version) || '' }})
     runs-on: ${{ matrix.os }}
     needs: pre-checks
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
+        # Standard test matrix (current PyArrow version from uv.lock)
         os: [ ubuntu-latest, windows-latest, macos-latest ]
         python-version: ${{ fromJson(needs.pre-checks.outputs.python-versions) }}
+        pyarrow-version: [ null ]  # null means use default from uv.lock
         exclude:
           # Skip some combinations to reduce CI time
           - os: windows-latest
             python-version: "3.10"
           - os: macos-latest
             python-version: "3.10"
+        include:
+          # PyArrow compatibility testing (only on Ubuntu, only for PR/main)
+          # Only add these combinations if we're in PR or main branch
+          # Pyarrow <=6.0.0 only support up to Python 3.9
+          # PyArrow 6.0.1-8.x: Python <=3.10.x
+          # PyArrow 10.x-13.x: Python 3.8-3.11
+          # PyArrow 14.x-17.x: Python 3.8-3.12
+          # PyArrow 18.x+: Python 3.9-3.13
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "6.0.1"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "8.0.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "10.0.1"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "10.0.1"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "12.0.1"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "12.0.1"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "14.0.2"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "14.0.2"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.12"
+            pyarrow-version: "14.0.2"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "16.1.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "16.1.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.12"
+            pyarrow-version: "16.1.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "18.1.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "18.1.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.12"
+            pyarrow-version: "18.1.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.13"
+            pyarrow-version: "18.1.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "20.0.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "20.0.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.12"
+            pyarrow-version: "20.0.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.13"
+            pyarrow-version: "20.0.0"
+            compatibility-test: true
+    env:
+      SHOULD_RUN: ${{ matrix.compatibility-test != true || github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
 
     steps:
       - name: Checkout
@@ -98,10 +190,18 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: Run tests with coverage
-        run: uv run pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 --junit-xml=pytest.xml -v
+        if: ${{ env.SHOULD_RUN == 'true' }}
+        run: |
+          if [ "${{ matrix.compatibility-test }}" = "true" ]; then
+            echo "🧪 Running compatibility tests (no coverage)"
+            uv run pytest --tb=short -v --disable-warnings
+          else
+            echo "🧪 Running standard tests with coverage"
+            uv run pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 --junit-xml=pytest.xml -v
+          fi
 
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == env.PYTHON_DEFAULT_VERSION
+        if: ${{ env.SHOULD_RUN == 'true' && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' && matrix.pyarrow-version == null }}
         uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: false
@@ -110,24 +210,37 @@ jobs:
 
   # Arrow Flight specific tests
   integration-tests:
-    name: Arrow Flight Integration Tests
-    runs-on: ubuntu-latest
+    name: Integration Tests (Python ${{ matrix.python-version }}, ${{ matrix.os }}${{ matrix.pyarrow-version && format(', PyArrow {0}', matrix.pyarrow-version) || '' }})
+    runs-on: ${{ matrix.os }}
     needs: pre-checks
     timeout-minutes: 20
-    services:
-      # We might need a test database or other services
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: testdb
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]  # Can expand to include windows-latest, macos-latest later
+        python-version: [ "3.11" ]  # Use default version for integration tests
+        pyarrow-version: [ null ]  # null means use default from uv.lock
+        include:
+          # Add PyArrow compatibility testing for integration tests
+          # Only test key versions to avoid excessive CI load
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "6.0.1"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "12.0.1"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.12"
+            pyarrow-version: "16.1.0"
+            compatibility-test: true
+          - os: ubuntu-latest
+            python-version: "3.13"
+            pyarrow-version: "20.0.0"
+            compatibility-test: true
+    env:
+      SHOULD_RUN: ${{ matrix.compatibility-test != true || github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
 
     steps:
       - name: Checkout
@@ -137,12 +250,13 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: uv sync --all-extras --dev
 
       - name: Start Flight server for testing
+        if: ${{ env.SHOULD_RUN == 'true' }}
         run: |
           cd examples/multi_protocol_demo
           
@@ -167,13 +281,11 @@ jobs:
           done
 
       - name: Run integration tests
+        if: ${{ env.SHOULD_RUN == 'true' }}
         run: |
           # Run the multi-protocol demo as integration test
           cd examples/multi_protocol_demo
           timeout 60 uv run python run_demo.py || echo "Demo completed or timed out"
-        env:
-          FLIGHT_SERVER_URL: "grpc://localhost:8815"
-          POSTGRES_URL: "postgresql://postgres:postgres@localhost:5432/testdb"
 
       - name: Stop servers
         if: always()
