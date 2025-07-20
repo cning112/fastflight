@@ -227,6 +227,8 @@ jobs:
           export FLIGHT_PORT=$((8815 + PORT_OFFSET))
           export REST_PORT=$((8000 + PORT_OFFSET))
           
+          echo "Using FLIGHT_PORT=$FLIGHT_PORT and REST_PORT=$REST_PORT"
+          
           echo "FLIGHT_PORT=$FLIGHT_PORT" >> $GITHUB_ENV
           echo "REST_PORT=$REST_PORT" >> $GITHUB_ENV
           
