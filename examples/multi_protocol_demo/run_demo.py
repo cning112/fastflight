@@ -58,8 +58,6 @@ class ServiceComparison:
         """Setup gRPC client"""
         try:
             self.grpc_client = FastFlightBouncer(self.grpc_url)
-            # Test the connection
-            self.grpc_client.list_data_types()
             return True
         except Exception as e:
             console.print(f"❌ Failed to connect to gRPC server: {e}")
