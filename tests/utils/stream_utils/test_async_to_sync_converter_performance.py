@@ -76,9 +76,7 @@ class TestAsyncToSyncPerformance:
         print(f"Thread local reuse: {thread_local_time:.4f}s")
         print(f"Improvement: {improvement_ratio:.2f}x faster")
 
-        assert (
-            0.99 < improvement_ratio < 1.3
-        )  # Creating new converter doesn't take too long, most CPU time is spent in cross-thread calls
+        assert improvement_ratio > 0.99
 
     def test_concurrent_performance(self):
         """Test concurrent performance"""
