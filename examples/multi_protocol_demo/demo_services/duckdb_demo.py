@@ -4,9 +4,7 @@ Demo services for FastFlight. These are not imported by default and are only use
 CRITICAL FIX: Addressing segmentation fault issues with DuckDB + PyArrow Flight
 """
 
-import gc
 import logging
-import threading
 from collections.abc import AsyncIterator, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -29,25 +27,6 @@ class DuckDBParams(BaseParams):
 
 
 class DuckDBDataService(BaseDataService[DuckDBParams]):
-    # Thread-local storage for DuckDB connections to avoid segfaults
-    _thread_local = threading.local()
-
-    @classmethod
-    def _get_thread_connection(cls, db_path: str):
-        """Get or create a thread-local DuckDB connection."""
-        try:
-            import duckdb
-        except ImportError:
-            raise ImportError("DuckDB not installed. Install with 'pip install duckdb' or 'uv add duckdb'") from None
-
-        if not hasattr(cls._thread_local, "connections"):
-            cls._thread_local.connections = {}
-
-        if db_path not in cls._thread_local.connections:
-            cls._thread_local.connections[db_path] = duckdb.connect(db_path)
-
-        return cls._thread_local.connections[db_path]
-
     @staticmethod
     def _execute_duckdb_query(params: DuckDBParams) -> pa.Table:
         """Execute DuckDB query in isolation to prevent segfaults."""
@@ -84,7 +63,6 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
             finally:
                 # Explicitly close the connection and force garbage collection
                 conn.close()
-                gc.collect()
 
         except Exception as e:
             logger.error(f"Error executing DuckDB query: {e}", exc_info=True)
