@@ -58,7 +58,9 @@ if __name__ == "__main__":
     print(f"Connecting to FastFlight server at {flight_location}")
 
     app = create_app(
-        module_paths=["multi_protocol_demo.demo_services"], route_prefix="/fastflight", flight_location=flight_location
+        module_paths=["fastflight.demo_services", "multi_protocol_demo.demo_services"],
+        route_prefix="/fastflight",
+        flight_location=flight_location,
     )
 
     uvicorn.run(app, host="0.0.0.0", port=rest_port)

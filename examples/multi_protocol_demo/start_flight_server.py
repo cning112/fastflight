@@ -41,7 +41,9 @@ def find_available_port(preferred_port: int, host: str = "localhost") -> int:
 
 
 if __name__ == "__main__":
-    # Load demo services
+    # Load demo services from main package
+    import_all_modules_in_package("fastflight.demo_services")
+    # Load local demo services (CSV, SQLite)
     import_all_modules_in_package("multi_protocol_demo.demo_services")
 
     # Get port from environment variable, default to 8815

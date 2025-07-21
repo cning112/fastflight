@@ -25,9 +25,9 @@ site.addsitedir(str(Path(__file__).parent.parent))
 
 from fastflight import BaseParams
 from fastflight.client import FastFlightBouncer
+from fastflight.demo_services.duckdb_demo import DuckDBParams
 from fastflight.utils.stream_utils import read_dataframe_from_arrow_stream
 from multi_protocol_demo.demo_services.csv_demo import CsvFileParams
-from multi_protocol_demo.demo_services.duckdb_demo import DuckDBParams
 from multi_protocol_demo.demo_services.sqllite_demo import SQLParams
 
 T = TypeVar("T")
