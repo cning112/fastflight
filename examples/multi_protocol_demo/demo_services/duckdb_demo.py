@@ -1,9 +1,4 @@
-"""
-Demo services for FastFlight. These are not imported by default and are only used in CLI/testing scenarios.
-
-CRITICAL FIX: Addressing segmentation fault issues with DuckDB + PyArrow Flight
-"""
-
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -27,6 +22,8 @@ class DuckDBParams(BaseParams):
 
 
 class DuckDBDataService(BaseDataService[DuckDBParams]):
+    _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="duckdb_data_service")
+
     @staticmethod
     def _execute_duckdb_query(params: DuckDBParams) -> pa.Table:
         """Execute DuckDB query in isolation to prevent segfaults."""
@@ -38,44 +35,19 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
         db_path = params.database_path or ":memory:"
         query_parameters = params.parameters or {}
 
-        try:
-            # Create a fresh connection for each query to avoid memory conflicts
-            # This is less efficient but more stable with PyArrow Flight
-            conn = duckdb.connect(db_path)
-
-            try:
-                logger.debug(f"Executing query: {params.query}")
-
-                # Execute and immediately fetch as Arrow to minimize DuckDB/Arrow interaction time
-                arrow_table = conn.execute(params.query, query_parameters).arrow()
-                logger.debug(f"Fetched arrow table with {arrow_table.num_rows} rows")
-
-                # Make a deep copy of the table to ensure it's fully materialized
-                # and independent of DuckDB's memory management
-                arrow_table = pa.Table.from_arrays(
-                    [pa.array(col.to_pylist()) for col in arrow_table.columns], names=arrow_table.column_names
-                )
-
-                logger.debug("Created independent arrow table")
-
-                return arrow_table
-
-            finally:
-                # Explicitly close the connection and force garbage collection
-                conn.close()
-
-        except Exception as e:
-            logger.error(f"Error executing DuckDB query: {e}", exc_info=True)
-            raise
+        with duckdb.connect(db_path) as conn:
+            logger.debug(f"Executing query: {params.query}")
+            arrow_table = conn.execute(params.query, query_parameters).arrow()
+            logger.debug(f"Fetched arrow table with {arrow_table.num_rows} rows")
+            return arrow_table
 
     def get_batches(self, params: DuckDBParams, batch_size: int | None = None) -> Iterable[pa.RecordBatch]:
         try:
             logger.info(f"SYNC: Processing request for {params.database_path or ':memory:'}")
 
-            # Execute query in a separate thread to isolate DuckDB from Flight server
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(self._execute_duckdb_query, params)
-                table = future.result(timeout=60)  # 60 second timeout
+            # !!! Execute query in a separate thread to isolate DuckDB from Flight server !!!
+            future = self._executor.submit(self._execute_duckdb_query, params)
+            table = future.result(timeout=60)  # 60 second timeout
 
             # Convert to batches after DuckDB connection is closed
             yield from table.to_batches(max_chunksize=batch_size or 10000)
@@ -87,21 +59,12 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
             raise
 
     async def aget_batches(self, params: DuckDBParams, batch_size: int | None = None) -> AsyncIterator[pa.RecordBatch]:
-        """
-        Async batch retrieval with segfault protection.
-        """
-        import asyncio
-
         logger.info(f"ASYNC: Processing request for {params.database_path or ':memory:'}")
 
         try:
-            # Execute the DuckDB query in a thread executor for safety
             loop = asyncio.get_running_loop()
-
-            # Use a dedicated thread pool executor with a single worker
-            # to ensure DuckDB operations are isolated
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                table = await loop.run_in_executor(executor, self._execute_duckdb_query, params)
+            executor = self._executor  # can be None meaning to use a default ThreadPoolExecutor
+            table = await loop.run_in_executor(executor, self._execute_duckdb_query, params)
 
             # Convert to batches and yield with cooperative multitasking
             batches = table.to_batches(max_chunksize=batch_size or 10000)
