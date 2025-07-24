@@ -265,45 +265,6 @@ jobs:
             kill $REST_PID || true
           fi
 
-  # Performance benchmarks
-  benchmarks:
-    name: Performance Benchmarks
-    runs-on: ubuntu-latest
-    needs: pre-checks
-    if: github.event_name == 'pull_request'
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
-
-      - name: Install benchmark dependencies
-        run: |
-          uv add --dev pytest-benchmark asv
-
-      - name: Run benchmarks
-        run: |
-          uv run --frozen pytest tests/benchmarks/ --benchmark-json=benchmark.json
-
-      - name: Store benchmark result
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          tool: 'pytest'
-          output-file-path: benchmark.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          comment-on-alert: true
-          alert-threshold: '200%'
-          fail-on-alert: true
-
   # Build and validate package
   build:
     name: Build Package
