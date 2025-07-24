@@ -36,7 +36,8 @@ async def read_data(body: bytes = Depends(body_bytes), ff_bouncer: FastFlightBou
 
     Args:
         body (bytes): The raw request body bytes. The body should be a JSON-serialized `BaseParams` instance.
-            Crucially, it must include the `param_type` field specifying the fully qualified name (FQN) of the data params class.
+            Crucially, it must include the `param_type` field specifying the fully qualified name (FQN) of the data
+            params class.
         ff_bouncer (FastFlightBouncer): The Flight connection bouncer for server communication.
 
     Returns:

@@ -5,7 +5,8 @@ Circuit breaker implementation.
 import asyncio
 import logging
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
+from typing import cast
 
 from fastflight.exceptions import FastFlightCircuitOpenError
 
@@ -30,7 +31,7 @@ class CircuitBreaker:
         self.state = CircuitState.CLOSED
         self.failure_count = 0
         self.success_count = 0
-        self.last_failure_time: Optional[float] = None
+        self.last_failure_time: float | None = None
         self._lock = asyncio.Lock()
 
     async def call(self, func: Callable[..., T], *args, **kwargs) -> T:
@@ -66,7 +67,7 @@ class CircuitBreaker:
                 result = func(*args, **kwargs)
 
             await self._on_success()
-            return result
+            return cast(T, result)
 
         except Exception as e:
             await self._on_failure(e)
@@ -76,11 +77,14 @@ class CircuitBreaker:
         """Check and update the circuit breaker state based on current conditions."""
         current_time = time.time()
 
-        if self.state == CircuitState.OPEN:
-            if self.last_failure_time and current_time - self.last_failure_time >= self.config.recovery_timeout:
-                self.state = CircuitState.HALF_OPEN
-                self.success_count = 0
-                logger.info(f"Circuit breaker '{self.name}' transitioned to HALF_OPEN")
+        if (
+            self.state == CircuitState.OPEN
+            and self.last_failure_time
+            and current_time - self.last_failure_time >= self.config.recovery_timeout
+        ):
+            self.state = CircuitState.HALF_OPEN
+            self.success_count = 0
+            logger.info(f"Circuit breaker '{self.name}' transitioned to HALF_OPEN")
 
     async def _on_success(self):
         """Handle successful operation execution."""

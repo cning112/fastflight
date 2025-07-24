@@ -51,7 +51,7 @@ class FlightServerTestCase(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls):
         cls.initial_data = cls.get_server_data()
-        cls.location = "grpc://0.0.0.0:18181"
+        cls.location = "grpc://127.0.0.1:18181"
         # Initialize the Flight server with default data.
         cls.server = SimpleFlightServer(cls.location, cls.initial_data)
         cls.server_thread = threading.Thread(target=cls.server.serve, daemon=True)

@@ -6,4 +6,4 @@ from .circuit_breaker import CircuitBreakerConfig
 from .resilience import ResilienceConfig
 from .retry import RetryConfig
 
-__all__ = ["RetryConfig", "CircuitBreakerConfig", "ResilienceConfig"]
+__all__ = ["CircuitBreakerConfig", "ResilienceConfig", "RetryConfig"]

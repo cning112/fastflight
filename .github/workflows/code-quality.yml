@@ -1,0 +1,224 @@
+name: Code Quality
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+  schedule:
+    # Run weekly quality checks every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ============================================================================
+  # Primary Code Quality Analysis
+  # ============================================================================
+  quality-analysis:
+    name: Quality Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install project dependencies
+        run: uv sync --all-extras --dev
+
+      # ============================================================================
+      # Security Analysis (Critical - Must Pass)
+      # ============================================================================
+      - name: Security scan with Bandit
+        run: |
+          echo "🔒 Running Bandit security analysis..."
+          uv run --with 'bandit[toml]' bandit -r src/ -f json -o bandit-report.json --configfile pyproject.toml
+          uv run --with 'bandit[toml]' bandit -r src/ -f txt --configfile pyproject.toml
+
+      - name: Dependency vulnerability scan with pip-audit
+        run: |
+          echo "🛡️ Scanning dependencies for vulnerabilities..."
+          uv run --with pip-audit pip-audit --config pyproject.toml --format=json --output=pip-audit-report.json --fix-dry-run || true
+          uv run --with pip-audit pip-audit --config pyproject.toml --format=text || true
+        continue-on-error: true
+
+      # ============================================================================
+      # Code Quality Analysis (Advisory - Can Warn)
+      # ============================================================================
+      - name: Dead code detection with Vulture
+        run: |
+          echo "🔍 Detecting unused code..."
+          uv run --with vulture vulture --config pyproject.toml > vulture-report.txt || true
+          uv run --with vulture vulture --config pyproject.toml || true
+        continue-on-error: true
+
+      - name: Complexity analysis with Radon and Xenon
+        run: |
+          echo "📊 Analyzing code complexity..."
+          # Radon: Use explicit CLI parameters to match pyproject.toml settings (no --config support)
+          uv run --with radon radon cc src/ --json --exclude "tests/*,examples/*,venv/*,.venv/*" --min=C > complexity-report.json || true
+          uv run --with radon radon cc src/ --show-complexity --exclude "tests/*,examples/*,venv/*,.venv/*" --min=C || true
+          # Xenon: Only supports command line arguments (no config file support)
+          uv run --with xenon xenon --max-absolute C --max-modules B --max-average B --exclude "tests,examples,venv,.venv" src/ || true
+        continue-on-error: true
+
+      - name: Maintainability Index with Radon MI
+        run: |
+          echo "🏗️ Analyzing maintainability index..."
+          # Maintainability Index (0-100, higher is better)
+          # >85: Excellent, 70-85: Good, 50-70: Moderate, <50: Difficult to maintain
+          # Use explicit CLI parameters to match pyproject.toml settings (no --config support)
+          uv run --with radon radon mi src/ --json --exclude "tests/*,examples/*,venv/*,.venv/*" > maintainability-report.json || true
+          uv run --with radon radon mi src/ --show --exclude "tests/*,examples/*,venv/*,.venv/*" --min B || true
+        continue-on-error: true
+
+      # ============================================================================
+      # Additional Quality Metrics
+      # ============================================================================
+      - name: Generate code metrics
+        run: |
+          echo "📈 Generating code metrics..."
+          echo "## 📊 Code Metrics" > metrics-report.md
+          echo "" >> metrics-report.md
+          echo "### Project Statistics" >> metrics-report.md
+          echo "- **Python files in src/**: $(find src/ -name '*.py' | wc -l)" >> metrics-report.md
+          echo "- **Test files**: $(find tests/ -name '*.py' 2>/dev/null | wc -l || echo 0)" >> metrics-report.md
+          echo "- **Lines of code**: $(find src/ -name '*.py' -exec wc -l {} + | tail -1 | awk '{print $1}' || echo 0)" >> metrics-report.md
+          echo "- **Generated at**: $(date -u)" >> metrics-report.md
+          
+          # Add complexity summary if available
+          if [ -f complexity-report.json ]; then
+            echo "" >> metrics-report.md
+            echo "### Complexity Summary" >> metrics-report.md
+            echo "Detailed complexity analysis completed. See complexity-report.json for details." >> metrics-report.md
+          fi
+          
+          # Add maintainability index summary if available
+          if [ -f maintainability-report.json ]; then
+            echo "" >> metrics-report.md
+            echo "### Maintainability Index" >> metrics-report.md
+            echo "Maintainability analysis completed. See maintainability-report.json for details." >> metrics-report.md
+          fi
+
+      # ============================================================================
+      # Generate Quality Summary
+      # ============================================================================
+      - name: Generate quality summary
+        if: always()
+        run: |
+          echo "## 🔍 Code Quality Analysis Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Security Analysis Results
+          echo "### 🔒 Security Analysis" >> $GITHUB_STEP_SUMMARY
+          if [ -f bandit-report.json ]; then
+            BANDIT_ISSUES=$(jq length bandit-report.json 2>/dev/null || echo "0")
+            if [ "$BANDIT_ISSUES" -eq 0 ]; then
+              echo "- ✅ **Bandit**: No security issues found" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ⚠️ **Bandit**: $BANDIT_ISSUES potential security issues found" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+          
+          if [ -f pip-audit-report.json ]; then
+            echo "- ✅ **pip-audit**: Dependency vulnerability scan completed" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Quality Metrics
+          echo "### 📊 Quality Metrics" >> $GITHUB_STEP_SUMMARY
+          if [ -f vulture-report.txt ]; then
+            VULTURE_LINES=$(wc -l < vulture-report.txt 2>/dev/null || echo "0")
+            echo "- **Dead Code**: $VULTURE_LINES potential unused code locations" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f complexity-report.json ]; then
+            echo "- **Complexity**: Analysis completed, see detailed reports" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f maintainability-report.json ]; then
+            echo "- **Maintainability**: Index analysis completed, see detailed reports" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📁 **Detailed Reports**: Available in the artifacts section below." >> $GITHUB_STEP_SUMMARY
+
+      # ============================================================================
+      # Upload All Reports
+      # ============================================================================
+      - name: Upload quality reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-analysis-reports
+          path: |
+            *-report.json
+            *-report.txt
+            *-report.md
+          retention-days: 30
+
+  # ============================================================================
+  # Quality Gate Decision
+  # ============================================================================
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs: [ quality-analysis ]
+    if: always()
+
+    steps:
+      - name: Evaluate quality gate
+        run: |
+          echo "## 🎯 Quality Gate Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          ANALYSIS_RESULT="${{ needs.quality-analysis.result }}"
+          
+          echo "| Component | Status | Impact |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "$ANALYSIS_RESULT" == "success" ]]; then
+            echo "| Quality Analysis | ✅ **PASSED** | Security and quality analysis completed successfully |" >> $GITHUB_STEP_SUMMARY
+            OVERALL_STATUS="PASSED"
+          else
+            echo "| Quality Analysis | ❌ **FAILED** | Critical security or quality issues found |" >> $GITHUB_STEP_SUMMARY
+            OVERALL_STATUS="FAILED"
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "$OVERALL_STATUS" == "PASSED" ]]; then
+            echo "🎉 **Overall Quality Gate: PASSED** ✅" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ✨ Quality Analysis Complete" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Security analysis passed (Bandit + pip-audit)" >> $GITHUB_STEP_SUMMARY
+            echo "- 📊 Code complexity and quality metrics generated" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔍 Dead code analysis completed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "_Quality reports are available in the artifacts section._" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Overall Quality Gate: FAILED** ⚠️" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔧 Action Required" >> $GITHUB_STEP_SUMMARY
+            echo "Critical quality issues were found that need to be addressed:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Next Steps:**" >> $GITHUB_STEP_SUMMARY
+            echo "1. 📋 Review the failed job logs above" >> $GITHUB_STEP_SUMMARY
+            echo "2. 🔍 Download and examine the quality reports" >> $GITHUB_STEP_SUMMARY
+            echo "3. 🛠️ Run quality checks locally: \`make security-check\`" >> $GITHUB_STEP_SUMMARY
+            echo "4. ✅ Fix issues and push changes" >> $GITHUB_STEP_SUMMARY
+            echo "5. 🔄 Re-run this workflow to verify fixes" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi

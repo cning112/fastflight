@@ -1,9 +1,11 @@
 import asyncio
 import collections
+import contextlib
 import io
 import logging
 import threading
-from typing import Any, AsyncIterable, Awaitable, Iterable, Iterator, TypeVar
+from collections.abc import AsyncIterable, Awaitable, Coroutine, Iterable, Iterator
+from typing import Any, TypeVar
 
 import pandas as pd
 import pyarrow as pa
@@ -40,7 +42,8 @@ class AsyncToSyncConverter:
             - This code is designed to work with Python 3.7 and later versions.
             - It leverages features from Python 3.7 such as `asyncio.run_coroutine_threadsafe`,
               and the stable `async`/`await` syntax, which was fully optimized in Python 3.7+.
-            - The `asyncio.Queue`, `async for`, and `await` used in this code are well supported and stable from Python 3.7 onwards.
+            - The `asyncio.Queue`, `async for`, and `await` used in this code are well supported and stable from
+              Python 3.7 onwards.
     """
 
     def __init__(self) -> None:
@@ -88,7 +91,7 @@ class AsyncToSyncConverter:
             logger.info("Event loop stopped, and thread joined.")
         self._closed = True
 
-    def run_coroutine(self, coro: Awaitable[T]) -> T:
+    def run_coroutine(self, coro: Coroutine[Any, Any, T]) -> T:
         """
         Runs a coroutine in the converter's event loop and returns its result synchronously.
 
@@ -154,10 +157,8 @@ class AsyncToSyncConverter:
                     yield item
 
     def __del__(self):
-        try:
+        with contextlib.suppress(Exception):
             self.close()
-        except Exception:
-            pass
 
     def __enter__(self) -> "AsyncToSyncConverter":
         """
@@ -182,8 +183,9 @@ async def read_record_batches_from_stream(
     """
     Similar to `more_itertools.chunked`, but returns an async iterable of Arrow RecordBatch.
     Args:
-        stream (AsyncIterable[T]): An async iterable of data of type T. A list of T must be used to create a pd.DataFrame
-        schema (pa.Schema | None, optional): The schema of the stream. Defaults to None and will be inferred.
+        stream (AsyncIterable[T]): An async iterable of data of type T. A list of T must be used to create
+            a pd.DataFrame schema (pa.Schema | None, optional): The schema of the stream. Defaults to None and
+            will be inferred.
         batch_size (int): The maximum size of each batch. Defaults to 100.
 
     Yields:
@@ -271,7 +273,7 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
                 await queue.put(buffer_value.to_pybytes())
         except Exception as e:
             logger.error("Error during producing Arrow IPC bytes", exc_info=True)
-            await queue.put(e)  # type: ignore[arg-type]
+            await queue.put(e)
         finally:
             # Signal the consumer that production is complete.
             await queue.put(end_of_stream)  # type: ignore[arg-type]
@@ -295,7 +297,10 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
             yield data
 
     # Launch the producer task in the background.
-    asyncio.create_task(produce())
+    # Store reference to prevent task from being garbage collected
+    _task = asyncio.create_task(produce())
+    # Reference stored to prevent garbage collection
+    _ = _task
     # Return the consumer async generator.
     return consume()
 

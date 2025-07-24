@@ -4,8 +4,7 @@ Retry configuration model for defining retry strategies and limits.
 Provides validation and delay calculation for various retry backoff strategies.
 """
 
-import random
-from typing import Type
+import secrets
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
@@ -61,7 +60,7 @@ class RetryConfig(BaseModel):
         default=0.1, ge=0.0, le=1.0, description="Jitter factor for randomized delays (0.0 to 1.0)"
     )
 
-    retryable_exceptions: tuple[Type[Exception], ...] = Field(
+    retryable_exceptions: tuple[type[Exception], ...] = Field(
         default=(FastFlightConnectionError, FastFlightTimeoutError, FastFlightServerError),
         description="Tuple of exception types that should trigger retry",
     )
@@ -130,10 +129,10 @@ class RetryConfig(BaseModel):
             delay = self.base_delay * (self.exponential_base ** (attempt - 1))
         elif self.strategy == RetryStrategy.JITTERED_EXPONENTIAL:
             base_delay = self.base_delay * (self.exponential_base ** (attempt - 1))
-            jitter = base_delay * self.jitter_factor * (random.random() * 2 - 1)
+            jitter = base_delay * self.jitter_factor * (secrets.SystemRandom().random() * 2 - 1)
             delay = base_delay + jitter
         else:
-            delay = self.base_delay
+            delay = self.base_delay  # type: ignore[unreachable]
 
         return min(delay, self.max_delay)
 

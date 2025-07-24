@@ -7,7 +7,7 @@ import logging
 import logging.config
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Literal
+from typing import Any, Literal
 
 # Try to import structlog, fallback to basic logging if not available
 # This allows the library to work without structlog as a hard dependency
@@ -17,7 +17,6 @@ try:
     HAS_STRUCTLOG = True
 except ImportError:
     HAS_STRUCTLOG = False
-    structlog = None
 
 
 def _get_shared_processors():
@@ -234,10 +233,10 @@ def _setup_structlog_logging(
 
     # Configure structlog with processor pipeline
     structlog.configure(
-        processors=shared_processors  # type: ignore[arg-type]
-        + [
+        processors=[
+            *shared_processors,
             # This is needed to convert the event dict to data that can be processed by the `ProcessorFormatter`
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         # `logger_factory` is used to create wrapped loggers that are used for
         # OUTPUT. This one returns a `logging.Logger`. The final value (a JSON
@@ -249,12 +248,13 @@ def _setup_structlog_logging(
     )
 
     # The `ProcessorFormatter` has a `foreign_pre_chain` argument which is responsible for adding properties to
-    # events from the standard library – in other words, those that do not originate from a structlog logger – and
+    # events from the standard library - in other words, those that do not originate from a structlog logger - and
     # which should in general match the processors argument to structlog.configure() so you get a consistent output.
-    foreign_pre_chain = shared_processors + [
+    foreign_pre_chain = [
+        *shared_processors,
         # Add extra attributes of LogRecord objects to the event dictionary so that values passed in the extra
         # parameter of log methods pass through to log output.
-        structlog.stdlib.ExtraAdder()
+        structlog.stdlib.ExtraAdder(),
     ]
 
     root_logger = logging.getLogger()
@@ -282,14 +282,14 @@ def _setup_structlog_logging(
     )
 
     # Always include console handler, optionally include file handler
-    handlers: Dict[str, Any] = {
+    handlers: dict[str, Any] = {
         "default": {"level": console_log_level, "class": "logging.StreamHandler", "formatter": "colored"},
         **file_handler,
     }
 
     # Configure logging with structlog-based formatters
     # Using explicit type annotation to satisfy mypy
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {
@@ -387,7 +387,7 @@ def _setup_basic_logging(
     # Define formatters for different output styles
     # Note: The JSON formatter references our custom JSONFormatter class
     # Using Dict[str, Any] to satisfy mypy type checking for logging.config.dictConfig
-    formatters: Dict[str, Any] = {
+    formatters: dict[str, Any] = {
         "plain": {
             "format": "%(asctime)s [%(levelname)8s] %(name)s: %(message)s (%(filename)s:%(funcName)s:%(lineno)d)",
             "datefmt": "%Y-%m-%dT%H:%M:%S",
@@ -407,7 +407,7 @@ def _setup_basic_logging(
 
     # Define handlers - always include console, optionally include file
     # Using Dict[str, Any] to satisfy mypy type checking
-    handlers: Dict[str, Any] = {
+    handlers: dict[str, Any] = {
         "default": {"level": console_log_level, "class": "logging.StreamHandler", "formatter": "colored"}
     }
 
@@ -426,7 +426,7 @@ def _setup_basic_logging(
 
     # Apply the logging configuration
     # Using explicit type annotation to satisfy mypy
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": formatters,

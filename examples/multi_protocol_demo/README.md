@@ -62,7 +62,7 @@ This will start the REST API at `http://localhost:8000` with routes under `/fast
 In a third terminal, run the multi-protocol comparison demo:
 
 ```bash
-python comprehensive_comparison.py
+python run_demo.py
 ```
 
 This will execute all demo services via both gRPC and REST, showing performance metrics and results.
@@ -74,8 +74,7 @@ examples/multi_protocol_demo/
 ├── README.md                      # This file
 ├── start_flight_server.py         # Starts the FastFlight gRPC server
 ├── start_rest_server.py           # Starts the REST API server
-├── comprehensive_comparison.py    # Main multi-protocol comparison demo
-├── example.db                     # SQLite database for demos
+├── run_demo.py                    # Main multi-protocol comparison demo
 └── demo_services/                 # Data service implementations
     ├── __init__.py
     ├── csv_demo.py                # CSV file handling service

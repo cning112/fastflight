@@ -15,7 +15,7 @@ def debuggable(func):
     @functools.wraps(func)
     def wrapper_decorator(*args, **kwargs):
         try:
-            import pydevd  # type: ignore[import-not-found]
+            import pydevd
 
             pydevd.connected = True
             pydevd.settrace(suspend=False)

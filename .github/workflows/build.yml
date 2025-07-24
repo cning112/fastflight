@@ -1,30 +1,406 @@
-name: Build Python Package
+name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_DEFAULT_VERSION: "3.11"
 
 jobs:
-  build:
+  # Fast checks that run first
+  pre-checks:
+    name: Pre-flight Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      python-versions: ${{ steps.python-versions.outputs.versions }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "latest"
+          enable-cache: true
+          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Determine Python versions to test
+        id: python-versions
+        run: |
+          echo "versions=[\"3.10\", \"3.11\", \"3.12\", \"3.13\"]" >> $GITHUB_OUTPUT
+
+      # ============================================================================
+      # Core Development Checks (Essential for CI)
+      # ============================================================================
+      - name: Lint with Ruff
+        run: uv run --frozen ruff check --output-format=github .
+
+      - name: Format check with Ruff
+        run: uv run --frozen ruff format --check --diff .
+
+      - name: Type check with MyPy
+        run: uv run --frozen mypy --config-file=pyproject.toml
+
+      # Note: Detailed security and quality analysis is handled by code-quality.yml
+      # This workflow focuses on core functionality: linting, formatting, type checking, and testing
+
+  # Core testing matrix
+  test:
+    name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }}${{ matrix.pyarrow-version && format(', PyArrow {0}', matrix.pyarrow-version) || '' }})
+    runs-on: ${{ matrix.os }}
+    needs: pre-checks
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Standard test matrix (current PyArrow version from uv.lock)
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        python-version: ${{ fromJson(needs.pre-checks.outputs.python-versions) }}
+        pyarrow-version: [ null ]  # null means use default from uv.lock
+        exclude:
+          # Skip some combinations to reduce CI time
+          - os: windows-latest
+            python-version: "3.10"
+          - os: macos-latest
+            python-version: "3.10"
+        include:
+          # PyArrow compatibility testing (only on Ubuntu)
+          # Only add these combinations for thorough compatibility testing
+          # Pyarrow <=6.0.0 only support up to Python 3.9
+          # PyArrow 6.0.1-8.x: Python <=3.10.x
+          # PyArrow 10.x-13.x: Python 3.8-3.11
+          # PyArrow 14.x-17.x: Python 3.8-3.12
+          # PyArrow 18.x+: Python 3.9-3.13
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "6.0.1"
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "8.0.0"
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "10.0.1"
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "10.0.1"
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "12.0.1"
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "12.0.1"
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "14.0.2"
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "14.0.2"
+          - os: ubuntu-latest
+            python-version: "3.12"
+            pyarrow-version: "14.0.2"
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "16.1.0"
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "16.1.0"
+          - os: ubuntu-latest
+            python-version: "3.12"
+            pyarrow-version: "16.1.0"
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "18.1.0"
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "18.1.0"
+          - os: ubuntu-latest
+            python-version: "3.12"
+            pyarrow-version: "18.1.0"
+          - os: ubuntu-latest
+            python-version: "3.13"
+            pyarrow-version: "18.1.0"
+          - os: ubuntu-latest
+            python-version: "3.10"
+            pyarrow-version: "20.0.0"
+          - os: ubuntu-latest
+            python-version: "3.11"
+            pyarrow-version: "20.0.0"
+          - os: ubuntu-latest
+            python-version: "3.12"
+            pyarrow-version: "20.0.0"
+          - os: ubuntu-latest
+            python-version: "3.13"
+            pyarrow-version: "20.0.0"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v3
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.x'
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install build
+          uv sync --all-extras --dev
 
-      - name: Build the package
-        run: python -m build
+      - name: Run compatibility tests
+        if: ${{ matrix.pyarrow-version != null }}
+        run: uv run --frozen --with pyarrow==${{ matrix.pyarrow-version}} pytest --tb=short -v --disable-warnings
 
-      - name: Verify the build
+      - name: Run tests with coverage
+        if: ${{ matrix.pyarrow-version == null }}
+        run: uv run --frozen pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 --junit-xml=pytest.xml -v
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' && matrix.pyarrow-version == null
+        uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: cning112/fastflight
+
+  # Arrow Flight specific tests
+  integration-tests:
+    name: Integration Tests (Python ${{ matrix.python-version }}${{ matrix.pyarrow-version && format(', PyArrow {0}', matrix.pyarrow-version) || '' }})
+    runs-on: ubuntu-latest
+    needs: pre-checks
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.11" ]  # Use default version for most integration tests
+        pyarrow-version: [ null ]  # null means use default from uv.lock
+        include:
+          # Add PyArrow compatibility testing for integration tests
+          # Test key versions across different Python versions
+          - python-version: "3.10"
+            pyarrow-version: "6.0.1"
+          - python-version: "3.11"
+            pyarrow-version: "12.0.1"
+          - python-version: "3.12"
+            pyarrow-version: "16.1.0"
+          - python-version: "3.13"
+            pyarrow-version: "20.0.0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
         run: |
-          ls dist
+          uv sync --all-extras --dev
+          # Install specific PyArrow version if specified
+          if [ -n "${{ matrix.pyarrow-version }}" ]; then
+            echo "Installing PyArrow version ${{ matrix.pyarrow-version }}"
+            uv pip install pyarrow==${{ matrix.pyarrow-version }}
+          fi
+
+      - name: Start Flight server for testing
+        run: |
+          cd examples/multi_protocol_demo
+          
+          # Use matrix job index for unique ports
+          JOB_INDEX="${{ strategy.job-index }}"
+          PORT_OFFSET=$((JOB_INDEX * 10))
+          export FLIGHT_PORT=$((8815 + PORT_OFFSET))
+          export REST_PORT=$((8000 + PORT_OFFSET))
+          
+          echo "Using FLIGHT_PORT=$FLIGHT_PORT and REST_PORT=$REST_PORT"
+          
+          echo "FLIGHT_PORT=$FLIGHT_PORT" >> $GITHUB_ENV
+          echo "REST_PORT=$REST_PORT" >> $GITHUB_ENV
+          
+          # Start servers
+          FLIGHT_PORT=$FLIGHT_PORT uv run --frozen python start_flight_server.py &
+          echo "FLIGHT_PID=$!" >> $GITHUB_ENV
+          
+          sleep 3
+          
+          FLIGHT_PORT=$FLIGHT_PORT REST_PORT=$REST_PORT uv run --frozen python start_rest_server.py &
+          echo "REST_PID=$!" >> $GITHUB_ENV
+          
+          # Wait for servers
+          for i in {1..30}; do
+            if nc -z localhost $FLIGHT_PORT && nc -z localhost $REST_PORT; then
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run integration tests
+        run: |
+          cd examples/multi_protocol_demo
+          FLIGHT_PORT=$FLIGHT_PORT REST_PORT=$REST_PORT timeout 60 uv run --frozen python run_demo.py
+
+      - name: Stop servers
+        if: always()
+        run: |
+          set +e
+          if [ ! -z "$FLIGHT_PID" ]; then
+            kill $FLIGHT_PID || true
+          fi
+          if [ ! -z "$REST_PID" ]; then
+            kill $REST_PID || true
+          fi
+
+  # Performance benchmarks
+  benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: pre-checks
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Install benchmark dependencies
+        run: |
+          uv add --dev pytest-benchmark asv
+
+      - name: Run benchmarks
+        run: |
+          uv run --frozen pytest tests/benchmarks/ --benchmark-json=benchmark.json
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'pytest'
+          output-file-path: benchmark.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-on-alert: true
+          alert-threshold: '200%'
+          fail-on-alert: true
+
+  # Build and validate package
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    needs: [ pre-checks, test ]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
+
+      - name: Build package
+        run: uv build
+
+      - name: Verify package
+        run: |
+          uv run --frozen twine check dist/*
+          
+          # Test installation in fresh environment
+          uv venv test-env
+          source test-env/bin/activate
+          pip install dist/*.whl
+          python -c "import fastflight; print(f'FastFlight version: {fastflight.__version__}')"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-files
+          path: dist/
+          retention-days: 30
+
+  # Documentation checks
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    needs: pre-checks
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras --dev
+          uv add --dev mkdocs mkdocs-material mkdocstrings[python]
+
+      - name: Build documentation
+        run: |
+          uv run --frozen mkdocs build --strict
+
+      - name: Upload docs artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs
+          path: site/
+
+  # Final status check
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [ pre-checks, test, integration-tests, build, docs ]
+    if: always()
+
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.pre-checks.result }}" != "success" ]]; then
+            echo "Pre-checks failed"
+            exit 1
+          fi
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "Tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.integration-tests.result }}" != "success" ]]; then
+            echo "Integration tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.build.result }}" != "success" ]]; then
+            echo "Build failed"
+            exit 1
+          fi
+          if [[ "${{ needs.docs.result }}" != "success" ]]; then
+            echo "Documentation build failed"
+            exit 1
+          fi
+          echo "All checks passed!"

@@ -2,7 +2,6 @@ import itertools
 import logging
 import multiprocessing
 import sys
-from typing import cast
 
 import pyarrow as pa
 from pyarrow import RecordBatchReader, flight
@@ -136,8 +135,8 @@ class FastFlightServer(flight.FlightServerBase):
             return flight.RecordBatchStream(reader)
         except Exception as e:
             logger.error(f"Error processing request: {e}", exc_info=True)
-            error_msg = f"Internal server error: {type(e).__name__}: {str(e)}"
-            raise flight.FlightInternalError(error_msg)
+            error_msg = f"Internal server error: {type(e).__name__}: {e!s}"
+            raise flight.FlightInternalError(error_msg) from e
 
     def _get_batch_reader(
         self, data_service: BaseDataService, params: BaseParams, batch_size: int | None = None
@@ -182,12 +181,12 @@ class FastFlightServer(flight.FlightServerBase):
             first = next(batch_iter)
             return RecordBatchReader.from_batches(first.schema, itertools.chain((first,), batch_iter))
         except StopIteration:
-            raise flight.FlightInternalError("Data service returned no batches.")
+            raise flight.FlightInternalError("Data service returned no batches.") from None
         except AttributeError as e:
-            raise flight.FlightInternalError(f"Service method issue: {e}")
+            raise flight.FlightInternalError(f"Service method issue: {e}") from e
         except Exception as e:
             logger.error(f"Error retrieving data from {data_service.fqn()}: {e}", exc_info=True)
-            raise flight.FlightInternalError(f"Error in data retrieval: {type(e).__name__}: {str(e)}")
+            raise flight.FlightInternalError(f"Error in data retrieval: {type(e).__name__}: {e!s}") from e
 
     @staticmethod
     def _resolve_ticket(ticket: flight.Ticket) -> tuple[BaseParams, BaseDataService]:
@@ -206,14 +205,14 @@ class FastFlightServer(flight.FlightServerBase):
         try:
             req_params = BaseParams.from_bytes(ticket.ticket)
             service_cls = BaseDataService.lookup(req_params.fqn())
-            return req_params, cast(BaseDataService, service_cls())
+            return req_params, service_cls()
         except KeyError as e:
-            raise flight.FlightInternalError(f"Missing required field in ticket: {e}")
+            raise flight.FlightInternalError(f"Missing required field in ticket: {e}") from e
         except ValueError as e:
-            raise flight.FlightInternalError(f"Invalid ticket format: {e}")
+            raise flight.FlightInternalError(f"Invalid ticket format: {e}") from e
         except Exception as e:
             logger.error(f"Error processing ticket: {e}", exc_info=True)
-            raise flight.FlightInternalError(f"Ticket processing error: {type(e).__name__}: {str(e)}")
+            raise flight.FlightInternalError(f"Ticket processing error: {type(e).__name__}: {e!s}") from e
 
     def shutdown(self):
         """
@@ -250,7 +249,7 @@ def main():
     from fastflight.utils.custom_logging import setup_logging
 
     setup_logging()
-    FastFlightServer.start_instance("grpc://0.0.0.0:8815", True)
+    FastFlightServer.start_instance("grpc://0.0.0.0:8815", True)  # nosec B104
 
 
 if __name__ == "__main__":

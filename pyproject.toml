@@ -11,8 +11,9 @@ readme = "README.md"
 requires-python = ">= 3.10"
 dependencies = [
     "pandas",
-    "pyarrow>=14.0.0",
+    "pyarrow>=6.0.1",
     "pydantic>=2.0",
+    "typing-extensions>=4.5.0",
 ]
 
 [project.optional-dependencies]
@@ -63,13 +64,186 @@ dev = [
 ]
 
 [tool.ruff]
+target-version = "py310"
 line-length = 120
 src = ["src", "tests", "examples"]
 
 [tool.ruff.format]
 skip-magic-trailing-comma = true
+quote-style = "double"
+indent-style = "space"
 
 [tool.ruff.lint]
-# On top of the default `select` (`E4`, E7`, `E9`, and `F`), enable isort (`I`)
-extend-select = ["I"]
-isort.split-on-trailing-comma = false
+# Unified linting configuration for consistency across pre-commit and CI
+select = [
+    "E", # pycodestyle errors
+    "W", # pycodestyle warnings
+    "F", # Pyflakes
+    "I", # isort
+    "B", # flake8-bugbear (catches common bugs)
+    "C4", # flake8-comprehensions (performance)
+    "UP", # pyupgrade (modernize syntax)
+    "SIM", # flake8-simplify (code simplification)
+    "RUF", # Ruff-specific rules
+    "T20", # flake8-print (detect print statements)
+]
+
+ignore = [
+    # Allow TODO comments during development
+    "FIX002",
+    # Allow function calls in argument defaults (common in FastAPI/Pydantic)
+    "B008", # Do not perform function calls in argument defaults
+]
+
+# Auto-fix safe rules
+fixable = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+split-on-trailing-comma = false
+force-single-line = false
+known-first-party = ["fastflight"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can be more relaxed
+"tests/**/*" = [
+    "B011", # Allow assert False
+    "T201", # Allow print statements in tests
+    "T203", # Allow pprint in tests
+]
+# Examples can use print statements and be more flexible  
+"examples/**/*" = [
+    "T201", # Allow print statements
+    "T203", # Allow pprint
+    "B008", # Allow function calls in defaults (demo code)
+]
+# CLI modules can use print
+"src/fastflight/cli.py" = [
+    "T201", # Allow print statements in CLI
+    "T203", # Allow pprint in CLI
+]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+show_error_codes = true
+pretty = true
+# Check all project code consistently across pre-commit and CI
+files = ["src", "tests", "examples"]
+
+# Enable strict optional checking
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+warn_unreachable = true
+
+# Per-module configuration
+[[tool.mypy.overrides]]
+module = "tests.*"
+# Tests can be more relaxed
+ignore_errors = false
+disable_error_code = ["import-untyped"]
+
+[[tool.mypy.overrides]]
+module = "examples.*"
+# Examples can be more relaxed
+ignore_errors = false
+disable_error_code = ["import-untyped"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--disable-warnings",
+    "-ra",
+    "--cov=fastflight",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=xml",
+    "--cov-report=html",
+]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+# ============================================================================
+# Code Quality Tool Configurations
+# ============================================================================
+
+[tool.bandit]
+# Security scanning configuration for FastFlight
+exclude_dirs = ["tests", "examples", ".venv", "venv", ".mypy_cache", ".pytest_cache"]
+skips = [
+    "B101", # Skip assert statements (common in tests and examples)
+    "B601", # Skip shell injection warnings for subprocess with shell=False
+]
+confidence = "medium"  # Low, Medium, High
+severity = "medium"    # Low, Medium, High
+
+# Specific configurations for Arrow Flight project
+[tool.bandit.assert_used]
+skips = ["**/tests/**", "**/test_*.py", "**/examples/**"]
+
+[tool.vulture]
+# Dead code detection configuration
+min_confidence = 80  # Higher confidence to reduce false positives
+paths = ["src"]
+exclude = ["tests/", "examples/", "venv/", ".venv/"]
+ignore_decorators = [
+    "@pytest.fixture",
+    "@property",
+    "@classmethod",
+    "@staticmethod",
+    "@abstractmethod",
+    "@cached_property",
+    "@lru_cache",
+    "@dataclass",
+    # FastAPI/Pydantic decorators
+    "@validator",
+    "@root_validator",
+    "@field_validator",
+]
+ignore_names = [
+    "setUp",
+    "tearDown",
+    "__*__", # Magic methods
+    "test_*", # Test methods
+    "*_test",
+    # Common FastAPI/Arrow Flight patterns
+    "get_*",
+    "create_*",
+    "delete_*",
+    "update_*",
+    "*_handler",
+    "*_endpoint",
+]
+
+# Note: Radon configuration requires Python 3.11+ or installing 'radon[toml]'
+# However, Radon does NOT support [tool.radon] format - it only supports [radon] in INI format
+# For explicit configuration, we use command line arguments in GitHub Actions instead
+# If you want to use Radon config files, create a setup.cfg with:
+# [radon]
+# exclude = tests/*,examples/*,venv/*,.venv/*
+# cc_min = C
+
+# Note: Xenon does NOT support any configuration files
+# Use command line arguments instead: xenon --max-absolute C --max-modules B --max-average B src/
+
+[tool.pip-audit]
+# Vulnerability scanning configuration
+format = "columns"
+desc = true
+resolve-dependencies = true
+vulnerability-service = "osv"
+progress-spinner = false
+timeout = 30
+
+# Cache configuration
+cache-dir = ".pip-audit-cache"
+
+# Skip specific packages if they are false positives (use with caution)
+# skip = ["package-name"]

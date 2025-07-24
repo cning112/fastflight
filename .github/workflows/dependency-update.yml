@@ -1,0 +1,297 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: 'Type of update to perform'
+        required: true
+        type: choice
+        default: 'all'
+        options:
+          - all
+          - security-only
+          - dev-dependencies
+          - production-dependencies
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # Check for dependency updates
+  check-updates:
+    name: Check for Updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      has-updates: ${{ steps.check.outputs.has-updates }}
+      security-updates: ${{ steps.check.outputs.security-updates }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Check for security vulnerabilities
+        id: check
+        run: |
+          echo "🔍 Scanning for security vulnerabilities..."
+          
+          # Use pip-audit for security scanning
+          if uv run --with pip-audit pip-audit --config pyproject.toml --format=json --output=security.json; then
+            echo "security-updates=false" >> $GITHUB_OUTPUT
+            echo "✅ No security vulnerabilities found"
+          else
+            # Check if there are actual vulnerabilities (not just tool errors)
+            if [ -f security.json ] && [ $(jq length security.json 2>/dev/null || echo "0") -gt 0 ]; then
+              echo "security-updates=true" >> $GITHUB_OUTPUT
+              echo "🚨 Security vulnerabilities found!"
+              
+              # Show summary in console
+              echo "Vulnerability summary:"
+              jq -r '.[] | "- \(.package): \(.fixed_versions[0] // "No fix available")"' security.json || true
+            else
+              echo "security-updates=false" >> $GITHUB_OUTPUT
+              echo "✅ No security vulnerabilities found"
+            fi
+          fi
+          
+          # Check for general updates using pip-check-updates equivalent
+          uv run --with pur pur --dry-run --nonzero-exit-code pyproject.toml
+          if [ $? -eq 0 ]; then
+            echo "has-updates=false" >> $GITHUB_OUTPUT
+            echo "✅ All packages are up to date"
+          else
+            echo "has-updates=true" >> $GITHUB_OUTPUT
+            echo "📦 Package updates available"
+          fi
+
+      - name: Upload security report
+        if: steps.check.outputs.security-updates == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security.json
+
+  # Update dependencies
+  update-dependencies:
+    name: Update Dependencies
+    runs-on: ubuntu-latest
+    needs: check-updates
+    if: ${{ needs.check-updates.outputs.has-updates == 'true' || needs.check-updates.outputs.security-updates == 'true' }}
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Create update branch
+        run: |
+          BRANCH_NAME="dependency-updates-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Update dependencies
+        run: |
+          UPDATE_TYPE="${{ github.event.inputs.update_type || 'all' }}"
+          
+          case $UPDATE_TYPE in
+            "security-only")
+              echo "🔒 Updating only security-related packages..."
+              
+              # Use pip-audit to get vulnerable packages and their fixed versions
+              if uv run --with pip-audit pip-audit --config pyproject.toml --format=json --output=vulns.json --fix-dry-run; then
+                echo "No vulnerabilities to fix"
+              else
+                # Extract packages that need updates
+                VULNERABLE_PACKAGES=$(jq -r '.[].package' vulns.json 2>/dev/null | sort -u | tr '\n' ' ' || echo "")
+                
+                if [ -n "$VULNERABLE_PACKAGES" ]; then
+                  echo "Updating vulnerable packages: $VULNERABLE_PACKAGES"
+                  
+                  # Update only the vulnerable packages
+                  for pkg in $VULNERABLE_PACKAGES; do
+                    echo "Updating $pkg..."
+                    uv lock --upgrade-package "$pkg" || echo "Failed to update $pkg"
+                  done
+                else
+                  echo "No specific packages to update"
+                fi
+              fi
+              
+              # Clean up temporary file
+              rm -f vulns.json
+              ;;
+            "dev-dependencies")
+              echo "Updating development dependencies..."
+              # Update dev dependencies in dependency groups
+              uv sync --group dev --upgrade
+              ;;
+            "production-dependencies")
+              echo "Updating production dependencies..."
+              # Update only main dependencies
+              uv lock --upgrade
+              ;;
+            *)
+              echo "Updating all dependencies..."
+              uv lock --upgrade
+              uv sync --all-extras --dev
+              ;;
+          esac
+
+      - name: Run tests with updated dependencies
+        run: |
+          uv run pytest --tb=short -q
+        continue-on-error: true
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "No changes to commit"
+          else
+            echo "changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected"
+            git diff --name-only
+          fi
+
+      - name: Commit changes
+        if: steps.changes.outputs.changes == 'true'
+        run: |
+          git add .
+          git commit -m "⬆️ Update dependencies
+          
+          Auto-update of dependencies via GitHub Actions.
+          Update type: ${{ github.event.inputs.update_type || 'all' }}
+          
+          Please review the changes and ensure all tests pass."
+
+      - name: Push branch
+        if: steps.changes.outputs.changes == 'true'
+        run: |
+          git push origin "$BRANCH_NAME"
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⬆️ Automated Dependency Updates',
+              head: process.env.BRANCH_NAME,
+              base: 'main',
+              body: `## 🤖 Automated Dependency Updates
+              
+              This PR contains automated dependency updates.
+              
+              **Update Type:** \`${{ github.event.inputs.update_type || 'all' }}\`
+              **Security Updates:** ${{ needs.check-updates.outputs.security-updates == 'true' && '🚨 Yes' || '✅ None' }}
+              
+              ### Changes
+              - Updated package dependencies in \`uv.lock\`
+              - Updated development dependencies (if applicable)
+              
+              ### ⚠️ Important Notes
+              - Please review all changes carefully
+              - Ensure all tests pass before merging
+              - Check for any breaking changes in updated packages
+              
+              ### 🧪 Testing
+              - [ ] All existing tests pass
+              - [ ] Manual testing completed (if required)
+              - [ ] No breaking changes introduced
+              
+              ---
+              
+              This PR was created automatically by the dependency update workflow.`,
+              draft: false
+            });
+            
+            // Add labels
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['dependencies', 'automated']
+            });
+            
+            // Add security label if needed
+            if ('${{ needs.check-updates.outputs.security-updates }}' === 'true') {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['security']
+              });
+            }
+
+  # Notify about security issues
+  security-notification:
+    name: Security Notification
+    runs-on: ubuntu-latest
+    needs: check-updates
+    if: ${{ needs.check-updates.outputs.security-updates == 'true' }}
+
+    steps:
+      - name: Create security issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Check if there's already an open security issue
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'security,dependencies',
+              state: 'open'
+            });
+            
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🚨 Security Vulnerabilities Detected in Dependencies',
+                body: `## Security Alert
+                
+                Automated security scanning has detected vulnerabilities in project dependencies.
+                
+                **Action Required:** Please review and update the affected packages as soon as possible.
+                
+                **Next Steps:**
+                1. Review the dependency update PR that should be created automatically
+                2. Test the updates thoroughly
+                3. Merge the updates to resolve security issues
+                
+                **Detection Time:** ${new Date().toISOString()}
+                **Workflow:** [${context.workflow}](${context.payload.repository.html_url}/actions/runs/${context.runId})
+                
+                This issue will be automatically closed when the vulnerabilities are resolved.`,
+                labels: ['security', 'dependencies', 'high-priority']
+              });
+            }

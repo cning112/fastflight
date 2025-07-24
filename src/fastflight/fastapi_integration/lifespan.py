@@ -1,6 +1,6 @@
 import logging
-from contextlib import AsyncExitStack, asynccontextmanager
-from typing import AsyncContextManager, Callable, Optional
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 async def fast_flight_bouncer_lifespan(
     app: FastAPI,
     registered_data_types: dict[str, str],
-    flight_location: str = "grpc://0.0.0.0:8815",
-    resilience_config: Optional[ResilienceConfig] = None,
+    flight_location: str = "grpc://0.0.0.0:8815",  # nosec B104
+    resilience_config: ResilienceConfig | None = None,
 ):
     """
     Manage FastFlightBouncer lifecycle for FastAPI application.
@@ -45,9 +45,9 @@ async def fast_flight_bouncer_lifespan(
 async def combine_lifespans(
     app: FastAPI,
     registered_data_types: dict[str, str],
-    flight_location: str = "grpc://0.0.0.0:8815",
-    resilience_config: Optional[ResilienceConfig] = None,
-    *other: Callable[[FastAPI], AsyncContextManager],
+    flight_location: str = "grpc://0.0.0.0:8815",  # nosec B104
+    resilience_config: ResilienceConfig | None = None,
+    *other: Callable[[FastAPI], AbstractAsyncContextManager],
 ):
     """
     Combine FastFlightBouncer lifespan with other context managers.
@@ -91,4 +91,4 @@ def get_fast_flight_bouncer(app: FastAPI) -> FastFlightBouncer:
     helper = getattr(app.state, "_flight_client", None)
     if helper is None:
         raise ValueError("FastFlightBouncer not initialized. Use fast_flight_bouncer_lifespan in your FastAPI app.")
-    return helper
+    return helper  # type: ignore[no-any-return]

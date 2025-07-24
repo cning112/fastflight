@@ -1,8 +1,9 @@
 import json
 import logging
 from abc import ABC
+from collections.abc import AsyncIterator, Iterable
 from functools import partial
-from typing import AsyncIterable, ClassVar, Generic, Iterable, Self, TypeVar, get_args, get_origin
+from typing import Any, ClassVar, Generic, TypeVar, get_args, get_origin
 
 import pyarrow as pa
 from pydantic import BaseModel
@@ -154,7 +155,7 @@ class BaseParams(BaseModel, ABC):
         return params_cls
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> Self:
+    def from_bytes(cls, data: bytes) -> "BaseParams":
         """
         Deserialize a params from bytes which includes the fully qualified name.
 
@@ -173,7 +174,7 @@ class BaseParams(BaseModel, ABC):
             logger.error(f"Error deserializing params: {e}")
             raise
 
-    def to_json(self) -> dict:
+    def to_json(self) -> dict[str, Any]:
         """
         Serialize the params to json, including the fully qualified name.
 
@@ -282,7 +283,7 @@ class BaseDataService(Generic[T], ABC):
     def fqn(cls):
         return f"{cls.__module__}.{cls.__qualname__}"
 
-    async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterable[pa.RecordBatch]:
+    async def aget_batches(self, params: T, batch_size: int | None = None) -> AsyncIterator[pa.RecordBatch]:
         """
         Fetch data in batches asynchronously based on the given parameters.
 
@@ -290,20 +291,24 @@ class BaseDataService(Generic[T], ABC):
 
         Args:
             params (T): The parameters for fetching data.
-            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
+            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service
+                implementation.
 
         Yields:
-            AsyncIterable[pa.RecordBatch]: An async iterable of RecordBatches.
+            AsyncGenerator[pa.RecordBatch, None]: An async generator of RecordBatches.
 
         """
         raise NotImplementedError
+        # This is just to make MyPy happy - this will never execute
+        yield  # type: ignore
 
     def get_batches(self, params: T, batch_size: int | None = None) -> Iterable[pa.RecordBatch]:
         """Fetches data synchronously in batches.
 
         Args:
             params (T): The parameters for fetching data.
-            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service implementation.
+            batch_size: The maximum size of each batch. Defaults to None to be decided by the data service
+                implementation.
 
         Yields:
             pa.RecordBatch: A generator of RecordBatch instances.

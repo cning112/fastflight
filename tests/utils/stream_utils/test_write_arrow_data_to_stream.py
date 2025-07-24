@@ -35,7 +35,7 @@ class TestWriteArrowDataToStream(unittest.TestCase):
                 chunks.append(chunk_mock)
 
             # Configure the mock to return chunks and then raise StopIteration
-            mock_reader.read_chunk.side_effect = chunks + [StopIteration]
+            mock_reader.read_chunk.side_effect = [*chunks, StopIteration]
 
             # Test the function
             result = []
