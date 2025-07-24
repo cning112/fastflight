@@ -6,6 +6,8 @@ with comprehensive error handling, retry mechanisms, and circuit breaker pattern
 production-ready resilience.
 """
 
+import importlib.metadata
+
 from fastflight.client import FastFlightBouncer
 from fastflight.core.base import BaseDataService, BaseParams
 from fastflight.exceptions import (
@@ -23,6 +25,12 @@ from fastflight.exceptions import (
 )
 from fastflight.resilience import CircuitBreakerConfig, ResilienceConfig, ResilienceManager, RetryConfig, RetryStrategy
 from fastflight.server import FastFlightServer
+
+# Get version from package metadata
+try:
+    __version__ = importlib.metadata.version("fastflight")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "dev"
 
 __all__ = [
     # Core classes
@@ -48,4 +56,6 @@ __all__ = [
     "ResilienceManager",
     "RetryConfig",
     "RetryStrategy",
+    # Version
+    "__version__",
 ]

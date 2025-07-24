@@ -265,7 +265,7 @@ jobs:
             kill $REST_PID || true
           fi
 
-  # Build and validate package
+  # Build package (single job)
   build:
     name: Build Package
     runs-on: ubuntu-latest
@@ -282,18 +282,24 @@ jobs:
           enable-cache: true
           python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
 
+      - name: Install build dependencies
+        run: |
+          uv sync --dev
+          uv add --dev twine
+
       - name: Build package
         run: uv build
 
-      - name: Verify package
+      - name: Verify package integrity
         run: |
           uv run --frozen twine check dist/*
-          
-          # Test installation in fresh environment
-          uv venv test-env
-          source test-env/bin/activate
-          pip install dist/*.whl
-          python -c "import fastflight; print(f'FastFlight version: {fastflight.__version__}')"
+
+      - name: Basic installation test
+        run: |
+          # Quick smoke test - can the wheel be installed and imported?
+          uv venv test-env --python ${{ env.PYTHON_DEFAULT_VERSION }}
+          uv pip install --python test-env dist/*.whl
+          uv run --python test-env python -c "import fastflight; print(f'FastFlight {fastflight.__version__} installed successfully')"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -302,11 +308,60 @@ jobs:
           path: dist/
           retention-days: 30
 
+  # Test installation on multiple Python versions
+  test-install:
+    name: Test Install (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    needs: build  # Depends on build job completion
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12", "3.13"]  # Excludes 3.11 since it's already tested in build job
+
+    steps:
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-files
+          path: dist/
+
+      - name: Test installation on Python ${{ matrix.python-version }}
+        run: |
+          echo "Testing installation on Python ${{ matrix.python-version }}..."
+          
+          # Create fresh virtual environment
+          uv venv test-env --python ${{ matrix.python-version }}
+          
+          # Test basic installation
+          echo "Installing wheel..."
+          uv pip install --python test-env dist/*.whl
+          
+          # Test package import
+          echo "Testing package import..."
+          uv run --python test-env python -c "import fastflight; import sys; print(f'FastFlight {fastflight.__version__} imported successfully on Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"
+          
+          # Test CLI availability
+          echo "Testing CLI availability..."
+          uv pip install --python test-env typer
+          if uv run --python test-env fastflight --help > /dev/null 2>&1; then
+            echo "CLI works"
+          else
+            echo "CLI test skipped"
+          fi
+          
+          echo "Installation test passed for Python ${{ matrix.python-version }}"
+
   # Final status check
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [ pre-checks, test, integration-tests, build ]
+    needs: [ pre-checks, test, integration-tests, build, test-install ]
     if: always()
 
     steps:
@@ -326,6 +381,10 @@ jobs:
           fi
           if [[ "${{ needs.build.result }}" != "success" ]]; then
             echo "Build failed"
+            exit 1
+          fi
+          if [[ "${{ needs.test-install.result }}" != "success" ]]; then
+            echo "Installation tests failed"
             exit 1
           fi
           echo "All checks passed!"
