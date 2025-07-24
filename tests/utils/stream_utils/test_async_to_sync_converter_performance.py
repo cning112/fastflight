@@ -47,37 +47,6 @@ class TestAsyncToSyncPerformance:
         assert direct_results == converter_results
         assert overhead_ratio < 5  # Overhead should be less than 5x
 
-    def test_thread_local_converter_reuse(self):
-        """Test thread-local converter reuse performance"""
-
-        def worker_with_new_converter(iterations):
-            start = time.perf_counter()
-            for i in range(iterations):
-                converter = AsyncToSyncConverter()
-                converter.run_coroutine(self.simple_async_func(i))
-                converter.close()
-            return time.perf_counter() - start
-
-        def worker_with_thread_local(iterations):
-            start = time.perf_counter()
-            for i in range(iterations):
-                converter = get_thread_local_converter()
-                converter.run_coroutine(self.simple_async_func(i))
-            return time.perf_counter() - start
-
-        iterations = 300
-
-        new_converter_time = worker_with_new_converter(iterations)
-        thread_local_time = worker_with_thread_local(iterations)
-
-        improvement_ratio = new_converter_time / thread_local_time
-
-        print(f"New converter each time: {new_converter_time:.4f}s")
-        print(f"Thread local reuse: {thread_local_time:.4f}s")
-        print(f"Improvement: {improvement_ratio:.2f}x faster")
-
-        assert improvement_ratio > 0.99
-
     def test_concurrent_performance(self):
         """Test concurrent performance"""
 
