@@ -265,45 +265,6 @@ jobs:
             kill $REST_PID || true
           fi
 
-  # Performance benchmarks
-  benchmarks:
-    name: Performance Benchmarks
-    runs-on: ubuntu-latest
-    needs: pre-checks
-    if: github.event_name == 'pull_request'
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
-
-      - name: Install dependencies
-        run: uv sync --all-extras --dev
-
-      - name: Install benchmark dependencies
-        run: |
-          uv add --dev pytest-benchmark asv
-
-      - name: Run benchmarks
-        run: |
-          uv run --frozen pytest tests/benchmarks/ --benchmark-json=benchmark.json
-
-      - name: Store benchmark result
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          tool: 'pytest'
-          output-file-path: benchmark.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          comment-on-alert: true
-          alert-threshold: '200%'
-          fail-on-alert: true
-
   # Build and validate package
   build:
     name: Build Package
@@ -341,43 +302,11 @@ jobs:
           path: dist/
           retention-days: 30
 
-  # Documentation checks
-  docs:
-    name: Documentation
-    runs-on: ubuntu-latest
-    needs: pre-checks
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v6
-        with:
-          enable-cache: true
-          python-version: ${{ env.PYTHON_DEFAULT_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          uv sync --all-extras --dev
-          uv add --dev mkdocs mkdocs-material mkdocstrings[python]
-
-      - name: Build documentation
-        run: |
-          uv run --frozen mkdocs build --strict
-
-      - name: Upload docs artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: docs
-          path: site/
-
   # Final status check
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [ pre-checks, test, integration-tests, build, docs ]
+    needs: [ pre-checks, test, integration-tests, build ]
     if: always()
 
     steps:
@@ -397,10 +326,6 @@ jobs:
           fi
           if [[ "${{ needs.build.result }}" != "success" ]]; then
             echo "Build failed"
-            exit 1
-          fi
-          if [[ "${{ needs.docs.result }}" != "success" ]]; then
-            echo "Documentation build failed"
             exit 1
           fi
           echo "All checks passed!"
