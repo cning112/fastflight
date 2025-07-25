@@ -95,14 +95,32 @@ proper service routing.
 
 ## **🐳 Docker Deployment**
 
+### **Build Options**
+
+FastFlight provides multi-stage Docker builds for different purposes:
+
+```bash
+# Build production image (optimized for size) 
+docker build --target production -t fastflight:prod .
+
+# Build development image (includes dev tools and dependencies)  
+docker build --target development -t fastflight:dev .
+
+# Default build (production)
+docker build -t fastflight:latest .
+```
+
 ### **Quick Start with Docker Compose**
 
 ```bash
-# Development setup (both servers in one container)
-docker-compose --profile dev up
-
-# Production setup (separated services)
+# Production setup (separated services for scalability)
 docker-compose up
+
+# Development setup (single container with both servers)
+docker-compose --profile dev up fastflight-dev-servers
+
+# Interactive development (shell access with full dev environment)
+docker-compose --profile dev run fastflight-dev-shell
 
 # Background mode
 docker-compose up -d
@@ -111,15 +129,24 @@ docker-compose up -d
 ### **Manual Docker Commands**
 
 ```bash
-# Run both servers
-docker run -p 8000:8000 -p 8815:8815 fastflight:latest start-all
+# Production: Run both servers (default command)
+docker run -p 8000:8000 -p 8815:8815 fastflight:prod
 
-# Run only FastFlight server
-docker run -p 8815:8815 fastflight:latest start-flight-server
+# Production: Run only FastFlight server
+docker run -p 8815:8815 fastflight:prod start-flight-server
 
-# Run only REST API server
-docker run -p 8000:8000 fastflight:latest start-rest-server
+# Production: Run only REST API server
+docker run -p 8000:8000 fastflight:prod start-rest-server
+
+# Development: Interactive shell with all dev tools
+docker run -it -v $(pwd):/app fastflight:dev
 ```
+
+### **Image Characteristics**
+
+- **Production Image**: Optimized size, no dev dependencies, runs as non-root user `fastflight`
+- **Development Image**: Full development environment, includes docs/examples/tests, editable installs, root access for
+  flexibility
 
 See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options and configuration.
 
@@ -129,8 +156,10 @@ See **[Docker Guide](./docs/DOCKER.md)** for complete deployment options and con
 
 For comprehensive examples, see the [`examples/` directory](./examples/) which includes:
 
-- **Multi-Protocol Demo**: [`examples/multi_protocol_demo/`](./examples/multi_protocol_demo/) - Complete demonstration of FastFlight with both gRPC and REST interfaces
-- **Benchmark Tools**: [`examples/benchmark/`](./examples/benchmark/) - Performance measurement and analysis comparing sync vs async operations
+- **Multi-Protocol Demo**: [`examples/multi_protocol_demo/`](./examples/multi_protocol_demo/) - Complete demonstration
+  of FastFlight with both gRPC and REST interfaces
+- **Benchmark Tools**: [`examples/benchmark/`](./examples/benchmark/) - Performance measurement and analysis comparing
+  sync vs async operations
 
 ### **Python Client Example**
 
