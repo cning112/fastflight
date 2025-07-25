@@ -1,16 +1,35 @@
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim AS base
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
-
 WORKDIR /app
 
+
+FROM base AS development
+ENV PATH="/app/.venv/bin:$PATH"
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --all-extras --no-install-project
+
+ADD src /app
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=README.md,target=README.md \
+    uv sync --frozen --all-extras
+
+ENTRYPOINT ["/bin/bash"]
+
+
+FROM base AS builder
 # Install dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --all-extras --no-dev --compile-bytecode --no-editable --no-install-project
+    uv sync --frozen --all-extras --no-install-project --no-dev --compile-bytecode --no-editable
 
 # Copy the project into the intermediate image
 ADD src /app
@@ -50,8 +69,7 @@ RUN echo "=== Cleanup docs and examples (safe) ===" && \
     uv run python -c "import numpy, pandas, pyarrow, fastflight; print('✅ Safe cleanup complete, all packages working normally')"
 
 
-
-FROM python:3.12-slim
+FROM python:3.12-slim as production
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
