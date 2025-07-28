@@ -295,12 +295,12 @@ class BaseDataService(Generic[T], ABC):
                 implementation.
 
         Yields:
-            AsyncGenerator[pa.RecordBatch, None]: An async generator of RecordBatches.
+            AsyncIterator[pa.RecordBatch]: An async iterator of RecordBatches.
 
         """
         raise NotImplementedError
-        # This is just to make MyPy happy - this will never execute
-        yield  # type: ignore
+        # This unreachable 'yield' is just to make mypy happy
+        yield  # type: ignore[unreachable]
 
     def get_batches(self, params: T, batch_size: int | None = None) -> Iterable[pa.RecordBatch]:
         """Fetches data synchronously in batches.

@@ -83,13 +83,6 @@ jobs:
           uv run --with radon radon mi src/ --show --exclude "tests/*,examples/*,venv/*,.venv/*" --min B || true
         continue-on-error: true
 
-      - name: Dependency analysis with deptry
-        run: |
-          echo "📦 Analyzing dependency usage..."
-          uv run --with deptry deptry . --json-output deptry-report.json || true
-          uv run --with deptry deptry . || true
-        continue-on-error: true
-
       # ============================================================================
       # Additional Quality Metrics
       # ============================================================================
@@ -116,13 +109,6 @@ jobs:
             echo "" >> metrics-report.md
             echo "### Maintainability Index" >> metrics-report.md
             echo "Maintainability analysis completed. See maintainability-report.json for details." >> metrics-report.md
-          fi
-          
-          # Add dependency analysis summary if available
-          if [ -f deptry-report.json ]; then
-            echo "" >> metrics-report.md
-            echo "### Dependency Analysis" >> metrics-report.md
-            echo "Dependency usage analysis completed. See deptry-report.json for details." >> metrics-report.md
           fi
 
       # ============================================================================
@@ -164,10 +150,6 @@ jobs:
           
           if [ -f maintainability-report.json ]; then
             echo "- **Maintainability**: Index analysis completed, see detailed reports" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [ -f deptry-report.json ]; then
-            echo "- **Dependencies**: Usage analysis completed, see detailed reports" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY

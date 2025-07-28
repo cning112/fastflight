@@ -169,7 +169,7 @@ class AsyncToSyncConverter:
         logger.info("Entering context manager for AsyncToSyncConverter.")
         return self
 
-    def __exit__(self, exc_type: type | None, exc_value: BaseException | None, traceback: object | None) -> None:
+    def __exit__(self, exc_type: type | None, _exc_value: BaseException | None, _traceback: object | None) -> None:
         """
         Context manager exit point. Closes the event loop if necessary and joins the thread.
         """

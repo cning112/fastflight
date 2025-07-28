@@ -435,10 +435,8 @@ all = [
 cli = [
     { name = "typer" },
 ]
-duckdb = [
-    { name = "duckdb" },
-]
 examples = [
+    { name = "duckdb" },
     { name = "httpx" },
     { name = "matplotlib" },
     { name = "rich" },
@@ -469,7 +467,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "duckdb", marker = "extra == 'all'" },
-    { name = "duckdb", marker = "extra == 'duckdb'" },
+    { name = "duckdb", marker = "extra == 'examples'" },
     { name = "fastapi", extras = ["standard"], marker = "extra == 'all'" },
     { name = "fastapi", extras = ["standard"], marker = "extra == 'fastapi'" },
     { name = "httpx", marker = "extra == 'all'" },
@@ -491,7 +489,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.15.2" },
     { name = "typing-extensions", specifier = ">=4.5.0" },
 ]
-provides-extras = ["cli", "duckdb", "fastapi", "structlog", "examples", "all"]
+provides-extras = ["cli", "fastapi", "structlog", "examples", "all"]
 
 [package.metadata.requires-dev]
 dev = [

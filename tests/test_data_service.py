@@ -1,5 +1,5 @@
 import json
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import AsyncIterator, Iterable
 from typing import Any
 
 import pyarrow as pa
@@ -41,7 +41,7 @@ class SampleParamsAsync(BaseParams):
 class SampleDataServiceAsync(BaseDataService[SampleParamsAsync]):
     async def aget_batches(
         self, params: SampleParamsAsync, batch_size: int | None = None
-    ) -> AsyncGenerator[RecordBatch, None]:
+    ) -> AsyncIterator[RecordBatch]:
         yield pa.RecordBatch.from_arrays([pa.array([1, 2, 3])], ["sample_column"])
 
 

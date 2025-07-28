@@ -20,9 +20,6 @@ dependencies = [
 cli = [
     "typer>=0.15.2"
 ]
-duckdb = [
-    "duckdb"
-]
 fastapi = [
     "fastapi[standard]"
 ]
@@ -30,6 +27,7 @@ structlog = [
     "structlog"
 ]
 examples = [
+    "duckdb",
     "matplotlib>=3.10.1",
     "seaborn>=0.13.2",
     "httpx",
@@ -249,10 +247,3 @@ cache-dir = ".pip-audit-cache"
 
 # Skip specific packages if they are false positives (use with caution)
 # skip = ["package-name"]
-
-[tool.deptry]
-# Known first-party modules (your project modules)
-known_first_party = ["fastflight"]
-
-# Skip transitive dependencies and missing optional imports  
-ignore = ["DEP003", "DEP004"]

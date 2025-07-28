@@ -10,7 +10,7 @@ Core improvements:
 import asyncio
 import logging
 import time
-from collections.abc import AsyncGenerator, Iterable
+from collections.abc import AsyncIterator, Iterable
 
 import numpy as np
 import pyarrow as pa
@@ -107,7 +107,7 @@ class MockDataServiceAsync(BaseDataService[MockDataParamsAsync]):
 
     async def aget_batches(
         self, params: MockDataParamsAsync, batch_size: int | None = None
-    ) -> AsyncGenerator[pa.RecordBatch, None]:
+    ) -> AsyncIterator[pa.RecordBatch]:
         table = TABLES[params.data_variant]
         delay = params.delay_per_row * params.rows_per_batch
 

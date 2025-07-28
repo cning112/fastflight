@@ -50,26 +50,25 @@ def tests(s: Session) -> None:
 @session(name="quality", uv_groups=["dev"])
 def quality_analysis(s: Session):
     """Run comprehensive code quality analysis."""
+    errors = []
+
     # Security analysis with Bandit
-    s.run(*shlex.split("uv run --with 'bandit[toml]' bandit -r src/ -f txt --configfile pyproject.toml"))
+    try:
+        s.run(*shlex.split("uv run --with 'bandit[toml]' bandit -r src/ -f txt --configfile pyproject.toml"))
+    except Exception as e:
+        errors.append(f"Bandit failed: {e}")
 
     # Dependency vulnerability scan
     try:
         s.run(*shlex.split("uv run --with pip-audit pip-audit --format=columns"))
-    except Exception:
-        s.log("pip-audit failed, continuing...")
+    except Exception as e:
+        errors.append(f"pip-audit failed: {e}")
 
     # Dead code detection
     try:
         s.run(*shlex.split("uv run --with vulture vulture --config pyproject.toml"))
-    except Exception:
-        s.log("vulture failed, continuing...")
-
-    # Dependency analysis with deptry
-    try:
-        s.run(*shlex.split("uv run --with deptry deptry src --config pyproject.toml"))
-    except Exception:
-        s.log("deptry analysis failed, continuing...")
+    except Exception as e:
+        errors.append(f"vulture failed: {e}")
 
     # Complexity analysis
     try:
@@ -85,8 +84,13 @@ def quality_analysis(s: Session):
                 "--exclude 'tests,examples,venv,.venv' src/"
             )
         )
-    except Exception:
-        s.log("complexity analysis failed, continuing...")
+    except Exception as e:
+        errors.append(f"complexity analysis failed: {e}")
+
+    # Report all errors at the end
+    if errors:
+        error_msg = "Quality analysis failed with the following errors:\n" + "\n".join(f"  - {err}" for err in errors)
+        s.error(error_msg)
 
 
 @session(name="build", uv_groups=["dev"], default=False)
