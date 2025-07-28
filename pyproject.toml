@@ -54,6 +54,8 @@ fastflight = "fastflight.cli:cli"
 [dependency-groups]
 dev = [
     "mypy",
+    "nox>=2025.5.1",
+    "nox-uv>=0.6.1",
     "pandas-stubs>=2.2.3.241126",
     "pre-commit",
     "pyarrow-stubs>=17.17",
@@ -249,39 +251,8 @@ cache-dir = ".pip-audit-cache"
 # skip = ["package-name"]
 
 [tool.deptry]
-# Dependency analysis configuration
-
-# Files/directories to exclude from analysis
-exclude = [
-    ".venv",
-    "venv",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    "__pycache__",
-    "tests",
-    "examples",
-    "docs",
-]
-
-# Source directories to analyze  
-src = ["src"]
-
 # Known first-party modules (your project modules)
 known_first_party = ["fastflight"]
 
-# Skip checking these import patterns
-ignore_unused = [
-    # Optional dependencies used conditionally
-    "DEP004", # Missing dependency (for optional imports)
-]
-
-# Skip checking missing dependencies for these modules
-# (useful for optional imports with try/except)
-ignore_missing_dependency = []
-
-# Requirements files to check against
-requirements_files = ["pyproject.toml"]
-
-# Skip transitive dependencies
-ignore_transitive = true
+# Skip transitive dependencies and missing optional imports  
+ignore = ["DEP003", "DEP004"]
