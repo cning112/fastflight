@@ -319,7 +319,7 @@ def start_all(
         args=(rest_host, rest_port, rest_prefix, flight_location, list(modules), resilience_config),
     )
 
-    def shutdown_handler(signum, frame):
+    def shutdown_handler(_signum, _frame):
         """Handle shutdown signals gracefully."""
         typer.echo("Received termination signal. Shutting down servers...")
         flight_process.terminate()

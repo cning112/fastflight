@@ -46,13 +46,13 @@ jobs:
       # Core Development Checks (Essential for CI)
       # ============================================================================
       - name: Lint with Ruff
-        run: uv run --frozen ruff check --output-format=github .
+        run: uv run ruff check --output-format=github .
 
       - name: Format check with Ruff
-        run: uv run --frozen ruff format --check --diff .
+        run: uv run ruff format --check --diff .
 
       - name: Type check with MyPy
-        run: uv run --frozen mypy --config-file=pyproject.toml
+        run: uv run mypy --config-file=pyproject.toml
 
       # Note: Detailed security and quality analysis is handled by code-quality.yml
       # This workflow focuses on core functionality: linting, formatting, type checking, and testing
@@ -161,11 +161,11 @@ jobs:
 
       - name: Run compatibility tests
         if: ${{ matrix.pyarrow-version != null }}
-        run: uv run --frozen --with pyarrow==${{ matrix.pyarrow-version}} pytest --tb=short -v --disable-warnings
+        run: uv run --with pyarrow==${{ matrix.pyarrow-version}} pytest --tb=short -v --disable-warnings
 
       - name: Run tests with coverage
         if: ${{ matrix.pyarrow-version == null }}
-        run: uv run --frozen pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 --junit-xml=pytest.xml -v
+        run: uv run pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 --junit-xml=pytest.xml -v
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11' && matrix.pyarrow-version == null
@@ -233,12 +233,12 @@ jobs:
           echo "REST_PORT=$REST_PORT" >> $GITHUB_ENV
           
           # Start servers
-          FLIGHT_PORT=$FLIGHT_PORT uv run --frozen python start_flight_server.py &
+          FLIGHT_PORT=$FLIGHT_PORT uv run python start_flight_server.py &
           echo "FLIGHT_PID=$!" >> $GITHUB_ENV
           
           sleep 3
           
-          FLIGHT_PORT=$FLIGHT_PORT REST_PORT=$REST_PORT uv run --frozen python start_rest_server.py &
+          FLIGHT_PORT=$FLIGHT_PORT REST_PORT=$REST_PORT uv run python start_rest_server.py &
           echo "REST_PID=$!" >> $GITHUB_ENV
           
           # Wait for servers
@@ -252,7 +252,7 @@ jobs:
       - name: Run integration tests
         run: |
           cd examples/multi_protocol_demo
-          FLIGHT_PORT=$FLIGHT_PORT REST_PORT=$REST_PORT timeout 60 uv run --frozen python run_demo.py
+          FLIGHT_PORT=$FLIGHT_PORT REST_PORT=$REST_PORT timeout 60 uv run python run_demo.py
 
       - name: Stop servers
         if: always()
@@ -292,7 +292,7 @@ jobs:
 
       - name: Verify package integrity
         run: |
-          uv run --frozen twine check dist/*
+          uv run twine check dist/*
 
       - name: Basic installation test
         run: |
@@ -316,7 +316,7 @@ jobs:
     timeout-minutes: 5
     strategy:
       matrix:
-        python-version: ["3.10", "3.12", "3.13"]  # Excludes 3.11 since it's already tested in build job
+        python-version: [ "3.10", "3.12", "3.13" ]  # Excludes 3.11 since it's already tested in build job
 
     steps:
       - name: Install UV

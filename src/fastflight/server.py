@@ -91,7 +91,7 @@ class FastFlightServer(flight.FlightServerBase):
         self.location = location
         self._converter = get_thread_local_converter()
 
-    def do_get(self, context, ticket: flight.Ticket) -> flight.RecordBatchStream:
+    def do_get(self, _context, ticket: flight.Ticket) -> flight.RecordBatchStream:
         """
         Handle data retrieval requests from Flight clients.
 
@@ -102,7 +102,7 @@ class FastFlightServer(flight.FlightServerBase):
         4. Returns a Flight-compatible stream
 
         Args:
-            context: Flight server context (authentication, metadata, etc.)
+            _context: Flight server context (authentication, metadata, etc.)
             ticket (flight.Ticket): Serialized request containing:
                 - Service fully qualified name (fqn)
                 - Query parameters and filters

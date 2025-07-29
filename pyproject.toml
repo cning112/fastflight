@@ -20,9 +20,6 @@ dependencies = [
 cli = [
     "typer>=0.15.2"
 ]
-duckdb = [
-    "duckdb"
-]
 fastapi = [
     "fastapi[standard]"
 ]
@@ -30,6 +27,7 @@ structlog = [
     "structlog"
 ]
 examples = [
+    "duckdb",
     "matplotlib>=3.10.1",
     "seaborn>=0.13.2",
     "httpx",
@@ -54,6 +52,8 @@ fastflight = "fastflight.cli:cli"
 [dependency-groups]
 dev = [
     "mypy",
+    "nox>=2025.5.1",
+    "nox-uv>=0.6.1",
     "pandas-stubs>=2.2.3.241126",
     "pre-commit",
     "pyarrow-stubs>=17.17",
