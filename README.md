@@ -18,8 +18,8 @@ routing and REST support.
 ✅ **Async & Streaming Ready** – `async for` support with non-blocking batch readers. Ideal for high-throughput
 systems.  
 ✅ **REST + Arrow Flight** – Use FastAPI to expose Arrow Flight services as standard REST endpoints (e.g., `/stream`).  
-✅ **Plug-and-Play Data Sources** – Includes a DuckDB demo example to help you get started quickly—extending to other
-sources (SQL, CSV, etc.) is straightforward.  
+✅ **Plug-and-Play Data Sources** – Includes an Echo demo service to help you get started quickly — extending to other
+sources is straightforward.  
 ✅ **Built-in Registry & Validation** – Automatic binding discovery and safety checks. Fail early if service is
 missing.  
 ✅ **Pandas / PyArrow Friendly** – Streamlined APIs for transforming results into pandas DataFrame or Arrow Table.  
@@ -55,14 +55,12 @@ This launches both gRPC and REST servers, allowing you to use REST APIs while st
 ### **3️⃣ Test with Demo Service**
 
 ```bash
-# Example REST API call to DuckDB demo service
+# Example REST API call to Echo demo service
 curl -X POST "http://localhost:8000/fastflight/stream" \
   -H "Content-Type: application/json" \
   -d '{
-    "type": "fastflight.demo_services.duckdb_demo.DuckDBParams",
-    "database_path": ":memory:",
-    "query": "SELECT 1 as test_column",
-    "parameters": []
+    "type": "fastflight.demo_services.echo_demo.EchoParams",
+    "message": "Hello FastFlight!"
   }'
 ```
 
@@ -165,17 +163,13 @@ For comprehensive examples, see the [`examples/` directory](./examples/) which i
 
 ```python
 from fastflight import FastFlightBouncer
-from fastflight.demo_services.duckdb_demo import DuckDBParams
+from fastflight.demo_services.echo_demo import EchoParams
 
 # Create client
 client = FastFlightBouncer("grpc://localhost:8815")
 
 # Define query parameters
-params = DuckDBParams(
-    database_path=":memory:",
-    query="SELECT 1 as test_column, 'hello' as message",
-    parameters=[]
-)
+params = EchoParams(message="Hello FastFlight!")
 
 # Fetch data as Arrow Table
 table = client.get_pa_table(params)
