@@ -17,13 +17,22 @@ PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13"]
 DEFAULT_PYTHON = "3.11"
 
 
+@session(name="fix", uv_groups=["dev"], uv_all_extras=True)
+def lint_fix(s: Session) -> None:
+    # Ruff linting fix
+    s.run(*shlex.split("uv run ruff check --config pyproject.toml --fix ."))
+
+    # Ruff formatting fix
+    s.run(*shlex.split("uv run ruff format --config pyproject.toml ."))
+
+
 @session(name="lint", uv_groups=["dev"], uv_all_extras=True)
 def lint(s: Session) -> None:
     # Ruff linting
-    s.run(*shlex.split("uv run ruff check --output-format=github ."))
+    s.run(*shlex.split("uv run ruff check --config pyproject.toml ."))
 
     # Ruff formatting check
-    s.run(*shlex.split("uv run ruff format --check --diff ."))
+    s.run(*shlex.split("uv run ruff format --config pyproject.toml --check --diff ."))
 
     # MyPy type checking
     s.run(*shlex.split("uv run mypy --config-file=pyproject.toml"))
