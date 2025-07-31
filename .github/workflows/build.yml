@@ -59,7 +59,7 @@ jobs:
 
   # Core testing matrix
   test:
-    name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }}${{ matrix.pyarrow-version && format(', PyArrow {0}', matrix.pyarrow-version) || '' }})
+    name: Test (Py${{ matrix.python-version }}, ${{ matrix.os }}${{ matrix.pyarrow-version && format(', PyArrow {0}', matrix.pyarrow-version) || '' }})
     runs-on: ${{ matrix.os }}
     needs: pre-checks
     timeout-minutes: 30
@@ -78,30 +78,9 @@ jobs:
             python-version: "3.10"
         include:
           # PyArrow compatibility testing (only on Ubuntu)
-          # Only add these combinations for thorough compatibility testing
-          # Pyarrow <=6.0.0 only support up to Python 3.9
-          # PyArrow 6.0.1-8.x: Python <=3.10.x
-          # PyArrow 10.x-13.x: Python 3.8-3.11
+          # Flight functionality became stable and feature-complete in PyArrow 14.x
           # PyArrow 14.x-17.x: Python 3.8-3.12
           # PyArrow 18.x+: Python 3.9-3.13
-          - os: ubuntu-latest
-            python-version: "3.10"
-            pyarrow-version: "6.0.1"
-          - os: ubuntu-latest
-            python-version: "3.10"
-            pyarrow-version: "8.0.0"
-          - os: ubuntu-latest
-            python-version: "3.10"
-            pyarrow-version: "10.0.1"
-          - os: ubuntu-latest
-            python-version: "3.11"
-            pyarrow-version: "10.0.1"
-          - os: ubuntu-latest
-            python-version: "3.10"
-            pyarrow-version: "12.0.1"
-          - os: ubuntu-latest
-            python-version: "3.11"
-            pyarrow-version: "12.0.1"
           - os: ubuntu-latest
             python-version: "3.10"
             pyarrow-version: "14.0.2"
@@ -189,10 +168,6 @@ jobs:
         include:
           # Add PyArrow compatibility testing for integration tests
           # Test key versions across different Python versions
-          - python-version: "3.10"
-            pyarrow-version: "6.0.1"
-          - python-version: "3.11"
-            pyarrow-version: "12.0.1"
           - python-version: "3.12"
             pyarrow-version: "16.1.0"
           - python-version: "3.13"

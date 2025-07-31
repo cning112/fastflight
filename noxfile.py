@@ -6,48 +6,63 @@
 
 import shlex
 
+import nox
 from nox import Session, options
 from nox_uv import session
+from packaging import version
 
 options.default_venv_backend = "uv"
 options.reuse_existing_virtualenvs = True
 options.stop_on_first_error = True  # Fail fast on first error
 
-PYTHON_VERSIONS = ["3.10", "3.11", "3.12", "3.13"]
+PYTHON_VERSIONS = ["3.10", "3.13"]
 DEFAULT_PYTHON = "3.11"
 
 
-@session(name="lint", uv_groups=["dev"], uv_all_extras=True)
+def is_pyarrow_compatible(python_version: str, pyarrow_version: str) -> bool:
+    py_ver = version.parse(python_version)
+    pa_ver = version.parse(pyarrow_version)
+
+    # Flight functionality became stable and feature-complete in PyArrow 14.x
+    if pa_ver < version.parse("14.0.0"):
+        return False
+
+    if version.parse("14.0.0") <= pa_ver < version.parse("18.0.0"):
+        # PyArrow 14.x-17.x: Python 3.8-3.12
+        return version.parse("3.8") <= py_ver < version.parse("3.13")
+    else:
+        # PyArrow 18.x+: Python 3.9-3.13
+        return version.parse("3.9") <= py_ver < version.parse("3.14")
+
+
+@session(python=PYTHON_VERSIONS, name="tests")
+@nox.parametrize("pyarrow_ver", ["14.0.2", "20.0.0"])
+def tests(s: Session, pyarrow_ver) -> None:
+    if not is_pyarrow_compatible(s.python, pyarrow_ver):
+        s.skip("Python and pyarrow version are not compatible")
+
+    s.run(
+        *shlex.split(
+            f"uv run --with pyarrow=={pyarrow_ver} "
+            "pytest --cov=fastflight --cov-report=xml --cov-report=term --cov-branch --cov-fail-under=50 "
+            "--junit-xml=pytest.xml -v"
+        )
+    )
+
+
+@session(name="lint", uv_groups=["lint"], uv_all_extras=True)
 def lint(s: Session) -> None:
     # Ruff linting
-    s.run(*shlex.split("uv run ruff check --output-format=github ."))
+    s.run(*shlex.split("uv run ruff check --config=pyproject.toml --fix ."))
 
     # Ruff formatting check
-    s.run(*shlex.split("uv run ruff format --check --diff ."))
+    s.run(*shlex.split("uv run ruff format --config=pyproject.toml ."))
 
     # MyPy type checking
     s.run(*shlex.split("uv run mypy --config-file=pyproject.toml"))
 
 
-@session(python=PYTHON_VERSIONS, name="tests", uv_groups=["dev"], uv_all_extras=True)
-def tests(s: Session) -> None:
-    """Run tests with coverage on multiple Python versions."""
-    # Run tests with coverage
-    s.run(
-        "uv",
-        "run",
-        "pytest",
-        "--cov=fastflight",
-        "--cov-report=xml",
-        "--cov-report=term",
-        "--cov-branch",
-        "--cov-fail-under=50",
-        "--junit-xml=pytest.xml",
-        "-v",
-    )
-
-
-@session(name="quality", uv_groups=["dev"])
+@session(name="quality", uv_groups=["lint"])
 def quality_analysis(s: Session):
     """Run comprehensive code quality analysis."""
     errors = []
@@ -93,7 +108,7 @@ def quality_analysis(s: Session):
         s.error(error_msg)
 
 
-@session(name="build", uv_groups=["dev"], default=False)
+@session(name="build", default=False)
 def build_package(s: Session):
     """Build package and verify integrity."""
     s.run(*shlex.split("uv add --dev twine"))

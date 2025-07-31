@@ -60,11 +60,8 @@ class EchoDataService(BaseDataService[EchoParams]):
 
     def _create_echo_table(self, message: str) -> pa.Table:
         """Create a single row table with the echo message."""
-        schema = pa.schema([("message", pa.string()), ("timestamp", pa.timestamp("s")), ("service", pa.string())])  # type: ignore[arg-type]
-
-        return pa.Table.from_arrays(
-            [pa.array([message]), pa.array([int(time.time())]), pa.array(["echo_service"])], schema=schema
-        )
+        data = {"message": [message], "timestamp": [int(time.time())], "service": ["echo_service"]}
+        return pa.Table.from_pydict(data)
 
 
 if __name__ == "__main__":

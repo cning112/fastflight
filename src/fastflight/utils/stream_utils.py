@@ -5,7 +5,7 @@ import io
 import logging
 import threading
 from collections.abc import AsyncIterable, Awaitable, Coroutine, Iterable, Iterator
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -182,14 +182,16 @@ async def read_record_batches_from_stream(
 ) -> AsyncIterable[pa.RecordBatch]:
     """
     Similar to `more_itertools.chunked`, but returns an async iterable of Arrow RecordBatch.
+
     Args:
         stream (AsyncIterable[T]): An async iterable of data of type T. A list of T must be used to create
-            a pd.DataFrame schema (pa.Schema | None, optional): The schema of the stream. Defaults to None and
-            will be inferred.
+            a pd.DataFrame
+        schema (pa.Schema | None, optional): The schema of the Arrow RecordBatch. If None, schema will be
+            inferred from the DataFrame. Defaults to None.
         batch_size (int): The maximum size of each batch. Defaults to 100.
 
     Yields:
-        pa.RecordBatch:  An async iterable of Arrow RecordBatch.
+        pa.RecordBatch: An async iterable of Arrow RecordBatch.
     """
     buffer = []
 
@@ -200,13 +202,13 @@ async def read_record_batches_from_stream(
         buffer.append(row)
         if len(buffer) >= batch_size:
             df = pd.DataFrame(buffer)
-            batch = pa.RecordBatch.from_pandas(df, schema=schema)
+            batch = pa.RecordBatch.from_pandas(df, schema=schema)  # type: ignore[arg-type]
             yield batch
             buffer.clear()
 
     if buffer:
         df = pd.DataFrame(buffer)
-        batch = pa.RecordBatch.from_pandas(df, schema=schema)
+        batch = pa.RecordBatch.from_pandas(df, schema=schema)  # type: ignore[arg-type]
         yield batch
 
 
@@ -238,7 +240,7 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
         background thread using asyncio.to_thread.
         """
         try:
-            return reader.read_chunk()
+            return cast(FlightStreamChunk, reader.read_chunk())
         except StopIteration:
             return end_of_stream  # type: ignore[return-value]
 

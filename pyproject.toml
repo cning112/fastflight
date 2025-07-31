@@ -11,7 +11,7 @@ readme = "README.md"
 requires-python = ">= 3.10"
 dependencies = [
     "pandas",
-    "pyarrow>=6.0.1",
+    "pyarrow>=14",
     "pydantic>=2.0",
     "typing-extensions>=4.5.0",
 ]
@@ -50,17 +50,33 @@ all = [
 fastflight = "fastflight.cli:cli"
 
 [dependency-groups]
-dev = [
+# Testing
+test = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+]
+
+# Type checking & linting
+lint = [
+    "ruff",
     "mypy",
+    "pandas-stubs>=2.2.3.241126",
+    "pyarrow-stubs",
+]
+
+# Development automation
+automation = [
     "nox>=2025.5.1",
     "nox-uv>=0.6.1",
-    "pandas-stubs>=2.2.3.241126",
     "pre-commit",
-    "pyarrow-stubs>=17.17",
-    "pytest",
-    "pytest-asyncio>=0.25.3",
-    "pytest-cov",
-    "ruff",
+]
+
+# Complete dev environment
+dev = [
+    { include-group = "test" },
+    { include-group = "lint" },
+    { include-group = "automation" },
 ]
 
 [tool.ruff]
@@ -129,7 +145,7 @@ ignore_missing_imports = true
 show_error_codes = true
 pretty = true
 # Check all project code consistently across pre-commit and CI
-files = ["src", "tests", "examples"]
+files = ["src", "examples"]
 
 # Enable strict optional checking
 strict_optional = true
@@ -140,16 +156,11 @@ warn_unreachable = true
 
 # Per-module configuration
 [[tool.mypy.overrides]]
-module = "tests.*"
-# Tests can be more relaxed
-ignore_errors = false
-disable_error_code = ["import-untyped"]
-
-[[tool.mypy.overrides]]
 module = "examples.*"
 # Examples can be more relaxed
 ignore_errors = false
 disable_error_code = ["import-untyped"]
+
 
 [tool.pytest.ini_options]
 minversion = "6.0"

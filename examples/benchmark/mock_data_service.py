@@ -41,7 +41,7 @@ def create_benchmark_table(total_rows: int, total_cols: int, variant: str = "def
     column_names = [f"col_{i}" for i in range(total_cols)]
 
     # Explicitly type the columns list to allow mixed array types
-    columns: list[pa.Array] = []
+    columns = []
 
     if variant == "simple":
         columns = [pa.array(np.arange(total_rows, dtype=np.int32)) for _ in range(total_cols)]
@@ -57,7 +57,7 @@ def create_benchmark_table(total_rows: int, total_cols: int, variant: str = "def
     else:
         columns = [pa.array(np.random.randint(0, 50_000, size=total_rows, dtype=np.int32)) for _ in range(total_cols)]
 
-    return pa.table(columns, names=column_names)
+    return pa.table(columns, names=column_names)  # type: ignore[arg-type]
 
 
 # Pre-built data tables

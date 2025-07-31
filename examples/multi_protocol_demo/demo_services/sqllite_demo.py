@@ -27,5 +27,5 @@ class SQLService(BaseDataService[SQLParams]):
                 # Create a PyArrow Table from rows
                 columns = list(result.keys())
                 arrays = [pa.array([row[i] for row in rows]) for i in range(len(columns))]
-                table = pa.Table.from_arrays(arrays, columns)
+                table = pa.table(arrays, columns)  # type: ignore[arg-type]
                 yield from table.to_batches()

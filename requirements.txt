@@ -111,14 +111,7 @@ nodeenv==1.9.1
 nox==2025.5.1
     # via nox-uv
 nox-uv==0.6.1
-numpy==2.2.6 ; python_full_version < '3.11'
-    # via
-    #   contourpy
-    #   matplotlib
-    #   pandas
-    #   pandas-stubs
-    #   seaborn
-numpy==2.3.1 ; python_full_version >= '3.11'
+numpy==1.26.4
     # via
     #   contourpy
     #   matplotlib
@@ -148,10 +141,8 @@ pluggy==1.6.0
     #   pytest-cov
 pre-commit==4.2.0
 pyarrow==21.0.0
-    # via
-    #   fastflight
-    #   pyarrow-stubs
-pyarrow-stubs==20.0.0.20250716
+    # via fastflight
+pyarrow-stubs==10.0.1.9
 pydantic==2.11.7
     # via
     #   fastapi
