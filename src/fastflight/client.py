@@ -50,7 +50,7 @@ def _handle_flight_error(error: Exception, operation_context: str) -> Exception:
             f"Server internal error during {operation_context}: {error!s}",
             details={"original_error": str(error), "error_type": type(error).__name__},
         )
-    elif isinstance(error, ConnectionError | OSError):
+    elif isinstance(error, (ConnectionError, OSError)):
         return FastFlightConnectionError(
             f"Connection failed during {operation_context}: {error!s}",
             details={"original_error": str(error), "error_type": type(error).__name__},

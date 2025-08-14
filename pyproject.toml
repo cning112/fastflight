@@ -109,6 +109,8 @@ ignore = [
     "FIX002",
     # Allow function calls in argument defaults (common in FastAPI/Pydantic)
     "B008", # Do not perform function calls in argument defaults
+    # Disable using X | Y in instance() call instead of (X, Y), which results in slow code
+    "UP038",
 ]
 
 # Auto-fix safe rules
