@@ -1,10 +1,13 @@
 services:
-  # Production services (default profile)
+  # === PRODUCTION SERVICES (default profile) ===
+  # Separated services for scalability and independent deployment
+  
+  # FastFlight gRPC server - handles Arrow Flight data streaming
   fastflight-server:
     build:
       context: .
       dockerfile: docker/Dockerfile
-      target: production
+      target: production  # Optimized production build (~543MB)
     ports:
       - "8815:8815"
     command: [ "start-flight-server", "--flight-location", "grpc://0.0.0.0:8815" ]
@@ -14,50 +17,60 @@ services:
       timeout: 10s
       retries: 3
 
+  # FastAPI REST server - provides HTTP/JSON interface to FastFlight services
   fastapi-server:
     build:
       context: .
       dockerfile: docker/Dockerfile
-      target: production
+      target: production  # Same optimized build as flight server
     ports:
       - "8000:8000"
     command: [
       "start-rest-server",
       "--host", "0.0.0.0",
       "--port", "8000",
-      "--flight-location", "grpc://fastflight-server:8815"
+      "--flight-location", "grpc://fastflight-server:8815"  # Connect to flight server
     ]
     depends_on:
       fastflight-server:
-        condition: service_healthy
+        condition: service_healthy  # Wait for flight server to be ready
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/fastflight/registered_data_types')" ]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # Development setup with both servers in one container
+  # === DEVELOPMENT SERVICES (dev profile) ===
+  # Use: docker-compose --profile dev up <service-name>
+  
+  # Single container running both FastFlight and REST servers
+  # Convenient for development testing and integration work
   fastflight-dev-servers:
     build:
       context: .
       dockerfile: docker/Dockerfile
-      target: production
+      target: production  # Uses production build but runs both servers
     ports:
-      - "8000:8000"
-      - "8815:8815"
-    command: [ "start-all" ]
+      - "8000:8000"  # REST API
+      - "8815:8815"  # gRPC Flight
+    command: [ "start-all" ]  # Starts both servers in one process
     profiles: [ "dev" ]
 
-  # Interactive development container
+  # Interactive development shell for remote debugging and emergency fixes
+  # Use cases:
+  # - Server environments without IDE access (SSH + vi/nano)
+  # - CI/CD pipeline debugging
+  # - Emergency hotfixes in production-like environments
+  # Usage: docker-compose --profile dev run fastflight-dev-shell
   fastflight-dev-shell:
     build:
       context: .
       dockerfile: docker/Dockerfile
-      target: development
+      target: development  # Full dev environment with all tools
     volumes:
-      - .:/app
+      - .:/app  # Mount source code for live editing
     working_dir: /app
-    stdin_open: true
-    tty: true
+    stdin_open: true   # Enable interactive input
+    tty: true         # Allocate pseudo-TTY
     profiles: [ "dev" ]
-    command: [ "/bin/bash" ]
+    command: [ "/bin/bash" ]  # Provides shell access
