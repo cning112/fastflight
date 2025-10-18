@@ -90,7 +90,7 @@ jobs:
       - name: Calculate new version
         id: new-version
         run: |
-          uv add --dev bump2version
+          uv add --quiet --dev bump2version
           CURRENT_VERSION="${{ steps.current-version.outputs.version }}"
           VERSION_TYPE="${{ github.event.inputs.version_type }}"
           PRERELEASE_ID="${{ github.event.inputs.prerelease_identifier }}"
@@ -128,7 +128,7 @@ jobs:
           fi
           
           # Dry run to get new version
-          NEW_VERSION=$(uv run bump2version --config-file .bumpversion-temp.cfg --dry-run --list $VERSION_TYPE | grep new_version | cut -d= -f2)
+          NEW_VERSION=$(uv run --quiet bump2version --config-file .bumpversion-temp.cfg --dry-run --list $VERSION_TYPE | grep new_version | cut -d= -f2)
           
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "New version will be: $NEW_VERSION"
