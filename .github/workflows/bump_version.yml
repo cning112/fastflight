@@ -39,6 +39,12 @@ jobs:
         run: |
           uv run --with bump2version bump2version ${{ github.event.inputs.version_type }}
 
+      - name: Update uv.lock and amend commit
+        run: |
+          uv lock
+          git add uv.lock
+          git commit --amend --no-edit
+
       - name: Push changes
         run: |
           git push --follow-tags origin main
