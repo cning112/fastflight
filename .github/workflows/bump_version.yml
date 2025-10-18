@@ -29,8 +29,6 @@ jobs:
           enable-cache: true
           python-version: '3.11'
 
-      - name: Install bump2version
-        run: uv add --dev bump2version
 
       - name: Configure Git
         run: |
