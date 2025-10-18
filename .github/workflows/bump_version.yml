@@ -37,7 +37,7 @@ jobs:
 
       - name: Bump version and create tag
         run: |
-          uv run bump2version ${{ github.event.inputs.version_type }}
+          uv run --with bump2version bump2version ${{ github.event.inputs.version_type }}
 
       - name: Push changes
         run: |
