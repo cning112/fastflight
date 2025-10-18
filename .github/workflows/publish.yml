@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_version:
-        description: "Tag version to build and publish (e.g., v0.5.0)"
+        description: "Tag version to build and publish (e.g., 0.5.0). The 'v' prefix is optional."
         required: true
         type: string
       environment:
@@ -52,6 +52,10 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
+          # This script handles three cases:
+          # 1. Manual trigger (`workflow_dispatch`): version is from input.
+          # 2. Tag push trigger (`push`): version is from the git ref name.
+          # 3. Release trigger (`release`): version is from the release tag name.
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             VERSION="${{ github.event.inputs.tag_version }}"
           elif [[ "${{ github.event_name }}" == "push" ]]; then
@@ -60,7 +64,7 @@ jobs:
             VERSION="${{ github.event.release.tag_name }}"
           fi
           
-          # Remove 'v' prefix if present
+          # Remove 'v' prefix if present to get the pure version number
           VERSION=${VERSION#v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
