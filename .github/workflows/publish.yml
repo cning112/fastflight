@@ -28,6 +28,10 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
   PYTHON_VERSION: "3.11"
 
@@ -169,9 +173,8 @@ jobs:
         with:
           name: release-artifacts-${{ needs.validate-release.outputs.version }}
           path: |
-            dist/
-            SHA256SUMS
-            !dist/*.egg-info/
+            dist/*.whl
+            dist/*.tar.gz
           retention-days: 90
 
   # Security scan
@@ -197,26 +200,8 @@ jobs:
         run: |
           set -eo pipefail
           mkdir -p dist
-          SHASUM_PATH="${{ github.workspace }}/SHA256SUMS"
-          if [ -f "$SHASUM_PATH" ]; then
-            echo "Moving SHA256SUMS from $SHASUM_PATH into dist/"
-            mv "$SHASUM_PATH" dist/
-          fi
           echo "Contents of dist/ before cleanup:"
           ls -al dist || true
-
-          # If artifacts were uploaded with a nested dist/ directory, flatten it.
-          if [ -d dist/dist ]; then
-            echo "Flattening nested dist/ directory..."
-            shopt -s dotglob
-            mv dist/dist/* dist/
-            rmdir dist/dist
-            shopt -u dotglob
-          fi
-
-          # Remove non-distribution files (e.g., checksum lists)
-          find dist -maxdepth 1 -type f ! -name '*.whl' ! -name '*.tar.gz' -delete
-
           shopt -s nullglob
           ARTIFACTS=(dist/*.whl dist/*.tar.gz)
           if [ ${#ARTIFACTS[@]} -eq 0 ]; then
@@ -352,7 +337,7 @@ jobs:
           print(f'✅ Successfully installed and verified FastFlight {fastflight.__version__}')
           
           # Basic functionality test
-          from fastflight.core.client import FlightClient
+          from fastflight import FastFlightBouncer
           print('✅ Core components working correctly')
           "
 
