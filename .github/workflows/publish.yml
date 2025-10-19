@@ -133,7 +133,7 @@ jobs:
 
       - name: Verify build
         run: |
-          uv run twine check dist/*
+          uv run --with twine twine check dist/*
           
           # Test installation in clean environment
           uv venv --python ${{ env.PYTHON_VERSION }} test-install
