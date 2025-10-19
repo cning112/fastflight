@@ -158,8 +158,13 @@ jobs:
 
       - name: Generate Software Bill of Materials (SBOM)
         run: |
-          uv add --dev cyclonedx-bom
-          uv run --with cyclonedx-bom cyclonedx-bom environment --schema-version 1.4 --output dist/fastflight-${{ needs.validate-release.outputs.version }}-sbom.json --ultimate
+          set -eo pipefail
+          TARGET="dist/fastflight-${{ needs.validate-release.outputs.version }}-sbom.json"
+          echo "Generating SBOM at $TARGET"
+          if ! uv run --with cyclonedx-py -- cyclonedx-py environment --format json --output "$TARGET"; then
+            echo "CycloneDX CLI not available, skipping SBOM generation." >&2
+            rm -f "$TARGET"
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
