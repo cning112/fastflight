@@ -197,6 +197,11 @@ jobs:
         run: |
           set -eo pipefail
           mkdir -p dist
+          SHASUM_PATH="${{ github.workspace }}/SHA256SUMS"
+          if [ -f "$SHASUM_PATH" ]; then
+            echo "Moving SHA256SUMS from $SHASUM_PATH into dist/"
+            mv "$SHASUM_PATH" dist/
+          fi
           echo "Contents of dist/ before cleanup:"
           ls -al dist || true
 
