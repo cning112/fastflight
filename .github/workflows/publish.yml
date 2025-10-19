@@ -128,11 +128,9 @@ jobs:
       - name: Build package
         run: |
           uv build
-          
-          # Generate checksums
-          cd dist
-          sha256sum * > SHA256SUMS
-          cd ..
+
+          # Generate checksums (stored outside dist to avoid publishing issues)
+          sha256sum dist/* > SHA256SUMS
 
       - name: Verify build
         run: |
@@ -172,6 +170,7 @@ jobs:
           name: release-artifacts-${{ needs.validate-release.outputs.version }}
           path: |
             dist/
+            SHA256SUMS
             !dist/*.egg-info/
           retention-days: 90
 
