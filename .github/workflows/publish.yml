@@ -200,6 +200,15 @@ jobs:
           echo "Contents of dist/ before cleanup:"
           ls -al dist || true
 
+          # If artifacts were uploaded with a nested dist/ directory, flatten it.
+          if [ -d dist/dist ]; then
+            echo "Flattening nested dist/ directory..."
+            shopt -s dotglob
+            mv dist/dist/* dist/
+            rmdir dist/dist
+            shopt -u dotglob
+          fi
+
           # Remove non-distribution files (e.g., checksum lists)
           find dist -maxdepth 1 -type f ! -name '*.whl' ! -name '*.tar.gz' -delete
 
