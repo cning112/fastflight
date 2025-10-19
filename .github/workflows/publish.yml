@@ -193,6 +193,26 @@ jobs:
           name: release-artifacts-${{ needs.validate-release.outputs.version }}
           path: dist/
 
+      - name: Prepare distribution artifacts
+        run: |
+          set -eo pipefail
+          mkdir -p dist
+          echo "Contents of dist/ before cleanup:"
+          ls -al dist || true
+
+          # Remove non-distribution files (e.g., checksum lists)
+          find dist -maxdepth 1 -type f ! -name '*.whl' ! -name '*.tar.gz' -delete
+
+          shopt -s nullglob
+          ARTIFACTS=(dist/*.whl dist/*.tar.gz)
+          if [ ${#ARTIFACTS[@]} -eq 0 ]; then
+            echo "❌ No distribution artifacts (*.whl, *.tar.gz) found in dist/."
+            exit 1
+          fi
+
+          echo "Artifacts to publish:"
+          ls -al dist
+
       - name: Install UV
         uses: astral-sh/setup-uv@v6
         with:
