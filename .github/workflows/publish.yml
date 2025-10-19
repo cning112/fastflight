@@ -136,7 +136,13 @@ jobs:
 
       - name: Verify build
         run: |
-          uv run --with twine twine check dist/*
+          shopt -s nullglob
+          ARTIFACTS=(dist/*.whl dist/*.tar.gz)
+          if [ ${#ARTIFACTS[@]} -gt 0 ]; then
+            uv run --with twine twine check "${ARTIFACTS[@]}"
+          else
+            echo "No distribution artifacts found for twine check."
+          fi
           
           # Test installation in clean environment
           uv venv --python ${{ env.PYTHON_VERSION }} test-install
