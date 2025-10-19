@@ -28,6 +28,10 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
   PYTHON_VERSION: "3.11"
 
@@ -333,7 +337,7 @@ jobs:
           print(f'✅ Successfully installed and verified FastFlight {fastflight.__version__}')
           
           # Basic functionality test
-          from fastflight.core.client import FlightClient
+          from fastflight import FastFlightBouncer
           print('✅ Core components working correctly')
           "
 
