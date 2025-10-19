@@ -159,7 +159,7 @@ jobs:
       - name: Generate Software Bill of Materials (SBOM)
         run: |
           uv add --dev cyclonedx-bom
-          uv run cyclonedx-py -o dist/fastflight-${{ needs.validate-release.outputs.version }}-sbom.json
+          uv run --with cyclonedx-bom cyclonedx-py environment --format json --output dist/fastflight-${{ needs.validate-release.outputs.version }}-sbom.json
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
