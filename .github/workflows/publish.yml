@@ -5,7 +5,7 @@ on:
     tags:
       - "v*.*.*"
   workflow_run:
-    workflows: ["Bump Version and Create Tag"]
+    workflows: [ "Bump Version and Create Tag" ]
     types:
       - completed
   workflow_dispatch:
@@ -112,7 +112,7 @@ jobs:
   build-release:
     name: Build Release Artifacts
     runs-on: ubuntu-latest
-    needs: [validate-release, release-tests]
+    needs: [ validate-release, release-tests ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -152,7 +152,7 @@ jobs:
           print(f'Successfully installed FastFlight {fastflight.__version__}')
           
           # Basic smoke test
-          from fastflight.core.client import FlightClient
+          from fastflight import FastFlightBouncer 
           print('Core components imported successfully')
           "
 
@@ -174,7 +174,7 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: [validate-release, build-release]
+    needs: [ validate-release, build-release ]
     timeout-minutes: 10
 
     steps:
@@ -222,9 +222,9 @@ jobs:
   publish-pypi:
     name: Publish Package
     runs-on: ubuntu-latest
-    needs: [validate-release, build-release, security-scan]
+    needs: [ validate-release, build-release, security-scan ]
     timeout-minutes: 10
-    environment: 
+    environment:
       name: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.environment) || (needs.validate-release.outputs.is-prerelease == 'true' && 'testpypi') || 'pypi' }}
 
     steps:
@@ -265,7 +265,7 @@ jobs:
   post-release-validation:
     name: Post-Release Validation
     runs-on: ubuntu-latest
-    needs: [validate-release, publish-pypi]
+    needs: [ validate-release, publish-pypi ]
     timeout-minutes: 15
     if: success()
 
@@ -322,7 +322,7 @@ jobs:
   notify:
     name: Notify Release Completion
     runs-on: ubuntu-latest
-    needs: [validate-release, post-release-validation]
+    needs: [ validate-release, post-release-validation ]
     if: always()
 
     steps:
