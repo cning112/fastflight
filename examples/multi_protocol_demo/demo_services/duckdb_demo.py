@@ -37,7 +37,8 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
 
         with duckdb.connect(db_path) as conn:
             logger.debug(f"Executing query: {params.query}")
-            arrow_table = conn.execute(params.query, query_parameters).arrow()
+            reader = conn.execute(params.query, query_parameters).arrow()
+            arrow_table: pa.Table = reader.read_all()  # type: ignore[attr-defined]
             logger.debug(f"Fetched arrow table with {arrow_table.num_rows} rows")
             return arrow_table
 
