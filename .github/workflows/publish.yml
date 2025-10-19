@@ -206,14 +206,14 @@ jobs:
       - name: Security scan with pip-audit
         run: |
           echo "🛡️ Scanning dependencies for vulnerabilities..."
-          uv run --with pip-audit pip-audit --config pyproject.toml --format=json --output=security-report.json || true
-          uv run --with pip-audit pip-audit --config pyproject.toml  # Console output
+          uv run --with pip-audit -- pip-audit -r pyproject.toml --format json --output security-report.json || true
+          uv run --with pip-audit -- pip-audit -r pyproject.toml || true  # Console output
 
       - name: Scan wheel for known vulnerabilities
         run: |
           echo "🎯 Scanning built wheel for vulnerabilities..."
-          uv run --with pip-audit pip-audit --config pyproject.toml --format=json --output=audit-report.json dist/*.whl || true
-          uv run --with pip-audit pip-audit --config pyproject.toml dist/*.whl  # Console output
+          uv run --with pip-audit -- pip-audit dist/*.whl --format json --output audit-report.json || true
+          uv run --with pip-audit -- pip-audit dist/*.whl || true  # Console output
 
       - name: Upload security reports
         uses: actions/upload-artifact@v4
