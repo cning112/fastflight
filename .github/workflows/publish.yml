@@ -1,9 +1,6 @@
 name: Publish Package
 
 on:
-  push:
-    tags:
-      - "*.*.*"
   workflow_run:
     workflows: ["Bump Version and Create Tag"]
     types:
@@ -59,14 +56,12 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             VERSION="${{ github.event.inputs.tag_version }}"
-            # Remove 'v' prefix if present
             VERSION=${VERSION#v}
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            VERSION=$(grep "version = " pyproject.toml | head -n 1 | sed 's/version = "\(.*\)"/\1/')
           elif [[ "${{ github.event_name }}" == "push" ]]; then
             VERSION="${{ github.ref_name }}"
             VERSION=${VERSION#v}
-          else
-            # For workflow_run, get version from pyproject.toml
-            VERSION=$(grep "version = " pyproject.toml | head -n 1 | sed 's/version = "\(.*\)"/\1/')
           fi
           
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -81,7 +76,7 @@ jobs:
       - name: Validate version format
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9\-\.]+)?$ ]]; then
+          if ! [[ "$VERSION" =~ '^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9\-\.]+)?$' ]]; then
             echo "Invalid version format: $VERSION"
             echo "Expected format: X.Y.Z or X.Y.Z-suffix"
             exit 1
