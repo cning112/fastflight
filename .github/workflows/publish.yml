@@ -296,7 +296,6 @@ jobs:
       - name: Install UV
         uses: astral-sh/setup-uv@v6
         with:
-          enable-cache: true
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Wait for package availability
