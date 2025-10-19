@@ -35,16 +35,38 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
 
-      - name: Bump version and create tag
+      - name: Bump version files
+        id: bump
         run: |
-          uv run --with bump2version bump2version ${{ github.event.inputs.version_type }}
+          set -eo pipefail
+          VERSION_TYPE="${{ github.event.inputs.version_type }}"
+          OUTPUT=$(uv run --with bump2version bump2version --list "$VERSION_TYPE")
+          echo "$OUTPUT"
+          CURRENT_VERSION=$(echo "$OUTPUT" | grep '^current_version=' | cut -d= -f2)
+          NEW_VERSION=$(echo "$OUTPUT" | grep '^new_version=' | cut -d= -f2)
+          echo "current=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "new=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Update uv.lock and amend commit
-        run: |
-          uv lock
-          git add uv.lock
-          git commit --amend --no-edit
+      - name: Regenerate uv.lock
+        run: uv lock
 
-      - name: Push changes
+      - name: Commit changes
         run: |
-          git push --follow-tags origin main
+          set -eo pipefail
+          CURRENT_VERSION="${{ steps.bump.outputs.current }}"
+          NEW_VERSION="${{ steps.bump.outputs.new }}"
+          git add pyproject.toml uv.lock .bumpversion.cfg
+          git commit -m "🔖 Bump version: ${CURRENT_VERSION} → ${NEW_VERSION}"
+
+      - name: Create release tag
+        run: |
+          set -eo pipefail
+          NEW_VERSION="${{ steps.bump.outputs.new }}"
+          git tag -a "v${NEW_VERSION}" -m "Release ${NEW_VERSION}"
+
+      - name: Push commit and tag
+        run: |
+          set -eo pipefail
+          NEW_VERSION="${{ steps.bump.outputs.new }}"
+          git push origin main
+          git push origin "v${NEW_VERSION}"

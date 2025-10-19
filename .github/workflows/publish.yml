@@ -1,6 +1,9 @@
 name: Publish Package
 
 on:
+  push:
+    tags:
+      - "v*.*.*"
   workflow_run:
     workflows: ["Bump Version and Create Tag"]
     types:
@@ -8,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_version:
-        description: "Tag version to build and publish (e.g., 0.5.0). The 'v' prefix is optional."
+        description: "Tag version to build and publish (e.g., v0.5.0)."
         required: true
         type: string
       environment:
