@@ -1,4 +1,13 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "fastflight[all]",
+# ]
+# [tool.uv.sources]
+# fastflight = { path = "../../", editable = true }
+# ///
 import os
 import site
 import socket

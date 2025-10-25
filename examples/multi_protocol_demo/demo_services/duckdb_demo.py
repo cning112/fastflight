@@ -25,8 +25,8 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
     _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="duckdb_data_service")
 
     @staticmethod
-    def _execute_duckdb_query(params: DuckDBParams) -> pa.Table:
-        """Execute DuckDB query in isolation to prevent segfaults."""
+    def _iterate_duckdb_batches(params: DuckDBParams, batch_size: int | None = None) -> Iterable[pa.RecordBatch]:
+        """Execute DuckDB query and yield record batches incrementally."""
         try:
             import duckdb
         except ImportError:
@@ -37,23 +37,50 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
 
         with duckdb.connect(db_path) as conn:
             logger.debug(f"Executing query: {params.query}")
-            reader = conn.execute(params.query, query_parameters).arrow()
-            arrow_table: pa.Table = reader.read_all()  # type: ignore[attr-defined]
-            logger.debug(f"Fetched arrow table with {arrow_table.num_rows} rows")
-            return arrow_table
+            reader: pa.RecordBatchReader = conn.execute(params.query, query_parameters).arrow()  # type: ignore[assignment]
+            for batch in reader:
+                if batch_size and batch.num_rows > batch_size:
+                    for offset in range(0, batch.num_rows, batch_size):
+                        yield batch.slice(offset, min(batch_size, batch.num_rows - offset))
+                else:
+                    yield batch
+
+    @staticmethod
+    def _submit_batch_producer(params: DuckDBParams, batch_size: int | None, put_item) -> None:
+        """Run in thread pool: stream batches and push them via callback."""
+        try:
+            for batch in DuckDBDataService._iterate_duckdb_batches(params, batch_size):
+                put_item(batch)
+        except Exception as exc:  # propagate to consumer
+            put_item(exc)
+        finally:
+            put_item(None)  # sentinel
 
     def get_batches(self, params: DuckDBParams, batch_size: int | None = None) -> Iterable[pa.RecordBatch]:
         try:
             logger.info(f"SYNC: Processing request for {params.database_path or ':memory:'}")
 
-            # !!! Execute query in a separate thread to isolate DuckDB from Flight server !!!
-            future = self._executor.submit(self._execute_duckdb_query, params)
-            table = future.result(timeout=60)  # 60 second timeout
+            import queue
 
-            # Convert to batches after DuckDB connection is closed
-            yield from table.to_batches(max_chunksize=batch_size or 10000)
+            batches_queue: queue.Queue[pa.RecordBatch | Exception | None] = queue.Queue(maxsize=4)
 
-            logger.debug(f"SYNC: Successfully yielded {table.num_rows} rows")
+            def put_item(item):
+                batches_queue.put(item)
+
+            self._executor.submit(self._submit_batch_producer, params, batch_size, put_item)
+
+            total_rows = 0
+            while True:
+                item = batches_queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                batch = item
+                total_rows += batch.num_rows
+                yield batch
+
+            logger.debug(f"SYNC: Successfully yielded {total_rows} rows")
 
         except Exception as e:
             logger.error(f"SYNC: Service error: {e}", exc_info=True)
@@ -65,18 +92,30 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
         try:
             loop = asyncio.get_running_loop()
             executor = self._executor  # can be None meaning to use a default ThreadPoolExecutor
-            table = await loop.run_in_executor(executor, self._execute_duckdb_query, params)
 
-            # Convert to batches and yield with cooperative multitasking
-            batches = table.to_batches(max_chunksize=batch_size or 10000)
+            async_queue: asyncio.Queue[pa.RecordBatch | Exception | None] = asyncio.Queue(maxsize=4)
 
-            for i, batch in enumerate(batches):
-                # Yield control to event loop periodically
-                if i % 5 == 0:
-                    await asyncio.sleep(0)
+            def put_item(item):
+                asyncio.run_coroutine_threadsafe(async_queue.put(item), loop)
+
+            executor.submit(self._submit_batch_producer, params, batch_size, put_item)
+
+            total_rows = 0
+            batch_count = 0
+            while True:
+                item = await async_queue.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                batch = item
+                total_rows += batch.num_rows
+                batch_count += 1
                 yield batch
+                if batch_count % 5 == 0:
+                    await asyncio.sleep(0)
 
-            logger.debug(f"ASYNC: Successfully yielded {table.num_rows} rows")
+            logger.debug(f"ASYNC: Successfully yielded {total_rows} rows")
 
         except Exception as e:
             logger.error(f"ASYNC: Service error: {e}", exc_info=True)

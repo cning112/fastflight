@@ -1,4 +1,14 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "fastflight[all]",
+# ]
+# [tool.uv.sources]
+# fastflight = { path = "../../", editable = true }
+# ///
+
 """
 Comprehensive Multi-Protocol Comparison for All Demo Services
 
@@ -178,41 +188,56 @@ def main():
     console.print("\n" + "=" * 80)
     sql_params = SQLParams(
         conn_str="sqlite:///example.db",
-        query="SELECT 1 as id, 'Hello from SQLite' as message, datetime('now') as timestamp",
+        query="""
+        WITH RECURSIVE seq AS (
+            SELECT 1 AS id
+            UNION ALL
+            SELECT id + 1 FROM seq WHERE id < 10000
+        )
+        SELECT
+            id,
+            'Hello from SQLite row ' || id AS message,
+            datetime('now', '+' || (id - 1) || ' seconds') AS timestamp
+        FROM seq
+        """,
     )
-    comparison.compare_service("SQLite", sql_params, "Basic SQLite query")
+    comparison.compare_service("SQLite", sql_params, "Recursive SQLite query (10,000 rows)")
 
     # Test 2: CSV File (if we can create a temp file)
     console.print("\n" + "=" * 80)
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create sample CSV for direct CSV reading
+        num_csv_rows = 50000
         csv_data = pd.DataFrame(
             {
-                "timestamp": pd.date_range("2024-01-01", periods=200, freq="1h"),
-                "temperature": [20 + (i % 30) + (i * 0.1 % 10) for i in range(200)],
-                "humidity": [50 + (i % 40) + (i * 0.05 % 15) for i in range(200)],
+                "timestamp": pd.date_range("2024-01-01", periods=num_csv_rows, freq="5min"),
+                "temperature": [20 + (i % 15) + (i * 0.05 % 7) for i in range(num_csv_rows)],
+                "humidity": [45 + (i % 20) + (i * 0.03 % 9) for i in range(num_csv_rows)],
             }
         )
         csv_file_path = Path(tmpdir) / "sensor_data.csv"
         csv_data.to_csv(csv_file_path, index=False)
 
         csv_params = CsvFileParams(path=csv_file_path)
-        comparison.compare_service("CSV File", csv_params, "Direct CSV file reading (200 rows)")
+        comparison.compare_service("CSV File", csv_params, "Direct CSV file reading (50,000 rows)")
 
     # Test 3: DuckDB Example
     console.print("\n" + "=" * 80)
-    duckdb_params = DuckDBParams(query="SELECT range as id, 'Row ' || range as message FROM range(1, 101)")
-    comparison.compare_service("DuckDB", duckdb_params, "In-memory DuckDB with 100 rows")
+    duckdb_params = DuckDBParams(query="SELECT range as id, 'Row ' || range as message FROM range(1, 50001)")
+    comparison.compare_service("DuckDB", duckdb_params, "In-memory DuckDB with 50,000 rows")
 
     # Test 4: DuckDB with CSV
     console.print("\n" + "=" * 80)
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create sample CSV
+        num_duckdb_csv_rows = 50000
         sample_data = pd.DataFrame(
             {
-                "id": range(1, 501),
-                "value": [i * 1.5 for i in range(1, 501)],
-                "category": ["A" if i % 3 == 0 else "B" if i % 3 == 1 else "C" for i in range(1, 501)],
+                "id": range(1, num_duckdb_csv_rows + 1),
+                "value": [i * 1.5 for i in range(1, num_duckdb_csv_rows + 1)],
+                "category": [
+                    "A" if i % 3 == 0 else "B" if i % 3 == 1 else "C" for i in range(1, num_duckdb_csv_rows + 1)
+                ],
             }
         )
         csv_path = Path(tmpdir) / "sample_data.csv"
@@ -220,10 +245,12 @@ def main():
 
         duckdb_csv_params = DuckDBParams(
             database_path=":memory:",
-            query=f"SELECT * FROM read_csv_auto('{csv_path}') WHERE value > ? ORDER BY id LIMIT 50",
+            query=f"SELECT * FROM read_csv_auto('{csv_path}') WHERE value > ? ORDER BY id LIMIT 5000",
             parameters=[100.0],
         )
-        comparison.compare_service("DuckDB+CSV", duckdb_csv_params, "DuckDB querying CSV file (500 rows)")
+        comparison.compare_service(
+            "DuckDB+CSV", duckdb_csv_params, "DuckDB querying CSV file (50,000 rows, limit 5,000)"
+        )
 
     # Summary
     console.print("\n" + "=" * 80)
