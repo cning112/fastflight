@@ -212,6 +212,9 @@ async def read_record_batches_from_stream(
         yield batch
 
 
+_MIN_IPC_CHUNK_SIZE = 64 * 1024  # 64 KiB
+
+
 async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffer_size=10) -> AsyncIterable[bytes]:
     """
     Convert a FlightStreamReader into an AsyncGenerator of bytes in Arrow IPC format.
@@ -231,6 +234,36 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
     queue: asyncio.Queue[bytes | Exception | None] = asyncio.Queue(maxsize=buffer_size)
     # Sentinel object to signal the end of the stream.
     end_of_stream = object()
+
+    class _ChunkBuffer(io.RawIOBase):
+        """Collects bytes written by the Arrow writer and releases them on demand."""
+
+        def __init__(self, min_chunk_size: int) -> None:
+            self._buffer = bytearray()
+            self._closed = False
+            self._min_chunk_size = min_chunk_size
+
+        def writable(self) -> bool:
+            return True
+
+        def write(self, b: bytes | bytearray | memoryview) -> int:  # type: ignore[override]
+            if self._closed:
+                raise ValueError("I/O operation on closed buffer")
+            self._buffer.extend(b)
+            return len(b)
+
+        def take(self, *, force: bool = False) -> bytes:
+            if not self._buffer:
+                return b""
+            if not force and len(self._buffer) < self._min_chunk_size:
+                return b""
+            data = bytes(self._buffer)
+            self._buffer.clear()
+            return data
+
+        def close(self) -> None:
+            self._closed = True
+            super().close()
 
     def next_chunk() -> FlightStreamChunk:
         """
@@ -252,8 +285,25 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
         The blocking call to read_chunk is executed in a background thread using asyncio.to_thread
         to ensure the event loop remains responsive.
         """
+        chunk_buffer = _ChunkBuffer(_MIN_IPC_CHUNK_SIZE)
+        arrow_sink = pa.output_stream(chunk_buffer)  # type: ignore[arg-type]
+        writer: pa.ipc.RecordBatchStreamWriter | None = None
+
+        async def flush_buffer(*, force: bool = False) -> None:
+            data = chunk_buffer.take(force=force)
+            if data:
+                await queue.put(data)
+
+        has_error = False
         try:
             logger.debug("Start producing Arrow IPC bytes from FlightStreamReader %s", id(reader))
+            schema = getattr(reader, "schema", None)
+            if schema is not None and not isinstance(schema, pa.Schema):
+                schema = None
+            if schema is not None:
+                writer = pa.ipc.new_stream(arrow_sink, schema)
+                await flush_buffer(force=True)
+
             while True:
                 # Wrap the blocking next_chunk() call in asyncio.to_thread to run it without blocking the event loop.
                 chunk = await asyncio.to_thread(next_chunk)
@@ -265,21 +315,30 @@ async def write_arrow_data_to_stream(reader: flight.FlightStreamReader, *, buffe
                     logger.warning("Chunk data is None. Ignored and continue")
                     continue
 
-                # Convert the chunk's data into Arrow IPC format.
-                sink = pa.BufferOutputStream()
-                # Using the new_stream context manager to write IPC data based on the chunk's schema.
-                with pa.ipc.new_stream(sink, chunk.data.schema) as writer:
-                    writer.write_batch(chunk.data)
-                # Retrieve the bytes from the output buffer.
-                buffer_value: pa.Buffer = sink.getvalue()
-                await queue.put(buffer_value.to_pybytes())
+                if writer is None:
+                    writer = pa.ipc.new_stream(arrow_sink, chunk.data.schema)
+                    await flush_buffer(force=True)
+
+                writer.write_batch(chunk.data)
+                await flush_buffer()
         except Exception as e:
+            has_error = True
             logger.error("Error during producing Arrow IPC bytes", exc_info=True)
             await queue.put(e)
         finally:
-            # Signal the consumer that production is complete.
-            await queue.put(end_of_stream)  # type: ignore[arg-type]
-            logger.debug("End producing Arrow IPC bytes from FlightStreamReader %s", id(reader))
+            try:
+                if writer is not None:
+                    writer.close()
+                arrow_sink.close()
+            finally:
+                if has_error:
+                    # Discard any remaining buffered bytes when an error is propagated.
+                    _ = chunk_buffer.take(force=True)
+                else:
+                    await flush_buffer(force=True)
+                # Signal the consumer that production is complete.
+                await queue.put(end_of_stream)  # type: ignore[arg-type]
+                logger.debug("End producing Arrow IPC bytes from FlightStreamReader %s", id(reader))
 
     async def consume() -> AsyncIterable[bytes]:
         """

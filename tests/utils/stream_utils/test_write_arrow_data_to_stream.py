@@ -43,11 +43,16 @@ class TestWriteArrowDataToStream(unittest.TestCase):
             async for data in stream:
                 result.append(data)
 
-            # We should have 2 chunks of data
-            self.assertEqual(len(result), 2)
-            # Each chunk should be bytes
+            # We should have emitted at least one chunk of data
+            self.assertGreater(len(result), 0)
             for chunk in result:
                 self.assertIsInstance(chunk, bytes)
+
+            # Combine the bytes and verify the table contents.
+            combined = b"".join(result)
+            table = pa.ipc.RecordBatchStreamReader(pa.BufferReader(combined)).read_all()
+            expected = pa.Table.from_batches([record_batch, record_batch])
+            self.assertTrue(table.equals(expected))
 
         # Run the async test
         loop = asyncio.new_event_loop()
