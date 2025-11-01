@@ -37,8 +37,21 @@ class DuckDBDataService(BaseDataService[DuckDBParams]):
 
         with duckdb.connect(db_path) as conn:
             logger.debug(f"Executing query: {params.query}")
-            reader: pa.RecordBatchReader = conn.execute(params.query, query_parameters).arrow()  # type: ignore[assignment]
+            arrow_obj: Any = conn.execute(params.query, query_parameters).arrow()
+
+            reader: pa.RecordBatchReader
+            if isinstance(arrow_obj, pa.RecordBatchReader):  # type: ignore[unreachable, unused-ignore]
+                reader = arrow_obj
+            elif isinstance(arrow_obj, pa.RecordBatch):  # type: ignore[unreachable, unused-ignore]
+                reader = pa.RecordBatchReader.from_batches(arrow_obj.schema, [arrow_obj])
+            elif isinstance(arrow_obj, pa.Table):  # type: ignore[unreachable, unused-ignore]
+                reader = arrow_obj.to_reader()
+            else:
+                raise TypeError(f"Unexpected DuckDB Arrow result type: {type(arrow_obj)!r}")
+
             for batch in reader:
+                if batch.num_rows == 0:
+                    continue
                 if batch_size and batch.num_rows > batch_size:
                     for offset in range(0, batch.num_rows, batch_size):
                         yield batch.slice(offset, min(batch_size, batch.num_rows - offset))
