@@ -135,7 +135,7 @@ from fastflight.utils.stream_utils import read_dataframe_from_arrow_stream
 # Prepare request
 url = "http://127.0.0.1:8000/fastflight/stream"
 json_data = {
-    "type": "multi_protocol_demo.demo_services.sqllite_demo.SQLParams",
+    "param_type": "multi_protocol_demo.demo_services.sqllite_demo.SQLParams",
     "conn_str": "sqlite:///example.db",
     "query": "SELECT 1 as id, 'Hello' as message"
 }

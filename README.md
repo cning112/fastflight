@@ -59,7 +59,7 @@ This launches both gRPC and REST servers, allowing you to use REST APIs while st
 curl -X POST "http://localhost:8000/fastflight/stream" \
   -H "Content-Type: application/json" \
   -d '{
-    "type": "fastflight.demo_services.echo_demo.EchoParams",
+    "param_type": "fastflight.demo_services.echo_demo.EchoParams",
     "message": "Hello FastFlight!"
   }'
 ```
