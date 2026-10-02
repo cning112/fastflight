@@ -122,7 +122,7 @@ fastflight start-all
 curl -X POST "http://localhost:8000/fastflight/stream" \
   -H "Content-Type: application/json" \
   -d '{
-    "type": "fastflight.demo_services.duckdb_demo.DuckDBParams",
+    "param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams",
     "database_path": ":memory:",
     "query": "SELECT 1 as test_column, '\''hello'\'' as message",
     "parameters": []
@@ -285,7 +285,7 @@ curl http://localhost:8000/fastflight/registered_data_types
 # Test specific request
 curl -X POST http://localhost:8000/fastflight/stream \
   -H "Content-Type: application/json" \
-  -d '{"type": "fastflight.demo_services.duckdb_demo.DuckDBParams", "database_path": ":memory:", "query": "SELECT 1"}'
+  -d '{"param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams", "database_path": ":memory:", "query": "SELECT 1"}'
 ```
 
 ### **Custom Resilience Settings**
@@ -327,20 +327,20 @@ fastflight start-all \
 
 ### **REST API Request Format**
 
-The REST API expects the `type` field to contain the fully qualified name (FQN) of the parameter class:
+The REST API expects the `param_type` field to contain the fully qualified name (FQN) of the parameter class:
 
 ```bash
 # Correct format - uses fully qualified name
 curl -X POST "http://localhost:8000/fastflight/stream" \
-  -d '{"type": "fastflight.demo_services.duckdb_demo.DuckDBParams", "database_path": ":memory:", "query": "SELECT 1"}'
+  -d '{"param_type": "fastflight.demo_services.duckdb_demo.DuckDBParams", "database_path": ":memory:", "query": "SELECT 1"}'
 
 # For custom modules
 curl -X POST "http://localhost:8000/fastflight/stream" \
-  -d '{"type": "mycompany.services.MyCustomParams", "param1": "value1"}'
+  -d '{"param_type": "mycompany.services.MyCustomParams", "param1": "value1"}'
 ```
 
 **Key Points:**
-- The `type` field must be the complete module path + class name
+- The `param_type` field must be the complete module path + class name
 - This ensures proper service routing and parameter deserialization
 - The class must be loaded via the `--modules` option
 
